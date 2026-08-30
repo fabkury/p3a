@@ -137,15 +137,17 @@ esp_err_t view_tracker_init(void)
 
     bool task_created = false;
     if (s_view_tracker_stack) {
-        s_state.task = xTaskCreateStatic(view_tracker_task, "view_tracker",
+        // pinned to core 0: jitter work stream fix 7b (networking/SD tasks stay off the render core)
+        s_state.task = xTaskCreateStaticPinnedToCore(view_tracker_task, "view_tracker",
                                           view_tracker_stack_size, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY,
-                                          s_view_tracker_stack, &s_view_tracker_task_buffer);
+                                          s_view_tracker_stack, &s_view_tracker_task_buffer, 0);
         task_created = (s_state.task != NULL);
     }
 
     if (!task_created) {
-        if (xTaskCreate(view_tracker_task, "view_tracker",
-                        view_tracker_stack_size, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_state.task) != pdPASS) {
+        // pinned to core 0: jitter work stream fix 7b (networking/SD tasks stay off the render core)
+        if (xTaskCreatePinnedToCore(view_tracker_task, "view_tracker",
+                        view_tracker_stack_size, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_state.task, 0) != pdPASS) {
             ESP_LOGE(TAG, "Failed to create view tracker task");
             return ESP_ERR_NO_MEM;
         }

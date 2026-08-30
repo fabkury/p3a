@@ -164,7 +164,8 @@ void makapix_mqtt_connection_callback(bool connected)
 
         // Create status publish task if needed
         if (s_status_publish_task_handle == NULL) {
-            if (xTaskCreate(makapix_status_publish_task, "status_pub", 4096, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_status_publish_task_handle) != pdPASS) {
+            // pinned to core 0: jitter work stream fix 7b (networking/SD tasks stay off the render core)
+            if (xTaskCreatePinnedToCore(makapix_status_publish_task, "status_pub", 4096, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_status_publish_task_handle, 0) != pdPASS) {
                 s_status_publish_task_handle = NULL;
             }
         }

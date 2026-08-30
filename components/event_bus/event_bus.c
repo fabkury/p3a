@@ -125,15 +125,17 @@ esp_err_t event_bus_init(void)
 
     bool task_created = false;
     if (s_event_bus_stack) {
-        s_bus.dispatch_task = xTaskCreateStatic(event_bus_dispatch_task, "event_bus",
+        // pinned to core 0: jitter work stream fix 7b (networking/SD tasks stay off the render core)
+        s_bus.dispatch_task = xTaskCreateStaticPinnedToCore(event_bus_dispatch_task, "event_bus",
                                                  event_bus_stack_size, NULL, CONFIG_P3A_APP_TASK_PRIORITY,
-                                                 s_event_bus_stack, &s_event_bus_task_buffer);
+                                                 s_event_bus_stack, &s_event_bus_task_buffer, 0);
         task_created = (s_bus.dispatch_task != NULL);
     }
 
     if (!task_created) {
-        if (xTaskCreate(event_bus_dispatch_task, "event_bus",
-                        event_bus_stack_size, NULL, CONFIG_P3A_APP_TASK_PRIORITY, &s_bus.dispatch_task) != pdPASS) {
+        // pinned to core 0: jitter work stream fix 7b (networking/SD tasks stay off the render core)
+        if (xTaskCreatePinnedToCore(event_bus_dispatch_task, "event_bus",
+                        event_bus_stack_size, NULL, CONFIG_P3A_APP_TASK_PRIORITY, &s_bus.dispatch_task, 0) != pdPASS) {
             vSemaphoreDelete(s_bus.mutex);
             s_bus.mutex = NULL;
             vQueueDelete(s_bus.queue);

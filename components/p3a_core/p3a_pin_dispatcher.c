@@ -253,7 +253,8 @@ static esp_err_t spawn_pin_task(pin_task_params_t *p)
      * several 256-byte path buffers across nested frames easily blows past
      * 4 KB; observed overflow ~116 B below the lower bound on first
      * makapix pin via /action/pin. */
-    BaseType_t ret = xTaskCreate(pin_task, "pin_io", 8192, p, 5, NULL);
+    // pinned to core 0: jitter work stream fix 7b (networking/SD tasks stay off the render core)
+    BaseType_t ret = xTaskCreatePinnedToCore(pin_task, "pin_io", 8192, p, 5, NULL, 0);
     if (ret != pdPASS) {
         ESP_LOGE(TAG, "Failed to create pin_io task");
         free(p);

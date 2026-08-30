@@ -565,17 +565,19 @@ esp_err_t show_url_init(void)
                                    MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     bool task_created = false;
     if (s_task_stack) {
-        s_task = xTaskCreateStatic(show_url_task, "show_url",
+        // pinned to core 0: jitter work stream fix 7b (networking/SD tasks stay off the render core)
+        s_task = xTaskCreateStaticPinnedToCore(show_url_task, "show_url",
                                    SHOW_URL_TASK_STACK_SIZE, NULL,
                                    tskIDLE_PRIORITY + 2,
-                                   s_task_stack, &s_task_buffer);
+                                   s_task_stack, &s_task_buffer, 0);
         task_created = (s_task != NULL);
     }
 
     if (!task_created) {
-        if (xTaskCreate(show_url_task, "show_url",
+        // pinned to core 0: jitter work stream fix 7b (networking/SD tasks stay off the render core)
+        if (xTaskCreatePinnedToCore(show_url_task, "show_url",
                         SHOW_URL_TASK_STACK_SIZE, NULL,
-                        tskIDLE_PRIORITY + 2, &s_task) != pdPASS) {
+                        tskIDLE_PRIORITY + 2, &s_task, 0) != pdPASS) {
             ESP_LOGE(TAG, "Failed to create task");
             vSemaphoreDelete(s_work_sem);
             s_work_sem = NULL;

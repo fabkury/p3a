@@ -177,9 +177,10 @@ static void transport_event_handler(void *arg, esp_event_base_t event_base,
             s_degraded = true;
             // Notice + quiesce from a dedicated task: the UI-mode switch and
             // the MQTT stop both block, and the event loop must stay free.
-            if (xTaskCreate(transport_failure_ui_task, "transport_ui", 4096,
+            // pinned to core 0: jitter work stream fix 7b (networking/SD tasks stay off the render core)
+            if (xTaskCreatePinnedToCore(transport_failure_ui_task, "transport_ui", 4096,
                             (void *)(intptr_t)TRANSPORT_UI_DEGRADED_NOTICE,
-                            CONFIG_P3A_APP_TASK_PRIORITY, NULL) != pdPASS) {
+                            CONFIG_P3A_APP_TASK_PRIORITY, NULL, 0) != pdPASS) {
                 ESP_LOGE(TAG, "Failed to create degraded-notice task");
                 // Minimal inline fallback: netif down is quick and stops the
                 // lwIP-fed SDIO retry storm; skip the blocking MQTT stop.
@@ -194,9 +195,10 @@ static void transport_event_handler(void *arg, esp_event_base_t event_base,
 
         // Reboot from a dedicated task: keeps the event loop free and gives
         // in-flight network error paths the countdown to unwind first.
-        if (xTaskCreate(transport_failure_ui_task, "transport_rbt", 4096,
+        // pinned to core 0: jitter work stream fix 7b (networking/SD tasks stay off the render core)
+        if (xTaskCreatePinnedToCore(transport_failure_ui_task, "transport_rbt", 4096,
                         (void *)(intptr_t)TRANSPORT_UI_REBOOT,
-                        CONFIG_P3A_APP_TASK_PRIORITY, NULL) != pdPASS) {
+                        CONFIG_P3A_APP_TASK_PRIORITY, NULL, 0) != pdPASS) {
             ESP_LOGE(TAG, "Failed to create reboot task; restarting inline");
             esp_restart();
         }

@@ -82,14 +82,16 @@ void makapix_provisioning_task(void *pvParameters)
 
             BaseType_t poll_ret = pdFAIL;
             if (s_cred_poll_stack) {
-                s_poll_task_handle = xTaskCreateStatic(makapix_credentials_poll_task, "cred_poll",
+                // pinned to core 0: jitter work stream fix 7b (networking/SD tasks stay off the render core)
+                s_poll_task_handle = xTaskCreateStaticPinnedToCore(makapix_credentials_poll_task, "cred_poll",
                                                         cred_poll_stack_size, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY,
-                                                        s_cred_poll_stack, &s_cred_poll_task_buffer);
+                                                        s_cred_poll_stack, &s_cred_poll_task_buffer, 0);
                 poll_ret = (s_poll_task_handle != NULL) ? pdPASS : pdFAIL;
             }
             if (poll_ret != pdPASS) {
-                poll_ret = xTaskCreate(makapix_credentials_poll_task, "cred_poll",
-                                       cred_poll_stack_size, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_poll_task_handle);
+                // pinned to core 0: jitter work stream fix 7b (networking/SD tasks stay off the render core)
+                poll_ret = xTaskCreatePinnedToCore(makapix_credentials_poll_task, "cred_poll",
+                                       cred_poll_stack_size, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_poll_task_handle, 0);
             }
             if (poll_ret != pdPASS) {
                 ESP_LOGE(MAKAPIX_TAG, "Failed to create credential polling task");

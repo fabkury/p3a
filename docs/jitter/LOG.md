@@ -616,3 +616,14 @@ the device; after = flash current build-trace), then the final merge (merge
 main into feat/jitter, resolve the 3 known conflicts branch-side,
 fast-forward main, push), then restore the device to a release build from
 main and confirm it plays clean.
+
+## 2026-08-30 evening — fix 9 verified; final merge next
+
+- Fix 9 A/B on identical build config (trace-only), `stress.py --phases upload`:
+  producer anomalies 11 -> 2, window max lateness 79 -> 30 ms, 0 stalls/warns
+  both sides. `runs/RUN-20260830-07-08-upload-ab.md`. Fix 9 kept.
+- Device now runs build-trace @ fix 9 (6dae17cc).
+
+**Next:** final merge (merge main into feat/jitter, 3 known conflicts
+branch-side, fast-forward main, push both), then flash the device with a
+release build from main and confirm clean playback; memory + README wrap-up.

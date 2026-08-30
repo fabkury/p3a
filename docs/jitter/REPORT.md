@@ -149,7 +149,7 @@ On the branch (`feat/jitter`), to land with the final merge:
   memory streams, spins, log floods), `POST /ota/check` ×3.
 - **Stress** (`stress.py`, RUN-20260830-02): rapid swaps, playset switches,
   a web-UI polling storm, OTA checks, forced refreshes, uploads: 0 stalls in
-  all six phases; uploads show sub-100 ms hiccups (fix 9 candidate below).
+  all six phases; the uploads' residual sub-100 ms hiccups became fix 9.
 - **Overnight**: 12 h clean apart from the OTA class that became fix 7.
 - **Phase 7** (release `sdkconfig` + `sdkconfig.trace.defaults`, no FreeRTOS
   run-time stats, no dev endpoints): RUN-20260830-06, 3.06 h, 146 901 valid
@@ -159,8 +159,9 @@ On the branch (`feat/jitter`), to land with the final merge:
 
 ## 6. Residuals and follow-ups
 
-- **Fix 9 candidate**: `/upload` writes in chunks that are not sector
-  multiples; sub-100 ms hiccups during uploads (never a stall in the soaks).
+- **Fix 9** (landed 2026-08-30 evening, `6dae17cc`): `/upload` writes through
+  a 64 KB aligned PSRAM stdio buffer; upload-phase producer anomalies 11 -> 2
+  (`runs/RUN-20260830-07-08-upload-ab.md`).
 - **Upstream**: report the no-yield CMD13 poll in `sdmmc_wait_for_idle()` to
   Espressif (esp-idf issue), with the reproducer numbers.
 - **Unexplained pair** in RUN-20260829-10 (#3/#4: 257/234 ms with no SD

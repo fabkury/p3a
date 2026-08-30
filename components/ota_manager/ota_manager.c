@@ -564,15 +564,20 @@ esp_err_t ota_manager_check_for_update(void)
 
     bool task_created = false;
     if (s_ota_check_stack) {
-        s_ota.check_task = xTaskCreateStatic(ota_check_task, "ota_check",
+        // Pinned to core 0 (jitter work stream fix 7, 2026-08-30): while it
+        // holds a socket/TLS lock that lwIP's prio-18 task waits on, this task
+        // inherits priority 18; unpinned it landed on core 1 and preempted the
+        // display consumer for ~560 ms (frames ready early, presented late).
+        // Three on-demand checks = five such stalls on RUN-20260829-12.
+        s_ota.check_task = xTaskCreateStaticPinnedToCore(ota_check_task, "ota_check",
                                               ota_check_stack_size, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY,
-                                              s_ota_check_stack, &s_ota_check_task_buffer);
+                                              s_ota_check_stack, &s_ota_check_task_buffer, 0);
         task_created = (s_ota.check_task != NULL);
     }
 
     if (!task_created) {
-        if (xTaskCreate(ota_check_task, "ota_check",
-                        ota_check_stack_size, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_ota.check_task) != pdPASS) {
+        if (xTaskCreatePinnedToCore(ota_check_task, "ota_check",
+                        ota_check_stack_size, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_ota.check_task, 0) != pdPASS) {
             ESP_LOGE(TAG, "Failed to create check task");
             return ESP_ERR_NO_MEM;
         }

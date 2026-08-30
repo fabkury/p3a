@@ -542,3 +542,20 @@ Phase 6 policy decision.
   one CMD13 per tick). Experiment wrapper removed from frame_trace. Release
   and diag builds in progress; then RUN-20260830-05 soak.
 
+## 2026-08-30 afternoon — fixes 2–8 cherry-picked to main (Fab's go-ahead)
+
+- main @ `8cf28935` (pushed): a2650d2e fix 2, 69ba412f fix 3, 30805a68 fix 4,
+  4f389697 fix 5, 944dd73a fix 6, a61c3c69 fix 7 (incl. lwIP affinity in
+  sdkconfig), 24164cb3 fix 7b (pinning hunks only), 8cf28935 fix 8
+  (`sd_idle_wait` without frame_trace marks). Phase 6 policy, frame_trace and
+  jitter-lab stay on feat/jitter. Done in the worktree `../repo-main`; release
+  build verified there (wrapper linked, no trace objects, P4 rev guards intact;
+  note: the gitignored `components/makapix/certs/makapix_ca_cert.inc` must be
+  copied into any fresh worktree to build).
+- RUN-20260830-05 (fixes 1–8 + Phase 6) keeps soaking on the diag build.
+
+**Next:** Phase 7 = flash `build-trace` (release config + trace only, all
+fixes) and soak it against the pass bar; then merge feat/jitter into main
+(rebase onto main first: identical hunks), decide whether Phase 6 goes to
+main (recommended), upstream issue to Espressif for the CMD13 poll.
+

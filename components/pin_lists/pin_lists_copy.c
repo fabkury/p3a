@@ -17,13 +17,14 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 static const char *TAG = "pl_copy";
 
 #define COPY_CHUNK_SIZE  (32 * 1024)
 
 typedef struct {
-    FILE *src;
+    int src_fd;
     const char *src_path;
     uint8_t *chunk;
     size_t total;
@@ -33,18 +34,20 @@ static esp_err_t copy_writer(FILE *dst, void *arg)
 {
     copy_writer_ctx_t *ctx = (copy_writer_ctx_t *)arg;
 
+    // read() rather than fread(): newlib's stdio feeds FATFS one sector per SD
+    // command (jitter work stream fix 6); read() gets whole-cluster transfers.
     while (true) {
-        size_t got = fread(ctx->chunk, 1, COPY_CHUNK_SIZE, ctx->src);
+        ssize_t got = read(ctx->src_fd, ctx->chunk, COPY_CHUNK_SIZE);
+        if (got < 0) {
+            ESP_LOGE(TAG, "read %s error (errno=%d)", ctx->src_path, errno);
+            return ESP_FAIL;
+        }
         if (got == 0) break;
-        if (fwrite(ctx->chunk, 1, got, dst) != got) {
+        if (fwrite(ctx->chunk, 1, (size_t)got, dst) != (size_t)got) {
             ESP_LOGE(TAG, "write short while copying %s", ctx->src_path);
             return ESP_FAIL;
         }
-        ctx->total += got;
-    }
-    if (ferror(ctx->src)) {
-        ESP_LOGE(TAG, "read %s error", ctx->src_path);
-        return ESP_FAIL;
+        ctx->total += (size_t)got;
     }
     return ESP_OK;
 }
@@ -58,8 +61,8 @@ esp_err_t pl_artwork_copy(const char *src_path, const char *dest_path)
     esp_err_t err = sd_path_ensure_parent_dirs(dest_path);
     if (err != ESP_OK) return err;
 
-    FILE *src = fopen(src_path, "rb");
-    if (!src) {
+    int src = open(src_path, O_RDONLY);
+    if (src < 0) {
         ESP_LOGE(TAG, "open src %s: %s", src_path, strerror(errno));
         return ESP_ERR_NOT_FOUND;
     }
@@ -68,16 +71,16 @@ esp_err_t pl_artwork_copy(const char *src_path, const char *dest_path)
     uint8_t *chunk = heap_caps_aligned_alloc(128, COPY_CHUNK_SIZE, MALLOC_CAP_SPIRAM);
     if (!chunk) chunk = malloc(COPY_CHUNK_SIZE);
     if (!chunk) {
-        fclose(src);
+        close(src);
         return ESP_ERR_NO_MEM;
     }
 
     /* Atomic copy via the shared helper (tmp + fsync + rename) */
-    copy_writer_ctx_t ctx = { .src = src, .src_path = src_path,
+    copy_writer_ctx_t ctx = { .src_fd = src, .src_path = src_path,
                               .chunk = chunk, .total = 0 };
     err = fs_atomic_write_cb(dest_path, copy_writer, &ctx, NULL);
     free(chunk);
-    fclose(src);
+    close(src);
 
     if (err != ESP_OK) {
         return err;

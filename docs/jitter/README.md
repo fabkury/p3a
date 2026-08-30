@@ -11,7 +11,7 @@ work before checking **Current status** and **Resume protocol** below.
 
 ## Current status
 
-**Phase 7 CLOSED (2026-08-30 17:13, Fab): RUN-20260830-06 on the trace-only release build (`build-trace`) passed the bar — 3.06 h, 0 stalls, 0 warns, p99 36.7 ms, max 79.8 ms. Full story in `REPORT.md`. Remaining: fix 9 upload A/B, final merge of feat/jitter into main (MERGE, not rebase), restore the device to a release build. Ladder: 37.7 → 0 stalls/h.**
+**WORK STREAM COMPLETE (2026-08-30): Phase 7 passed and closed by Fab (RUN-20260830-06: 3.06 h, 0 stalls, 0 warns, p99 36.7 ms on the trace-only release build). feat/jitter merged into main (`f65f1dd4`, pushed): fixes 1–9 + Phase 6 re-baseline + diagnostics (all behind `CONFIG_P3A_FRAME_TRACE`, default off) + host/jitter-lab. Ladder: 37.7 → 0 stalls/h. Dev unit restored to the release build. Full story: `REPORT.md`. Open items: Espressif issue (`upstream-espressif-issue.md`, Fab posts), diag/trace overlays remain available for future regressions.**
 
 | Phase | Description | Status |
 |-------|-------------|--------|
@@ -22,7 +22,7 @@ work before checking **Current status** and **Resume protocol** below.
 | 4 | Provocation runs per hypothesis (H1..H5 in PLAN.md) | partially skipped — the A/B (RUN-06 vs RUN-07) was decisive; provocations kept in reserve for residual stalls |
 | 5 | Fixes, one per confirmed cause, each with before/after soak | in progress — fix 1 `065d6c90` (aligned PSRAM SD buffers): 32 → 0 stalls, SD write median 70 → 4.7 ms; fix also on main as `6ca1e7c5`; multi-hour confirmation soak still owed |
 | 6 | Catch-up policy decision (rush / drop / resync) with data | done on branch (producer-bound re-baseline, 2026-08-30; to main at the final merge) |
-| 7 | Final soak on plain build (trace on, no diag overlay) against pass bar; report; merge | soak PASSED + closed by Fab 2026-08-30 (RUN-20260830-06); merge pending |
+| 7 | Final soak on plain build (trace on, no diag overlay) against pass bar; report; merge | done: RUN-20260830-06 PASS; merged to main `f65f1dd4` 2026-08-30 |
 
 Pass criterion (Fab, 2026-08-28): **no presented-frame lateness ≥ 100 ms during a
 multi-hour soak on the normal workload** (Makapix + Giphy/Klipy + museum channels

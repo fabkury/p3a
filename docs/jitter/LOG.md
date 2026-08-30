@@ -627,3 +627,21 @@ main and confirm it plays clean.
 **Next:** final merge (merge main into feat/jitter, 3 known conflicts
 branch-side, fast-forward main, push both), then flash the device with a
 release build from main and confirm clean playback; memory + README wrap-up.
+
+## 2026-08-30 evening — final merge done; work stream complete
+
+- `git merge main` into feat/jitter (`f65f1dd4`, signed): the 3 known
+  conflicts resolved branch-side. main fast-forwarded to the same commit in
+  the worktree and pushed; release build from merged main verified first
+  (trace off, 0 frame_trace objects, `__wrap_sdmmc_wait_for_idle` linked,
+  rev guards + lwIP affinity intact).
+- Dev unit flashed with that release build and verified: up, hostname
+  p3a-fab, `/api/debug/*` 404 (trace compiled out). Device restored; no
+  runtime settings were changed during Phase 7, nothing else to restore.
+- Work stream complete. Deliverables: fixes 1–9 + Phase 6 on main,
+  diagnostics behind `CONFIG_P3A_FRAME_TRACE` (default off, zero release
+  overhead), `host/jitter-lab/`, `REPORT.md`, draft Espressif issue.
+
+**Next:** nothing scheduled. Open: Fab posts the Espressif issue if desired
+(fill in the card model); any future jitter regression starts at README.md
+resume protocol with `build.ps1 -Diag` and a soak.

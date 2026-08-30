@@ -559,3 +559,25 @@ fixes) and soak it against the pass bar; then merge feat/jitter into main
 (rebase onto main first: identical hunks), decide whether Phase 6 goes to
 main (recommended), upstream issue to Espressif for the CMD13 poll.
 
+
+## 2026-08-30 afternoon — RUN-05 passes; Phase 7 soak started
+
+- RUN-20260830-05 (diag build 0e2a9bbc, fixes 1–8 + Phase 6, Work mix):
+  2.7 h, 0 stalls, 0 warns, p99 lateness 37.6 ms, max 125 ms (one
+  producer-explained frame). First run to pass the bar: `runs/RUN-20260830-05.md`.
+- Phase 7 build: `build-trace/` = release `sdkconfig` + `sdkconfig.trace.defaults`
+  (trace on, 32768 entries, no FreeRTOS run-time stats, no dev endpoints).
+  Regenerated from the current release sdkconfig so it carries fix 8 and the
+  lwIP-affinity lines; map check: `__wrap_sdmmc_wait_for_idle` linked.
+  Flashed to COM5; `/api/debug/frames/stats` confirms runtime_stats=false,
+  dev_endpoints=false.
+- RUN-20260830-06 started 14:09 (`soak.ps1 -Start … -Hours 24 -Every 30`),
+  Monitor armed (stall reports, reboots, puller errors, process health,
+  hourly heartbeat). Note the trace-only build has no per-task CPU deltas in
+  the UART report (`JTR|T` lines absent by design).
+
+**Next:** let RUN-06 run several hours; analyze against the pass bar; write
+`runs/RUN-20260830-06.md`; then the final merge (rebase feat/jitter onto
+main, Phase 6 to main recommended), `docs/jitter/REPORT.md`, Espressif issue
+for the CMD13 poll, fix 9 candidate (upload chunks in sector multiples), and
+restore the device to a release build at the very end.

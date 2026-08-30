@@ -11,7 +11,7 @@ work before checking **Current status** and **Resume protocol** below.
 
 ## Current status
 
-**Phase 5/6 (2026-08-30): eight fixes + the Phase 6 re-baseline on feat/jitter. Root physics of the SD stall family found and removed (fix 8: IDF's no-yield CMD13 polling while the card is busy). Ladder 37.7 → 0.17 → 0.27 stalls/h (RUN-03, pre-fix-8); RUN-20260830-05 (fixes 1–8 + Phase 6) soaking. Fixes 1–8 are on main (`8cf28935`); Phase 6 and the diagnostics stay on the branch until the final merge.**
+**Phase 7 (2026-08-30 afternoon): RUN-20260830-05 (fixes 1–8 + Phase 6, diag build) PASSED the bar (2.7 h, 0 stalls, 0 warns, p99 37.6 ms). Now soaking RUN-20260830-06 on the Phase 7 build (`build-trace`: release sdkconfig + `sdkconfig.trace.defaults`, no run-time stats, no dev endpoints, fixes 1–8 + Phase 6). Fixes 1–8 are on main (`8cf28935`); Phase 6 and the diagnostics stay on the branch until the final merge. Ladder: 37.7 → 0.17 → 0.27 → 0 stalls/h.**
 
 | Phase | Description | Status |
 |-------|-------------|--------|
@@ -21,8 +21,8 @@ work before checking **Current status** and **Resume protocol** below.
 | 3 | Baseline soak on normal workload (multi-hour); attribution table | done 2026-08-28 — RUN-04/05/06: stalls = single-frame upscale blow-ups during SD writes; SD bounce path (H3b) identified |
 | 4 | Provocation runs per hypothesis (H1..H5 in PLAN.md) | partially skipped — the A/B (RUN-06 vs RUN-07) was decisive; provocations kept in reserve for residual stalls |
 | 5 | Fixes, one per confirmed cause, each with before/after soak | in progress — fix 1 `065d6c90` (aligned PSRAM SD buffers): 32 → 0 stalls, SD write median 70 → 4.7 ms; fix also on main as `6ca1e7c5`; multi-hour confirmation soak still owed |
-| 6 | Catch-up policy decision (rush / drop / resync) with data | not started |
-| 7 | Final soak on plain build (trace on, no diag overlay) against pass bar; report; merge | not started |
+| 6 | Catch-up policy decision (rush / drop / resync) with data | done on branch (producer-bound re-baseline, 2026-08-30; to main at the final merge) |
+| 7 | Final soak on plain build (trace on, no diag overlay) against pass bar; report; merge | in progress: RUN-20260830-06 soaking on `build-trace` (started 2026-08-30 14:09) |
 
 Pass criterion (Fab, 2026-08-28): **no presented-frame lateness ≥ 100 ms during a
 multi-hour soak on the normal workload** (Makapix + Giphy/Klipy + museum channels

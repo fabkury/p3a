@@ -11,7 +11,7 @@ work before checking **Current status** and **Resume protocol** below.
 
 ## Current status
 
-**Phase 5 in progress (2026-08-28): first fix (H3b, aligned SD DMA buffers, `065d6c90`) verified A/B: 37.7 stalls/h → 0 in 1.1 h. Fix cherry-picked to main (`6ca1e7c5`). Confirmation soak still owed (RUN-08 was cut short; see LOG 'Wrap-up' for the exact next steps).**
+**Phase 5/6 (2026-08-30): eight fixes + the Phase 6 re-baseline on feat/jitter. Root physics of the SD stall family found and removed (fix 8: IDF's no-yield CMD13 polling while the card is busy). Ladder 37.7 → 0.17 → 0.27 stalls/h (RUN-03, pre-fix-8); RUN-20260830-05 (fixes 1–8 + Phase 6) soaking. Only fix 1 is on main; cherry-pick of 2–8 scheduled after a clean soak (worktree `../repo-main`).**
 
 | Phase | Description | Status |
 |-------|-------------|--------|

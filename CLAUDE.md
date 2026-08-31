@@ -102,4 +102,4 @@ Clarifying questions are always welcome.
 
 ## Active work streams
 
-- **Jitter elimination** (branch `feat/jitter`, multi-week): start at `docs/jitter/README.md` (status, rules, resume protocol) before touching the render pipeline or the dev device.
+- None currently. (Jitter elimination completed and merged 2026-08; for jitter regressions, start at `docs/jitter/README.md`.)

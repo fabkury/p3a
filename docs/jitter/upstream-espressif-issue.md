@@ -2,7 +2,7 @@
 
 Status: DRAFT, not posted. Fab posts it (or not) at https://github.com/espressif/esp-idf/issues.
 Written 2026-08-30 from the jitter work stream findings (`REPORT.md` §3.1,
-`runs/RUN-20260830-03-04.md`). Fill in the card model before posting.
+`runs/RUN-20260830-03-04.md`). Environment verified 2026-08-31 (BSP `bsp_sdcard_mount`: slot 0, 4-bit, SDMMC_FREQ_HIGHSPEED; card = TOPESEL 32 GB UHS-I Class 10, Amazon B07Z7V34RG).
 
 ---
 
@@ -11,8 +11,8 @@ Written 2026-08-30 from the jitter work stream findings (`REPORT.md` §3.1,
 ### Environment
 
 - ESP-IDF v5.5.4, ESP32-P4 (rev v1.0), Waveshare ESP32-P4-WIFI6-Touch-LCD-4B
-- SDMMC host, 4-bit, default clock; FAT filesystem via `esp_vfs_fat_sdmmc_mount`
-- Card: `<fill in: brand/model/class>`; card-busy after a single-block write measured at 1 to 45 ms on this card
+- SDMMC host slot 0, 4-bit bus, `max_freq_khz = SDMMC_FREQ_HIGHSPEED` (40 MHz, no DDR), FAT filesystem via `esp_vfs_fat_sdmmc_mount`; FreeRTOS tick 1000 Hz
+- Card: TOPESEL 32 GB microSDHC, UHS-I, Class 10 (a generic consumer card; card-busy after a single-block write measured at 1 to 45 ms on it)
 
 ### Summary
 

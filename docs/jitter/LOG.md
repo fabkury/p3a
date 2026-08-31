@@ -645,3 +645,15 @@ release build from main and confirm clean playback; memory + README wrap-up.
 **Next:** nothing scheduled. Open: Fab posts the Espressif issue if desired
 (fill in the card model); any future jitter regression starts at README.md
 resume protocol with `build.ps1 -Diag` and a soak.
+
+## 2026-08-31 — esp-idf issue posted
+
+- Environment verified in the BSP (`bsp_sdcard_mount`: slot 0, 4-bit,
+  SDMMC_FREQ_HIGHSPEED 40 MHz, no DDR); card = TOPESEL 32 GB microSDHC UHS-I
+  Class 10 (Amazon B07Z7V34RG). Issue tracker searched: no prior report.
+  Master still has the identical loop (line 449).
+- Posted via `gh` from Fab's account: https://github.com/espressif/esp-idf/issues/19034
+  (Runtime-bug form layout; PR offer kept at Fab's choice).
+
+**Next:** watch the issue for Espressif's response; if they accept the
+approach, open the PR (the 6-line change in `sd_idle_wait.c` is the patch).

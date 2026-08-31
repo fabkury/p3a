@@ -162,8 +162,9 @@ On the branch (`feat/jitter`), to land with the final merge:
 - **Fix 9** (landed 2026-08-30 evening, `6dae17cc`): `/upload` writes through
   a 64 KB aligned PSRAM stdio buffer; upload-phase producer anomalies 11 -> 2
   (`runs/RUN-20260830-07-08-upload-ab.md`).
-- **Upstream**: report the no-yield CMD13 poll in `sdmmc_wait_for_idle()` to
-  Espressif (esp-idf issue), with the reproducer numbers.
+- **Upstream**: reported to Espressif 2026-08-31 as https://github.com/espressif/esp-idf/issues/19034
+  (no-yield CMD13 poll in `sdmmc_wait_for_idle()`, reproducer numbers,
+  suggested patch, PR offered). Code unchanged on master at posting time.
 - **Unexplained pair** in RUN-20260829-10 (#3/#4: 257/234 ms with no SD
   activity; consumer vsync wait 143 ms while the UART reporter printed). Not
   seen again after fix 7/7b.

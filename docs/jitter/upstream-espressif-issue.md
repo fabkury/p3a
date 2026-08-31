@@ -1,6 +1,6 @@
 # Draft: esp-idf issue about the no-yield CMD13 poll in `sdmmc_wait_for_idle()`
 
-Status: DRAFT, not posted. Fab posts it (or not) at https://github.com/espressif/esp-idf/issues.
+Status: POSTED 2026-08-31 as https://github.com/espressif/esp-idf/issues/19034 (by Fab's account via gh, laid out in the esp-idf 'Runtime bug' form structure: IDF v5.5.4, P4 rev v1.0, Windows/idf.py/PowerShell, Waveshare 4B, USB power). The text below is the pre-form draft; the posted body carries the same content.
 Written 2026-08-30 from the jitter work stream findings (`REPORT.md` §3.1,
 `runs/RUN-20260830-03-04.md`). Environment verified 2026-08-31 (BSP `bsp_sdcard_mount`: slot 0, 4-bit, SDMMC_FREQ_HIGHSPEED; card = TOPESEL 32 GB UHS-I Class 10, Amazon B07Z7V34RG).
 

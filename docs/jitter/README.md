@@ -11,7 +11,7 @@ work before checking **Current status** and **Resume protocol** below.
 
 ## Current status
 
-**WORK STREAM COMPLETE (2026-08-30): Phase 7 passed and closed by Fab (RUN-20260830-06: 3.06 h, 0 stalls, 0 warns, p99 36.7 ms on the trace-only release build). feat/jitter merged into main (`f65f1dd4`, pushed): fixes 1–9 + Phase 6 re-baseline + diagnostics (all behind `CONFIG_P3A_FRAME_TRACE`, default off) + host/jitter-lab. Ladder: 37.7 → 0 stalls/h. Dev unit restored to the release build. Full story: `REPORT.md`. Open items: Espressif issue (`upstream-espressif-issue.md`, Fab posts), diag/trace overlays remain available for future regressions.**
+**WORK STREAM COMPLETE (2026-08-30): Phase 7 passed and closed by Fab (RUN-20260830-06: 3.06 h, 0 stalls, 0 warns, p99 36.7 ms on the trace-only release build). feat/jitter merged into main (`f65f1dd4`, pushed): fixes 1–9 + Phase 6 re-baseline + diagnostics (all behind `CONFIG_P3A_FRAME_TRACE`, default off) + host/jitter-lab. Ladder: 37.7 → 0 stalls/h. Dev unit restored to the release build. Full story: `REPORT.md`. Espressif issue posted 2026-08-31: https://github.com/espressif/esp-idf/issues/19034. Diag/trace overlays remain available for future regressions.**
 
 | Phase | Description | Status |
 |-------|-------------|--------|

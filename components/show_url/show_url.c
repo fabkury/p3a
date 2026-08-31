@@ -46,7 +46,14 @@ static const char *TAG = "show_url";
 #include "p3a_limits.h"
 #define SHOW_URL_MAX_FILE_SIZE      P3A_MAX_ARTWORK_SIZE
 #define SHOW_URL_CHUNK_SIZE         (128 * 1024)         // 128 KB (matches makapix_artwork.c)
-#define SHOW_URL_TASK_STACK_SIZE    8192
+// 16 KB: this task's own frame carries ~3.9 KB of URL/path buffers, and on
+// top of it run the TLS download (mbedTLS on caller stack), the SD index
+// rebuild (FATFS long-name buffers), and execute_playset. 8 KB overflowed
+// (HW stack guard fault, 2026-08-31) once jitter fix 7b pinned this task to
+// core 0 with the rest of the networking load; siblings doing less use
+// 12-16 KB (makapix refresh 12 KB, MQTT tasks 16 KB). PSRAM-backed, so the
+// extra 8 KB is effectively free.
+#define SHOW_URL_TASK_STACK_SIZE    16384
 #define SHOW_URL_MAX_URL_LEN        2048
 #define SHOW_URL_MAX_FILENAME_LEN   256
 

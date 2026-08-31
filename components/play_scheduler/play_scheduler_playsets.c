@@ -679,6 +679,24 @@ esp_err_t play_scheduler_execute_playset(const ps_playset_t *playset, bool user_
         // Load existing cache if available
         ps_load_channel_cache(ch);
 
+        // ARTWORK fast path: if the file is already on disk (show_url just
+        // downloaded it; replay of a vault artwork), activate the channel
+        // right here so the has_entries check below plays it synchronously.
+        // Leaving activation to the refresh task races that task's playback
+        // trigger (a cheap stat) against this function's tail (a ~500 ms
+        // active_playset_save), and losing paints a "Loading artwork..."
+        // message over the already-started playback that nothing ever
+        // clears. refresh_pending stays false so the refresh task doesn't
+        // run a second, redundant trigger for the same swap.
+        if (spec->type == PS_CHANNEL_TYPE_ARTWORK && spec->artwork.filepath[0] != '\0') {
+            struct stat art_st;
+            if (stat(spec->artwork.filepath, &art_st) == 0 && art_st.st_size > 0) {
+                ch->active = true;
+                ch->refresh_pending = false;
+                s_state->artwork_state.download_pending = false;
+            }
+        }
+
         size_t entries_count = (ch->cache ? ch->cache->entry_count : ch->entry_count);
         ESP_LOGD(TAG, "Channel[%zu]: '%s', type=%d, weight=%lu, active=%d, entries=%zu",
                  i, ch->display_name, ch->type, (unsigned long)ch->weight,
@@ -834,6 +852,17 @@ esp_err_t play_scheduler_execute_playset(const ps_playset_t *playset, bool user_
         // channels this is unnecessary — play_scheduler_next() repopulates
         // history before returning — but those don't take this branch.
         xSemaphoreTake(s_state->mutex, portMAX_DELAY);
+        if (s_state->first_swap_emitted) {
+            // The refresh task (or LAi first-available) already found content
+            // and triggered this playset's first swap in the window between
+            // the mutex release above and here (active_playset_save makes
+            // that window ~500 ms wide). Clearing history now would drop the
+            // pick it just recorded, and the message below would cover a
+            // playing animation with a "Loading" screen nothing ever clears.
+            xSemaphoreGive(s_state->mutex);
+            ESP_LOGI(TAG, "Playback already triggered during playset setup - skipping cold-start message");
+            return ESP_OK;
+        }
         ps_history_clear(s_state);
         xSemaphoreGive(s_state->mutex);
         p3a_current_post_clear();

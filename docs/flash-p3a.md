@@ -4,6 +4,12 @@ Flash the p3a firmware to your Waveshare ESP32-P4 board. This is a one-time proc
 
 > **Just got your board?** This page is the deep-dive on flashing methods. If you'd rather follow a single end-to-end walkthrough that covers flashing, Wi-Fi setup, and seeing your first artwork, start with the [Quick Start Guide](QUICK-START.md).
 
+Whichever method you pick, plug the cable into the **UART** port: the USB-C port farther from the buttons. The other port (HS) is for USB storage, not flashing.
+
+<p align="center">
+  <img src="../images/hardware/p3a-buttons-and-ports.webp" alt="p3a side view: PAUSE (BOOT) and REBOOT (RESET) buttons, USB-HS port for SD card access, USB-UART port for flashing" width="600">
+</p>
+
 ---
 
 ## Option 1: Web Flasher — Recommended
@@ -14,7 +20,7 @@ The easiest way to flash your p3a. No software installation required — just a 
 
 1. Go to the [**p3a Web Flasher**](https://fabkury.github.io/p3a/web-flasher/)
 2. Select the firmware version from the dropdown
-3. Connect your p3a via USB-C
+3. Connect your p3a via USB-C (UART port)
 4. Click **Connect** and select your device from the browser prompt
 5. Click **Flash Device**
 6. Wait ~2 minutes
@@ -29,7 +35,7 @@ The web flasher downloads firmware directly from GitHub and flashes it to your d
 A standalone Windows application for flashing — useful if you don't have Chrome/Edge or prefer an offline tool.
 
 1. Download `p3a-flasher.exe` from the [latest GitHub Release](https://github.com/fabkury/p3a/releases/latest)
-2. Connect your p3a via USB-C
+2. Connect your p3a via USB-C (UART port)
 3. Run `p3a-flasher.exe`
 4. Click **Flash Device**
 5. Wait ~2 minutes
@@ -75,11 +81,6 @@ pip3 install esptool
 
 1. Use a **USB-C data cable** (charging-only cables won't work)
 2. Connect to the **UART (flashing/serial) USB-C port** on your board — labelled UART/Serial on the silkscreen, not the HS port used for USB storage
-
-   <p align="center">
-     <img src="../images/hardware/p3a-buttons-and-ports.webp" alt="p3a side view: PAUSE (BOOT) and REBOOT (RESET) buttons, USB-HS port for SD card access, USB-UART port for flashing" width="600">
-   </p>
-
 3. Find your serial port:
    - **Windows:** Open Device Manager → Ports → Note the COM number (e.g., `COM5`)
    - **macOS:** Run `ls /dev/cu.usb*` in Terminal

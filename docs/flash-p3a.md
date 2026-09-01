@@ -75,6 +75,11 @@ pip3 install esptool
 
 1. Use a **USB-C data cable** (charging-only cables won't work)
 2. Connect to the **UART (flashing/serial) USB-C port** on your board — labelled UART/Serial on the silkscreen, not the HS port used for USB storage
+
+   <p align="center">
+     <img src="../images/hardware/p3a-buttons-and-ports.webp" alt="p3a side view: PAUSE (BOOT) and REBOOT (RESET) buttons, USB-HS port for SD card access, USB-UART port for flashing" width="600">
+   </p>
+
 3. Find your serial port:
    - **Windows:** Open Device Manager → Ports → Note the COM number (e.g., `COM5`)
    - **macOS:** Run `ls /dev/cu.usb*` in Terminal

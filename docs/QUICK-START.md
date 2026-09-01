@@ -38,6 +38,11 @@ The card is where your p3a stores the artwork it downloads and any files you cop
 "Flashing" just means installing the p3a software onto the board. The easiest way takes a couple of minutes and only needs a Chrome or Edge browser:
 
 1. Plug the board into your computer with the USB-C cable. Use the **UART** port: it's the port away from the buttons, not the one closer to the buttons.
+
+   <p align="center">
+     <img src="../images/hardware/p3a-buttons-and-ports.webp" alt="p3a side view: PAUSE (BOOT) and REBOOT (RESET) buttons, USB-HS port for SD card access, USB-UART port for flashing" width="600">
+   </p>
+
 2. Open the **[p3a Web Flasher](https://fabkury.github.io/p3a/web-flasher/)** in Chrome or Edge.
 3. Pick the latest version from the dropdown and click **Connect**. A browser pop-up asks which device to connect to — pick the one that appears.
 4. Click **Flash Device** and wait about two minutes. The board reboots when it's done.

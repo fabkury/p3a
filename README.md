@@ -121,6 +121,10 @@ All controls are also available via the web UI and REST API.
 
 ### Physical Buttons
 
+<p align="center">
+  <img src="images/hardware/p3a-buttons-and-ports.webp" alt="p3a side view: PAUSE (BOOT) and REBOOT (RESET) buttons, USB-HS port for SD card access, USB-UART port for flashing" width="600">
+</p>
+
 - **BOOT** (top button, farther from the USB-C ports) — pause/unpause: the screen goes black, then resumes on the same artwork
 - **RESET** (bottom button) — hardware reset: reboots the device immediately
 

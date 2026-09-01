@@ -101,6 +101,10 @@ When idle (no touch or API interaction), the device automatically advances to th
 
 Besides the touchscreen, the board has two small push-buttons next to the USB-C ports:
 
+<p align="center">
+  <img src="../images/hardware/p3a-buttons-and-ports.webp" alt="p3a side view: PAUSE (BOOT) and REBOOT (RESET) buttons, USB-HS port for SD card access, USB-UART port for flashing" width="600">
+</p>
+
 | Button | Position | Action |
 |--------|----------|--------|
 | **BOOT** | Top — farther from the USB-C ports | Pause / unpause playback |
@@ -168,7 +172,7 @@ Two ways to copy files onto the card:
 
 ## USB SD Card Access
 
-p3a has two USB-C ports, but only one (the High-Speed port) works as a USB storage device.
+p3a has two USB-C ports, but only one (the High-Speed port) works as a USB storage device (see the [Physical Buttons](#physical-buttons) diagram).
 
 1. **Connect a USB-C cable** from the HS port to your computer
 2. **The microSD card appears as a removable drive** — copy, delete, or organize files as needed

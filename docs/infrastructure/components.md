@@ -279,7 +279,7 @@ All 32 components live under `components/`: 29 p3a components, described in orde
 
 ## 26. http_fetch — Shared HTTP Fetch/Download Helper
 
-- **Purpose**: One implementation of the `esp_http_client` boilerplate for every content fetcher (Giphy, Klipy, museums, Makapix, show_url) and the OTA downloader: client config and cert bundle, optional POST body, status classification, a unified retry / truncated-read / `Retry-After` policy, optional manual 3xx redirect following, optional SDIO-bus poll-wait, and an atomic temp-file-then-rename write for the file variant
+- **Purpose**: The one `esp_http_client` implementation for every HTTPS request the firmware makes, except the firmware image download (`esp_https_ota` in `ota_manager`) and the persistent Makapix MQTT link. Callers today: Giphy, Klipy, all museums, Makapix (artwork downloads, promoted-artworks walk, provisioning, certificate renewal), show_url, and the OTA metadata paths (GitHub release list, `.sha256`, `manifest.json`, web UI image). It owns client config and cert bundle, optional POST body, status classification, a unified retry / truncated-read / `Retry-After` policy, optional manual 3xx redirect following, optional SDIO-bus poll-wait, and an atomic temp-file-then-rename write for the file variant
 - **Key files**: `http_fetch.c`
 - **Public API**: `http_fetch.h`
 - **Key functions**: `http_fetch_to_buffer()` (body into a caller-owned buffer, for JSON/text APIs), `http_fetch_to_file()` (body into a file on the SD card, for binary artwork)

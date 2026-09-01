@@ -144,7 +144,7 @@ Supporting components:
 | `pin_lists` | Pinned-artwork vault: multiple named lists, each a first-class channel, under `/sdcard/p3a/pinned/` |
 | `show_url` | Download an artwork from a URL and play it |
 | `storage_eviction` | Age-based cleanup of cache debris (artwork, `.404` markers, orphaned `.tmp` files) and emptied directories |
-| `http_fetch` | Shared HTTP fetch/download helper used by the Giphy, museum, Makapix, and show_url fetchers |
+| `http_fetch` | Shared HTTP fetch/download helper and TLS concurrency gate. Every HTTPS request goes through it except the firmware image download (`esp_https_ota`) and the MQTT link |
 | `event_bus` | Typed events with categories, subscribe/emit |
 | `sdio_bus` | Coordinates the SDMMC controller shared between Wi-Fi (SDIO slot 1 via esp_hosted) and the SD card (slot 0) |
 | `sd_idle_wait` | Yielding replacement for IDF's `sdmmc_wait_for_idle()` (jitter fix 8) |

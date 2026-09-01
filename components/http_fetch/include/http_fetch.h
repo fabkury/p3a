@@ -5,15 +5,23 @@
  * @file http_fetch.h
  * @brief Shared HTTP fetch/download helper.
  *
- * Collapses the esp_http_client boilerplate that was hand-rolled across the
- * Giphy, museum (art_institution), Makapix and show_url fetchers into one
- * place: client config + cert bundle, optional POST body, status
- * classification, a unified retry / truncated-read / Retry-After policy
- * (modeled on the Giphy path), optional manual 3xx-redirect following, an
- * optional SDIO-bus poll-wait, and (for the file variant) an atomic
- * temp-file-then-rename write.
+ * Every HTTPS request the firmware makes goes through here, with two
+ * exceptions by design: the firmware image download (esp_https_ota in
+ * components/ota_manager) and the persistent Makapix MQTT link (esp-mqtt).
+ * Callers today: the Giphy and Klipy API and download paths, all museums
+ * (art_institution), Makapix (artwork downloads, the promoted-artworks HTTPS
+ * walk, provisioning, certificate renewal), show_url, and the OTA metadata
+ * paths (GitHub release list, .sha256, manifest.json, web UI image). Adding
+ * a fetcher means calling one of the two entry points below, not
+ * hand-rolling esp_http_client.
  *
- * Because every content fetcher funnels through here, this is also where the
+ * What the one core owns: client config + cert bundle, optional POST body,
+ * status classification, a unified retry / truncated-read / Retry-After
+ * policy (modeled on the original Giphy path), optional manual 3xx-redirect
+ * following, an optional SDIO-bus poll-wait, and (for the file variant) an
+ * atomic temp-file-then-rename write.
+ *
+ * Because every fetcher funnels through here, this is also where the
  * process-wide TLS concurrency gate lives: at most
  * CONFIG_HTTP_FETCH_MAX_CONCURRENT_TLS transfers hold a live TLS session at
  * once, so overlapping HTTPS streams can't starve each other on the single

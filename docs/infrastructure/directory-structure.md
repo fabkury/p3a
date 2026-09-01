@@ -50,7 +50,7 @@ p3a/
 │       ├── ugfx_ui.h
 │       └── version.h
 │
-├── components/                          # Custom components (25 total)
+├── components/                          # Custom components (32 total)
 │   ├── p3a_core/                        # Unified state machine and lifecycle
 │   │   ├── p3a_state.c                  # Global state machine
 │   │   ├── p3a_state_channel.c          # Channel-related state transitions
@@ -347,6 +347,41 @@ p3a/
 │   │   ├── debug_http_log.h
 │   │   └── CMakeLists.txt
 │   │
+│   ├── pin_lists/                       # Pinned-artwork lists (multiple named lists, each a channel)
+│   │   ├── pin_lists.c
+│   │   ├── pin_lists_state.c
+│   │   ├── pin_lists_manifest.c
+│   │   ├── pin_lists_order.c
+│   │   ├── pin_lists_entry.c
+│   │   ├── pin_lists_copy.c
+│   │   ├── pin_lists_internal.h
+│   │   ├── include/pin_lists.h
+│   │   ├── include/pin_lists_types.h
+│   │   └── CMakeLists.txt
+│   │
+│   ├── http_fetch/                      # Shared HTTP fetch/download helper + TLS concurrency gate
+│   │   ├── http_fetch.c
+│   │   ├── include/http_fetch.h
+│   │   ├── Kconfig
+│   │   └── CMakeLists.txt
+│   │
+│   ├── mem_stats/                       # Heap usage snapshots (console log + GET /api/memory)
+│   │   ├── mem_stats.c
+│   │   ├── include/mem_stats.h
+│   │   └── CMakeLists.txt
+│   │
+│   ├── frame_trace/                     # Presentation-lateness frame trace (CONFIG_P3A_FRAME_TRACE, default off)
+│   │   ├── frame_trace.c
+│   │   ├── frame_trace_wraps.c
+│   │   ├── include/frame_trace.h
+│   │   ├── Kconfig
+│   │   └── CMakeLists.txt
+│   │
+│   ├── sd_idle_wait/                    # Yielding replacement for sdmmc_wait_for_idle() (link-time wrap)
+│   │   ├── sd_idle_wait.c
+│   │   └── CMakeLists.txt
+│   │
+│   ├── espressif__libpng/               # Local fork of managed libpng 1.6.52 with the APNG read patch
 │   ├── ugfx/                            # uGFX text/font rendering subset (DejaVu Sans 16/24/32)
 │   └── libwebp_decoder/                 # libwebp v1.4.0 wrapper (FetchContent)
 │
@@ -418,8 +453,8 @@ p3a/
 ├── README.md                            # User-facing documentation
 ├── LICENSE                              # Apache License 2.0
 ├── LICENSING.md                         # Dependency license report
-├── CLAUDE.md                            # AI assistant guidance
-└── AGENTS.md                            # AI agent instructions
+├── CLAUDE.md                            # Claude Code entry point: imports AGENTS.md
+└── AGENTS.md                            # Canonical guidance for AI coding agents
 ```
 
 ## Key Files

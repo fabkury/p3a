@@ -37,7 +37,7 @@ Uniform slow playback of artworks the chip cannot decode in time is accepted.
   `sdkconfig` must stay byte-identical except for fixes that are themselves the
   deliverable. Any sdkconfig regeneration must preserve
   `CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y` + `CONFIG_ESP32P4_REV_MIN_1=y`
-  (see root CLAUDE.md).
+  (see root AGENTS.md).
 - **Automation first.** The agent builds, flashes, monitors, runs soaks, pulls
   data, and analyzes on its own. Fab is consulted only for decisions or physical
   actions. Keep Fab informed: chat summary at each phase milestone; push
@@ -60,7 +60,7 @@ Uniform slow playback of artworks the chip cannot decode in time is accepted.
 
 | Item | Value |
 |------|-------|
-| Dev device UART | **COM5** (CH343 bridge, 115200). CLAUDE.md's "COM11" is stale for this unit. Probe: `host/jitter-lab/find_port.ps1` |
+| Dev device UART | **COM5** (CH343 bridge, 115200). Probe: `host/jitter-lab/find_port.ps1` |
 | Opening COM5 with .NET `SerialPort` or plain `idf.py monitor` **resets the board**. `host/jitter-lab/serial_logger.py` (pyserial, DTR/RTS low before open) does **not** (verified). `idf.py flash` needs COM5 free: stop the logger first |
 | USB-Serial-JTAG | not wired to the laptop; no OpenOCD/SystemView. In-firmware tracing only |
 | Device LAN name | `http://p3a-fab.local` (device name "fab", hostname `p3a-fab`; IP 192.168.4.87 on 2026-08-28). **`p3a.local` is a DIFFERENT, unrelated p3a on this LAN** (192.168.4.33): tooling refuses any host whose `/api/device-name` hostname is not `p3a-fab` |
@@ -68,7 +68,7 @@ Uniform slow playback of artworks the chip cannot decode in time is accepted.
 | Firmware baseline | main @ `dd8fb410`, version in root `CMakeLists.txt` |
 | Panel | 720×720 @ 60 Hz (`VSYNC_PERIOD_US 16667` in `main/display_renderer.c`) |
 | CPU | ESP32-P4 rev v1.0 @ 360 MHz, PSRAM 200 MHz, XIP from PSRAM (`SPIRAM_FETCH_INSTRUCTIONS` + `SPIRAM_RODATA`) |
-| Build env | see root CLAUDE.md (IDF 5.5.4 profile, `ESP_IDF_VERSION=5.5`, `PYTHONUTF8=1`); always `Set-Location` repo root in the same command as `idf.py` |
+| Build env | see root AGENTS.md (IDF 5.5.4 profile, `ESP_IDF_VERSION=5.5`, `PYTHONUTF8=1`); always `Set-Location` repo root in the same command as `idf.py` |
 | Useful API | `GET /api/state`, `GET /api/memory`, `GET /config` (redact!), `PUT /config`, `GET/PUT /playsets/active`, `PUT /settings/dwell_time`, `POST /action/{swap_next,pause,resume,reboot}`, `POST /upload` (multipart → animations dir) |
 
 ## Layout

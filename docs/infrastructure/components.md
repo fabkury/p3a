@@ -1,6 +1,6 @@
 # Component Architecture
 
-All 25 custom components live under `components/`. This document describes each one.
+All 32 components live under `components/`: 29 p3a components, described in order below, plus three supporting libraries (section 30).
 
 ---
 
@@ -269,9 +269,51 @@ All 25 custom components live under `components/`. This document describes each 
 - **Statistics**: decode time, upscale time, total render time, late frames, alpha usage
 - When disabled, all functions are no-ops with zero overhead.
 
-## 25. Supporting Libraries
+## 25. pin_lists — Pinned-Artwork Lists
+
+- **Purpose**: Pinned-artworks vault with multiple named lists, each a first-class channel. Exactly one list is active at a time; swipe-up pins and `/action/pin` without a list slug go to the active list. A default list "My Pins" is created on first init
+- **Key files**: `pin_lists.c`, `pin_lists_state.c`, `pin_lists_manifest.c`, `pin_lists_order.c`, `pin_lists_entry.c`, `pin_lists_copy.c`
+- **Public API**: `pin_lists.h`, `pin_lists_types.h`
+- **Key functions**: `pin_lists_init()`, `pin_lists_get_active()`, `pin_lists_set_active()`, `pin_lists_create()`, `pin_lists_rename()`, `pin_lists_delete()`, `pin_lists_enumerate()`, `pin_list_pin()`, `pin_list_unpin()`, `pin_list_is_pinned()`, `pin_lists_channel_load()`, plus per-source helpers `pin_lists_pin_{makapix,giphy,klipy,institution}()` and their unpin twins
+- **Layout** under `/sdcard/p3a/pinned/`: `state.bin` (active list slug + version), `lists/{slug}/manifest.json`, `lists/{slug}/order.bin` (64 B per entry, newest-first), `lists/{slug}/entries/` (rich metadata, loaded on demand), and per-source artwork subfolders holding the pinned bytes. Every state file has a `.bak` twin used for recovery
+
+## 26. http_fetch — Shared HTTP Fetch/Download Helper
+
+- **Purpose**: One implementation of the `esp_http_client` boilerplate for every content fetcher (Giphy, Klipy, museums, Makapix, show_url) and the OTA downloader: client config and cert bundle, optional POST body, status classification, a unified retry / truncated-read / `Retry-After` policy, optional manual 3xx redirect following, optional SDIO-bus poll-wait, and an atomic temp-file-then-rename write for the file variant
+- **Key files**: `http_fetch.c`
+- **Public API**: `http_fetch.h`
+- **Key functions**: `http_fetch_to_buffer()` (body into a caller-owned buffer, for JSON/text APIs), `http_fetch_to_file()` (body into a file on the SD card, for binary artwork)
+- **Callbacks**: `on_rate_limited` (caller records the 429 cooldown, e.g. the per-museum table), `should_abort` (caller cancels mid-transfer), `progress` (caller renders download progress). Domain behavior stays in the caller, so http_fetch has no dependency on the fetchers
+- **TLS gate**: at most `CONFIG_HTTP_FETCH_MAX_CONCURRENT_TLS` transfers hold a live TLS session at once, so overlapping HTTPS streams cannot starve each other on the single Wi-Fi link (see `docs/concurrent-tls-eagain-tabled.md`, Option 4)
+
+## 27. mem_stats — Memory Usage Snapshots
+
+- **Purpose**: One place to collect a full heap breakdown, with two presentations of the same numbers: `mem_stats_log()` for the console and `mem_stats_to_json()` for the HTTP API. Both `GET /api/memory` and the periodic auto-report task in `main/p3a_main.c` funnel through it, so the console output is identical regardless of trigger
+- **Key files**: `mem_stats.c`
+- **Public API**: `mem_stats.h`
+- **Key functions**: `mem_stats_collect()`, `mem_stats_log()`, `mem_stats_to_json()`
+- **Focus**: internal RAM, the scarce pool on the ESP32-P4 (PSRAM is plentiful). The `INTERNAL|DMA|8BIT` mask is reported separately because that is the exact allocation esp_hosted's SDIO RX path makes, and its exhaustion is what panics the chip (see `docs/sdio-rx-oom-crash.md`)
+
+## 28. frame_trace — Presentation-Lateness Frame Trace
+
+- **Purpose**: Jitter diagnostics. Records every presented frame (intended vs actual present time, producer decode/upscale time, queue depth) plus timestamped event markers (NVS commits, loader loads, downloads, MQTT, log bursts) into a lock-free multi-writer PSRAM ring buffer, detects stalls, prints a one-shot UART report (`JTR|` lines), and serves the ring over `GET /api/debug/frames`
+- **Key files**: `frame_trace.c`, `frame_trace_wraps.c` (link-time `--wrap` of `sdmmc_read_sectors`, `sdmmc_write_sectors`, `esp_flash_read`, `esp_flash_write`, `esp_flash_erase_region` to timestamp storage I/O)
+- **Public API**: `frame_trace.h`
+- **Key functions**: `frame_trace_init()`, `frame_trace_frame()`, `frame_trace_mark()`, `frame_trace_mark_span()`, `frame_trace_read()`, `frame_trace_get_stats()`, `frame_trace_reset()`
+- **Kconfig**: `P3A_FRAME_TRACE` (default off; when disabled the component compiles to nothing, so release builds carry no code and no data), `P3A_FRAME_TRACE_ENTRIES`, `P3A_FRAME_TRACE_WARN_MS`, `P3A_FRAME_TRACE_STALL_MS`, `P3A_FRAME_TRACE_REPORT_MIN_INTERVAL_S`, `P3A_FRAME_TRACE_REPORT_WINDOW_MS`, `P3A_FRAME_TRACE_DEV_ENDPOINTS` (dev-only `POST /api/debug/provoke` stall provocations; never enable in release)
+- **Docs**: `docs/jitter/README.md`; host-side capture and analysis in `host/jitter-lab/`
+
+## 29. sd_idle_wait — Yielding SD Busy-Wait
+
+- **Purpose**: Replaces IDF's `sdmmc_wait_for_idle()` at link time (`--wrap=sdmmc_wait_for_idle`). The stock driver polls CMD13 back-to-back with no yield for the first 100 ms after every SD write; with 1-45 ms busy periods on real cards, each write became a storm of hundreds of host commands that slowed decode and upscale on both cores 3-50x and was the dominant source of sporadic 100-800 ms playback stalls. Polling once per FreeRTOS tick removes the effect at no measurable cost to SD throughput (jitter work stream, fix 8)
+- **Key files**: `sd_idle_wait.c`, `CMakeLists.txt` (the `--wrap` and `-u __wrap_sdmmc_wait_for_idle` linker options are `INTERFACE` so they reach the final executable link)
+- **Public API**: none. The original stays reachable as `__real_sdmmc_wait_for_idle` for the SPI-host assert path
+- **Docs**: `docs/jitter/README.md`; measurement in `docs/jitter/runs/RUN-20260830-04-idle-exp.md`
+
+## 30. Supporting Libraries
 
 | Component | Purpose |
 |-----------|---------|
 | `ugfx` | uGFX text/font rendering subset (DejaVu Sans 16/24/32 only; no graphics primitives enabled) |
 | `libwebp_decoder` | libwebp wrapper for WebP decoding |
+| `espressif__libpng` | Local fork of the managed libpng 1.6.52 component carrying the official APNG read patch; overrides the registry version by name. Read its README.md before any libpng bump |

@@ -8,7 +8,7 @@ Comprehensive technical documentation for the **p3a** firmware — an ESP32-P4-p
 - [Architecture](architecture.md) — System diagram, boot sequence, service layer pattern
 - [Directory Structure](directory-structure.md) — Complete file and folder layout
 - [Build System](build-system.md) — CMake configuration, build commands, release packaging
-- [Components](components.md) — All 24 custom ESP-IDF components
+- [Components](components.md) — All 32 ESP-IDF components under `components/`
 - [Hardware and Peripherals](hardware-and-peripherals.md) — Board specs, display, touch, USB, SD card
 - [Network and API](network-and-api.md) — Wi-Fi, HTTP server, REST API, WebSocket, MQTT
 - [Display Pipeline](display-pipeline.md) — Rendering, upscaling, overlays, frame buffer management

@@ -100,6 +100,3 @@ Build artifacts go to `build/`. Release binaries are copied to `release/v{VERSIO
 
 Clarifying questions are always welcome.
 
-## Active work streams
-
-- None currently. (Jitter elimination completed and merged 2026-08; for jitter regressions, start at `docs/jitter/README.md`.)

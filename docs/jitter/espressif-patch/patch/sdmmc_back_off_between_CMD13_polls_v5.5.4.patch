@@ -1,0 +1,220 @@
+From 631029cd7934ad524e49dba57cc7a65c0057cb18 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Adam=20M=C3=BAdry?= <adam.mudry@espressif.com>
+Date: Wed, 2 Sep 2026 15:39:59 +0200
+Subject: [PATCH] fix(sdmmc): back off between CMD13 polls while waiting for
+ card to be ready
+
+The loops waiting for the card to leave its busy state started their yield
+backoff at 100 ms and doubled it from there. A card is typically busy for
+a few milliseconds after a write, so the backoff never fired and every
+write was followed by a tight loop of hundreds of CMD13 commands until the
+card reported ready. Occupying the host controller like this slows down
+unrelated work on both cores, not just the calling task.
+
+Delay between polls instead, starting at CONFIG_SD_READY_POLL_PERIOD_START_US
+(100 us by default) and doubling up to 32 ms. The delay stays proportional
+to the time the card has already been busy, so short busy periods are still
+detected quickly, and a typical wait now costs a handful of commands instead of
+hundreds. Delays shorter than one FreeRTOS tick period are busy-waited since
+no shorter blocking sleep is available; longer ones block on vTaskDelay().
+
+Applies to sdmmc_wait_for_idle(), sdmmc_init_sd_wait_data_ready() and
+read_tuning_block().
+
+Closes https://github.com/espressif/esp-idf/issues/19034
+---
+ components/sdmmc/Kconfig                      | 24 +++++++++++++++++
+ .../sdmmc/include/esp_private/sdmmc_common.h  | 27 +++++++++++++++++++
+ components/sdmmc/sdmmc_common.c               | 27 +++++++++++++++----
+ components/sdmmc/sdmmc_sd.c                   | 14 +++-------
+ 4 files changed, 77 insertions(+), 15 deletions(-)
+ create mode 100644 components/sdmmc/Kconfig
+
+diff --git a/components/sdmmc/Kconfig b/components/sdmmc/Kconfig
+new file mode 100644
+index 00000000000..7f9042de58a
+--- /dev/null
++++ b/components/sdmmc/Kconfig
+@@ -0,0 +1,24 @@
++menu "SD Protocol Layer Configuration"
++    config SD_READY_POLL_PERIOD_START_US
++        int "Initial delay between card status polls (us)"
++        default 100
++        range 1 1000000
++        help
++            While waiting for the card to leave its busy state (for example after a write),
++            the driver polls it with CMD13 (SEND_STATUS). This is the delay before the
++            first re-poll; the delay then doubles after every poll, up to a cap of 32 ms.
++
++            Polling back-to-back without a delay turns every write into a storm of
++            hundreds of CMD13 commands, which occupies the host controller and slows down
++            unrelated work on both cores.
++
++            The exponential backoff keeps the overshoot proportional to how long the card
++            has already been busy, so a card that becomes ready after 1.5 ms is detected
++            at around 2 ms rather than at the next FreeRTOS tick. Lower this value to
++            detect very short busy periods sooner, at the cost of more commands on the
++            bus.
++
++            Delays shorter than one FreeRTOS tick period are spent busy-waiting, since
++            there is no shorter blocking sleep available; longer delays block on
++            vTaskDelay() and let other tasks run.
++endmenu
+diff --git a/components/sdmmc/include/esp_private/sdmmc_common.h b/components/sdmmc/include/esp_private/sdmmc_common.h
+index ccf599ef4e5..04a179e5c95 100644
+--- a/components/sdmmc/include/esp_private/sdmmc_common.h
++++ b/components/sdmmc/include/esp_private/sdmmc_common.h
+@@ -17,6 +17,7 @@
+ #pragma once
+ 
+ #include <string.h>
++#include "sdkconfig.h"
+ #include "esp_log.h"
+ #include "esp_check.h"
+ #include "esp_heap_caps.h"
+@@ -39,6 +40,21 @@ extern "C" {
+ #define SDMMC_INIT_WAIT_DATA_READY_TIMEOUT_US  (5000 * 1000)
+ #define SDMMC_READY_FOR_DATA_TIMEOUT_US        (5000 * 1000)
+ 
++/* Delay between two consecutive card status (CMD13) polls while waiting for the
++ * card to become ready. Starts at SDMMC_READY_POLL_PERIOD_START_US and doubles
++ * after every poll, up to SDMMC_READY_POLL_PERIOD_MAX_US.
++ *
++ * Polling without a delay turns every write into a storm of hundreds of CMD13
++ * commands, which occupies the host controller and slows down unrelated work.
++ * Backing off exponentially keeps the number of commands low while the overshoot
++ * stays proportional to the time the card has already been busy, so short busy
++ * periods are still detected quickly.
++ *
++ * This mirrors what the Linux MMC core does in __mmc_poll_for_busy().
++ */
++#define SDMMC_READY_POLL_PERIOD_START_US       CONFIG_SD_READY_POLL_PERIOD_START_US
++#define SDMMC_READY_POLL_PERIOD_MAX_US         (32 * 1000)
++
+ /* These delay values are mostly useful for cases when CD pin is not used, and
+  * the card is removed. In this case, SDMMC peripheral may not always return
+  * CMD_DONE / DATA_DONE interrupts after signaling the error. These timeouts work
+@@ -175,6 +191,17 @@ static inline bool sdmmc_ready_for_data(uint32_t status)
+     return (status & MMC_R1_READY_FOR_DATA) && (MMC_R1_CURRENT_STATE_STATUS(status) == MMC_R1_CURRENT_STATE_TRAN);
+ }
+ 
++/**
++ * @brief Wait before the next card status poll, and back off for the poll after that
++ *
++ * Delays for *period_us, then doubles *period_us up to SDMMC_READY_POLL_PERIOD_MAX_US.
++ * Delays shorter than one FreeRTOS tick period are busy-waited, longer ones block on
++ * vTaskDelay() so that other tasks can run.
++ *
++ * @param[in,out] period_us  Delay to apply now; updated to the delay to apply next time
++ */
++void sdmmc_poll_delay_and_backoff(uint32_t* period_us);
++
+ void sdmmc_flip_byte_order(uint32_t* response, size_t size);
+ 
+ esp_err_t sdmmc_fix_host_flags(sdmmc_card_t* card);
+diff --git a/components/sdmmc/sdmmc_common.c b/components/sdmmc/sdmmc_common.c
+index f2e6a993886..2f35fa0742e 100644
+--- a/components/sdmmc/sdmmc_common.c
++++ b/components/sdmmc/sdmmc_common.c
+@@ -17,6 +17,8 @@
+ 
+ #include <inttypes.h>
+ #include "esp_log.h"
++#include "freertos/FreeRTOS.h"
++#include "esp_rom_sys.h"
+ #include "esp_timer.h"
+ #include "esp_private/sdmmc_common.h"
+ 
+@@ -428,12 +430,30 @@ uint32_t sdmmc_get_erase_timeout_ms(const sdmmc_card_t* card, int arg, size_t er
+     }
+ }
+ 
++void sdmmc_poll_delay_and_backoff(uint32_t* period_us)
++{
++    const uint32_t us_per_tick = portTICK_PERIOD_MS * 1000;
++    uint32_t delay_us = *period_us;
++
++    if (delay_us < us_per_tick) {
++        /* No blocking sleep with sub-tick resolution is available, busy-wait instead.
++         * The point of the delay is to keep CMD13 off the bus, which this still does. */
++        esp_rom_delay_us(delay_us);
++    } else {
++        vTaskDelay(delay_us / us_per_tick);
++    }
++
++    if (delay_us < SDMMC_READY_POLL_PERIOD_MAX_US) {
++        *period_us = MIN(delay_us * 2, SDMMC_READY_POLL_PERIOD_MAX_US);
++    }
++}
++
+ esp_err_t sdmmc_wait_for_idle(sdmmc_card_t* card, uint32_t status)
+ {
+     assert(!host_is_spi(card));
+     esp_err_t err = ESP_OK;
+     size_t count = 0;
+-    int64_t yield_delay_us = 100 * 1000; // initially 100ms
++    uint32_t poll_period_us = SDMMC_READY_POLL_PERIOD_START_US;
+     int64_t t0 = esp_timer_get_time();
+     int64_t t1 = 0;
+     /* SD mode: wait for the card to become idle based on R1 status */
+@@ -442,10 +462,7 @@ esp_err_t sdmmc_wait_for_idle(sdmmc_card_t* card, uint32_t status)
+         if (t1 - t0 > SDMMC_READY_FOR_DATA_TIMEOUT_US) {
+             return ESP_ERR_TIMEOUT;
+         }
+-        if (t1 - t0 > yield_delay_us) {
+-            yield_delay_us *= 2;
+-            vTaskDelay(1);
+-        }
++        sdmmc_poll_delay_and_backoff(&poll_period_us);
+         err = sdmmc_send_cmd_send_status(card, &status);
+         if (err != ESP_OK) {
+             ESP_LOGE(TAG, "%s: sdmmc_send_cmd_send_status returned 0x%x", __func__, err);
+diff --git a/components/sdmmc/sdmmc_sd.c b/components/sdmmc/sdmmc_sd.c
+index b1bf7640158..61dfd8e555f 100644
+--- a/components/sdmmc/sdmmc_sd.c
++++ b/components/sdmmc/sdmmc_sd.c
+@@ -147,7 +147,7 @@ esp_err_t sdmmc_init_sd_wait_data_ready(sdmmc_card_t* card)
+     /* Wait for the card to be ready for data transfers */
+     uint32_t status = 0;
+     uint32_t count = 0;
+-    int64_t yield_delay_us = 100 * 1000; // initially 100ms
++    uint32_t poll_period_us = SDMMC_READY_POLL_PERIOD_START_US;
+     int64_t t0 = esp_timer_get_time();
+     int64_t t1 = 0;
+     while (!host_is_spi(card) && !(status & MMC_R1_READY_FOR_DATA)) {
+@@ -156,10 +156,7 @@ esp_err_t sdmmc_init_sd_wait_data_ready(sdmmc_card_t* card)
+             ESP_LOGE(TAG, "init wait data ready - timeout");
+             return ESP_ERR_TIMEOUT;
+         }
+-        if (t1 - t0 > yield_delay_us) {
+-            yield_delay_us *= 2;
+-            vTaskDelay(1);
+-        }
++        sdmmc_poll_delay_and_backoff(&poll_period_us);
+         esp_err_t err = sdmmc_send_cmd_send_status(card, &status);
+         if (err != ESP_OK) {
+             return err;
+@@ -384,7 +381,7 @@ static esp_err_t read_tuning_block(sdmmc_card_t *card)
+ 
+     uint32_t status = 0;
+     size_t count = 0;
+-    int64_t yield_delay_us = 100 * 1000; // initially 100ms
++    uint32_t poll_period_us = SDMMC_READY_POLL_PERIOD_START_US;
+     int64_t t0 = esp_timer_get_time();
+     int64_t t1 = 0;
+     while (!host_is_spi(card) && !(status & MMC_R1_READY_FOR_DATA)) {
+@@ -393,10 +390,7 @@ static esp_err_t read_tuning_block(sdmmc_card_t *card)
+             ESP_LOGW(TAG, "read sectors dma - timeout");
+             return ESP_ERR_TIMEOUT;
+         }
+-        if (t1 - t0 > yield_delay_us) {
+-            yield_delay_us *= 2;
+-            vTaskDelay(1);
+-        }
++        sdmmc_poll_delay_and_backoff(&poll_period_us);
+         ret = sdmmc_send_cmd_send_status(card, &status);
+         if (ret != ESP_OK) {
+             ESP_LOGW(TAG, "%s: sdmmc_send_cmd_send_status returned 0x%x", __func__, ret);
+-- 
+2.39.5 (Apple Git-154)
+

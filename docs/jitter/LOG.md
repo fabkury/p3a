@@ -657,3 +657,34 @@ resume protocol with `build.ps1 -Diag` and a soak.
 
 **Next:** watch the issue for Espressif's response; if they accept the
 approach, open the PR (the 6-line change in `sd_idle_wait.c` is the patch).
+
+## 2026-09-02 — Espressif answered #19034 with a patch; evaluation sub-stream opened
+
+- Adam Múdry (Espressif) assigned the issue and posted
+  `sdmmc_back_off_between_CMD13_polls_v5.5.4.patch`: exponential CMD13
+  back-off (100 µs doubling to 32 ms; sub-tick delays are `esp_rom_delay_us`
+  spins, longer ones `vTaskDelay`), all three busy loops, new Kconfig
+  `SD_READY_POLL_PERIOD_START_US`. Fab replied (comment 5511698488): will
+  test within days, wrap disabled for the test, A/B against our variant,
+  flagged the 100 Hz spin cost and the 32 ms-cap overshoot, asked about a
+  `release/v5.5` backport.
+- Fab's decisions: three arms on the reproducer (stock / patch / wrap), 3 h
+  soaks for patch and wrap, diag flavour for everything, Kconfig switch for
+  the wrap committed to main, GPG-signed commits as we go, GitHub replies
+  drafted here and posted only on approval.
+- Setup done: `CONFIG_P3A_SD_IDLE_WAIT_WRAP` (default y) in
+  `components/sd_idle_wait`; `sd_idle_wait_info.c` reports wrap + IDF-patch
+  presence (weak ref to `sdmmc_poll_delay_and_backoff`) through
+  `/api/debug/frames/stats` `config`; `sdkconfig.nowrap.defaults`;
+  `build.ps1 -Extra/-Suffix/-FlashOnly` + `ARM:` line; `run_audit.py`
+  (reset classification + coverage gaps, so cable accidents and laptop sleeps
+  are never booked as firmware faults); `arm_reproducer.py`. Start-here:
+  `espressif-patch/README.md`.
+- Gotcha: `build.ps1` launched from Git Bash inherits `MSYSTEM=MINGW64` and
+  `idf.py` refuses to build ("MSys/Mingw is no longer supported") while
+  returning 0. Launch it from PowerShell.
+
+**Next:** build wrap + nowrap (clean IDF), apply the patch to
+`C:/esp/v5.5.4/esp-idf`, build patch; flash stock → reproducer; flash patch →
+reproducer → 3 h soak; flash wrap → reproducer → 3 h soak; decide; reply;
+restore IDF tree; release build on the device.

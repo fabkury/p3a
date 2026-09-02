@@ -19,6 +19,10 @@
  *
  * Linked with --wrap=sdmmc_wait_for_idle (see CMakeLists.txt); the original is
  * kept reachable as __real_sdmmc_wait_for_idle for the SPI-host assert path.
+ * CONFIG_P3A_SD_IDLE_WAIT_WRAP (default y) controls whether this file is
+ * compiled and the wrap applied; sd_idle_wait_info.c reports the outcome.
+ * Upstream: esp-idf issue #19034 (Espressif's own back-off patch is evaluated
+ * against this wrapper in docs/jitter/espressif-patch/).
  */
 
 #include "esp_err.h"

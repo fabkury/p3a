@@ -1,0 +1,18 @@
+menu "SD idle wait (jitter fix 8)"
+
+    config P3A_SD_IDLE_WAIT_WRAP
+        bool "Replace IDF's sdmmc_wait_for_idle() with the yielding wrapper"
+        default y
+        help
+            Links --wrap=sdmmc_wait_for_idle so that the wait for the SD card
+            to leave its busy state after a write polls CMD13 once per FreeRTOS
+            tick instead of back-to-back (IDF v5.5.4 polls without yielding for
+            the first 100 ms, and the command storm slows both cores 3-50x;
+            see docs/jitter/REPORT.md and esp-idf issue #19034).
+
+            Keep this on in release builds. Switch it off only to measure the
+            stock IDF behaviour or an IDF-side fix (docs/jitter/espressif-patch/).
+            The component still reports which variant is linked through
+            sd_idle_wait_wrap_enabled() and sd_idle_wait_idf_patched().
+
+endmenu

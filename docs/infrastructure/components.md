@@ -307,8 +307,10 @@ All 32 components live under `components/`: 29 p3a components, described in orde
 
 - **Purpose**: Replaces IDF's `sdmmc_wait_for_idle()` at link time (`--wrap=sdmmc_wait_for_idle`). The stock driver polls CMD13 back-to-back with no yield for the first 100 ms after every SD write; with 1-45 ms busy periods on real cards, each write became a storm of hundreds of host commands that slowed decode and upscale on both cores 3-50x and was the dominant source of sporadic 100-800 ms playback stalls. Polling once per FreeRTOS tick removes the effect at no measurable cost to SD throughput (jitter work stream, fix 8)
 - **Key files**: `sd_idle_wait.c`, `CMakeLists.txt` (the `--wrap` and `-u __wrap_sdmmc_wait_for_idle` linker options are `INTERFACE` so they reach the final executable link)
-- **Public API**: none. The original stays reachable as `__real_sdmmc_wait_for_idle` for the SPI-host assert path
-- **Docs**: `docs/jitter/README.md`; measurement in `docs/jitter/runs/RUN-20260830-04-idle-exp.md`
+- **Public API**: `sd_idle_wait.h`: `sd_idle_wait_wrap_enabled()`, `sd_idle_wait_idf_patched()` (build identity, reported by `GET /api/debug/frames/stats` on frame-trace builds). The original stays reachable as `__real_sdmmc_wait_for_idle` for the SPI-host assert path
+- **Kconfig**: `P3A_SD_IDLE_WAIT_WRAP` (default y, keep on in release). Off only to measure stock IDF or an IDF-side fix (`sdkconfig.nowrap.defaults`)
+- **Upstream**: esp-idf issue #19034; Espressif's own back-off patch evaluated in `docs/jitter/espressif-patch/`
+- **Docs**: `docs/jitter/README.md`; measurement in `docs/jitter/runs/RUN-20260830-03-04.md`
 
 ## 30. Supporting Libraries
 

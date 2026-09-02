@@ -31,6 +31,7 @@
 #include "freertos/task.h"
 
 #include "frame_trace.h"
+#include "sd_idle_wait.h"
 #include "http_api_internal.h"
 
 #if CONFIG_P3A_FRAME_TRACE_DEV_ENDPOINTS
@@ -201,6 +202,9 @@ static esp_err_t h_get_frames_stats(httpd_req_t *req)
 #else
     cJSON_AddBoolToObject(cfg, "dev_endpoints", false);
 #endif
+    // Which SD busy-wait variant this build runs (A/B identity, esp-idf #19034)
+    cJSON_AddBoolToObject(cfg, "sd_idle_wait_wrap", sd_idle_wait_wrap_enabled());
+    cJSON_AddBoolToObject(cfg, "idf_sdmmc_backoff_patch", sd_idle_wait_idf_patched());
     cJSON_AddItemToObject(data, "config", cfg);
 
     send_json_root(req, 200, root);

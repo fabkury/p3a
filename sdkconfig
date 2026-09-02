@@ -2683,6 +2683,12 @@ CONFIG_PLAY_SCHEDULER_MAX_CHANNELS=64
 # end of Play Scheduler
 
 #
+# SD idle wait (jitter fix 8)
+#
+CONFIG_P3A_SD_IDLE_WAIT_WRAP=y
+# end of SD idle wait (jitter fix 8)
+
+#
 # Slave OTA
 #
 # CONFIG_P3A_SLAVE_OTA_MOCK is not set

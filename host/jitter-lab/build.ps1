@@ -100,7 +100,7 @@ if ($Flash -or $FlashOnly) {
         # esptool directly from the build dir's flash_args: no ninja, no rebuild.
         Push-Location $buildDir
         try {
-            & python -m esptool --chip esp32p4 -p $Port -b 460800 --before default-reset --after hard-reset write-flash "@flash_args"
+            & python -m esptool --chip esp32p4 -p $Port -b 460800 --before default_reset --after hard_reset write_flash "@flash_args"
             if ($LASTEXITCODE -ne 0) { throw "esptool write-flash failed" }
         } finally { Pop-Location }
     } else {

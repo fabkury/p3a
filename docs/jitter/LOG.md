@@ -688,3 +688,27 @@ approach, open the PR (the 6-line change in `sd_idle_wait.c` is the patch).
 `C:/esp/v5.5.4/esp-idf`, build patch; flash stock → reproducer; flash patch →
 reproducer → 3 h soak; flash wrap → reproducer → 3 h soak; decide; reply;
 restore IDF tree; release build on the device.
+
+## 2026-09-02 midday — three arms built; reproducer: stock 12 anomalies, patch 0; patch soak started
+
+- Builds (all diag): wrap `build-diag` ec3d7abf18ae, stock `build-diag-nowrap`
+  4f09523b25c4 (clean IDF 73550728), patch `build-diag-patch` 14f03b740e1c
+  (IDF tree patched with `git apply`; **tree stays dirty until the end**).
+  Map-file `ARM:` line had to match `.text.<sym>` sections: the weak
+  reference alone puts the patch's symbol name in every map.
+- RUN-20260902-01 (stock): misaligned 32 KB → 12 anomalies / 299 frames,
+  upscale max 479 ms. The reproducer still bites without the wrapper.
+- RUN-20260902-02 (patch): 0 anomalies everywhere, upscale max 22 ms. Cost:
+  every single-command write slower (aligned 32 KB median 4.5 → 6.0 ms,
+  512 B 2.4 → 5.0 ms): the doubling sequence overshoots the busy period.
+  `runs/RUN-20260902-repro-arms.md`.
+- RUN-20260902-03 (patch soak, Work mix) started 11:53, 3.3 h. Gotcha: the
+  reproducer's upload had left a single-artwork playset active; Work mix
+  re-activated by hand at 11:55, `arm_reproducer.py` now does it itself.
+- `build.ps1 -FlashOnly`: IDF's esptool wants `default_reset`/`hard_reset`/
+  `write_flash` (underscores). Fixed.
+
+**Next:** ~15:15 stop RUN-03 (`soak.ps1 -Stop`, `run_audit.py`,
+`runs/RUN-20260902-03.md`); flash wrap (`-Diag -FlashOnly`), RUN-04
+reproducer, RUN-05 soak 3.3 h; compare; decide; reply draft; restore IDF
+tree; release build + flash.

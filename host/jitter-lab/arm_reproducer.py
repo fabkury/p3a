@@ -35,6 +35,8 @@ def main():
     ap.add_argument("--host", default="http://p3a-fab.local")
     ap.add_argument("--rounds", type=int, default=3)
     ap.add_argument("--settle", type=float, default=20.0, help="seconds after the upload before provoking")
+    ap.add_argument("--playset", default="Work mix",
+                    help="playset to re-activate at the end (the upload replaces the active playset with a single-artwork one)")
     ap.add_argument("--no-restore", action="store_true")
     a = ap.parse_args()
     H = a.host
@@ -69,6 +71,8 @@ def main():
     finally:
         if not a.no_restore:
             subprocess.run([py, str(HERE / "snapshot_settings.py"), "restore", a.run, "--host", H], check=False)
+            # POST /upload made a single-artwork playset the active one; put the soak playset back.
+            subprocess.run([py, str(HERE / "snapshot_settings.py"), "set", a.run, "--host", H, "--playset", a.playset], check=False)
     (run_dir / "arm.json").write_text(json.dumps({"arm": a.arm, "device_config": cfg, "rounds": a.rounds,
                                                   "finished": time.strftime("%Y-%m-%dT%H:%M:%S")}, indent=1),
                                       encoding="utf-8")

@@ -712,3 +712,22 @@ restore IDF tree; release build on the device.
 `runs/RUN-20260902-03.md`); flash wrap (`-Diag -FlashOnly`), RUN-04
 reproducer, RUN-05 soak 3.3 h; compare; decide; reply draft; restore IDF
 tree; release build + flash.
+
+## 2026-09-02 afternoon — patch soak PASS; wrap arm flashed
+
+- RUN-20260902-03 (patch, Work mix, 3.30 h, 5 epochs): 0 stalls, 1 warn,
+  p99 39.1 ms, max 77.2 ms: PASS, same picture as RUN-06 on the wrapper.
+  `runs/RUN-20260902-03.md`. All 4 reboots were Fab handling the fragile
+  USB-C cable (confirmed); `run_audit.py` classifies them from the logger's
+  "Access is denied" link drops since the ROM `rst:` line is lost when the
+  bridge re-enumerates. `analyze.py` fixed to merge `frames.e<N>.csv`
+  epochs (it silently analysed epoch 0 only: 6584 of 160 760 frames).
+- Cost signal confirmed at soak scale: SD write p90/p99 52.5/57.5 ms on the
+  patch vs 37.2/46.8 ms on the wrapper (RUN-06): the 32 ms cap makes a
+  25–57 ms busy period visible only at 57.5 ms.
+- RUN-20260902-04 upload stress on the patch: 0 anomalies, 0 stalls.
+- Noted: this soak did ~half the SD writes per frame of the August soaks
+  (caches fuller). Both arms today share that; the upload stress phase is
+  the controlled write-heavy comparison.
+- Wrap arm (`build-diag` ec3d7abf18ae) flashed 15:2x; RUN-05 reproducer
+  running, then RUN-06 soak 3.3 h, RUN-07 upload stress.

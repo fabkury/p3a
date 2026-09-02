@@ -99,9 +99,11 @@ rebuilt against another. A plain `-Flash` or `idf.py flash` WOULD rebuild.
 | Apply patch to IDF, build `patch` | done 11:36 (sha 14f03b740e1c); **IDF tree is dirty until restored** | `build-diag-patch/` |
 | Reproducer `stock` | done RUN-20260902-01: misaligned 32 KB → 12 anomalies / 299 frames (4.0 %), upscale max 479 ms; all other conditions 0 | `../runs/RUN-20260902-repro-arms.md` |
 | Reproducer `patch` | done RUN-20260902-02: 0 anomalies in every condition, upscale max 22 ms; but single-command writes ~1.5–2x slower (aligned 32 KB median 4.5 → 6.0 ms) | same file |
-| Reproducer `wrap` | pending RUN-20260902-04 (after the patch soak) | |
-| Soak `patch` 3 h | **running** RUN-20260902-03, started 11:53, "Work mix" (first ~2 min on the bar GIF, see gotcha), `-Hours 3.3` → puller stops ~15:11; Monitor armed in the agent session | `host/jitter-lab/runs/RUN-20260902-03/` |
-| Soak `wrap` 3 h | pending | |
+| Reproducer `wrap` | in progress RUN-20260902-05 | same file |
+| Soak `patch` 3 h | **done RUN-20260902-03: PASS**, 3.30 h, 160 760 frames, 0 stalls, 1 warn, p99 39.1 ms, max 77.2 ms; 4 reboots all external (cable, confirmed by Fab); SD write p90/p99 52.5/57.5 ms vs 37.2/46.8 on the wrapper (RUN-06) | `../runs/RUN-20260902-03.md` |
+| Upload stress `patch` | done RUN-20260902-04: 2342 frames, 0 anomalies, 0 stalls, upscale max 20 ms (wrapper reference RUN-20260830-08: 2 anomalies, max 21 ms) | `host/jitter-lab/runs/RUN-20260902-04/` |
+| Soak `wrap` 3 h | pending RUN-20260902-06 | |
+| Upload stress `wrap` | pending RUN-20260902-07 | |
 | Decision + reply to Espressif | pending | `reply-draft.md` here |
 | IDF tree restored, device on release build | pending | |
 

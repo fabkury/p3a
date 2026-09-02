@@ -39,15 +39,39 @@ def pct(sorted_vals, p):
     return sorted_vals[max(0, min(k, len(sorted_vals) - 1))]
 
 
-def load_rows(path: Path):
+EPOCH_T_US = 10**12      # 11.6 days: device reboots restart t_us, seq and gen at 0;
+EPOCH_SEQ = 10**9        # offsetting each epoch keeps every epoch disjoint so
+EPOCH_GEN = 10**6        # dedupe, attribution and per-generation medians stay per boot
+
+
+def load_rows(run_dir: Path):
+    """frames.csv is epoch 0; each device reboot during the run opened frames.e<N>.csv."""
     frames, marks = [], []
+    paths = [(0, run_dir / "frames.csv")]
+    for fp in sorted(run_dir.glob("frames.e*.csv"), key=lambda x: int(x.stem.split(".e")[1])):
+        paths.append((int(fp.stem.split(".e")[1]), fp))
+    for ep, path in paths:
+        if not path.exists():
+            continue
+        _load_file(path, ep, frames, marks)
+    # Dedupe by seq (a manual pull during a running soak appends duplicates).
+    frames = list({f["seq"]: f for f in frames}.values())
+    marks = list({m["seq"]: m for m in marks}.values())
+    frames.sort(key=lambda x: x["seq"])
+    marks.sort(key=lambda x: x["seq"])
+    return frames, marks
+
+
+def _load_file(path: Path, ep: int, frames, marks):
+    ot, os_, og = ep * EPOCH_T_US, ep * EPOCH_SEQ, ep * EPOCH_GEN
     with path.open(encoding="utf-8") as f:
         rd = csv.DictReader(f)
         for r in rd:
             try:
                 if r["type"] == "F":
                     frames.append({
-                        "seq": int(r["seq"]), "t": int(r["t_us"]), "gen": int(r["arg"] or 0),
+                        "ep": ep,
+                        "seq": int(r["seq"]) + os_, "t": int(r["t_us"]) + ot, "gen": int(r["arg"] or 0) + og,
                         "late": int(r["lateness_us"] or 0), "margin": int(r["ready_margin_us"] or 0),
                         "produce": int(r["produce_us"] or 0), "decode": int(r["decode_us"] or 0),
                         "upscale": int(r["upscale_us"] or 0), "free_wait": int(r["free_wait_us"] or 0),
@@ -56,18 +80,13 @@ def load_rows(path: Path):
                     })
                 elif r["type"] == "M":
                     marks.append({
-                        "seq": int(r["seq"]), "t": int(r["t_us"]), "kind": r["kind"], "phase": int(r["phase"] or 0),
+                        "ep": ep,
+                        "seq": int(r["seq"]) + os_, "t": int(r["t_us"]) + ot, "kind": r["kind"], "phase": int(r["phase"] or 0),
                         "arg": int(r["arg"] or 0), "core": int(r["core"] or 0), "task": r["task_tag"],
                         "dur": int(r["lateness_us"] or 0),   # span marks carry their duration here
                     })
             except (KeyError, ValueError):
                 continue
-    # Dedupe by seq (a manual pull during a running soak appends duplicates).
-    frames = list({f["seq"]: f for f in frames}.values())
-    marks = list({m["seq"]: m for m in marks}.values())
-    frames.sort(key=lambda x: x["seq"])
-    marks.sort(key=lambda x: x["seq"])
-    return frames, marks
 
 
 def pair_marks(marks):
@@ -111,7 +130,8 @@ def main():
     if not frames_csv.exists():
         print(f"no frames.csv in {run_dir}")
         return 1
-    frames, marks = load_rows(frames_csv)
+    frames, marks = load_rows(run_dir)
+    epochs = sorted({f["ep"] for f in frames})
     intervals = pair_marks(marks)
     stall_us, warn_us, window_us = a.stall_ms * 1000, a.warn_ms * 1000, int(a.window_s * 1e6)
 
@@ -138,7 +158,12 @@ def main():
         elif f["late"] >= warn_us:
             warns.append(f)
 
-    span_s = (frames[-1]["t"] - frames[0]["t"]) / 1e6 if len(frames) > 1 else 0.0
+    # Span = sum over epochs (a reboot restarts the device clock; the gap is not playback time).
+    span_s = 0.0
+    for ep in epochs:
+        ts = [f["t"] for f in frames if f["ep"] == ep]
+        if len(ts) > 1:
+            span_s += (max(ts) - min(ts)) / 1e6
 
     # ---- attribution
     kind_base = Counter(i["kind"] for i in intervals)
@@ -174,6 +199,7 @@ def main():
                 pass
 
     def report_for_seq(seq):
+        seq = seq % EPOCH_SEQ   # UART reports carry the device's own (per-boot) seq
         for r in uart_reports:
             h = r.get("header", "")
             if f"seq={seq} " in h or h.startswith(f"seq={seq}"):
@@ -184,7 +210,8 @@ def main():
     out = []
     w = out.append
     w(f"# Jitter run report: {a.run}\n")
-    w(f"- frames: {len(frames)} (valid for lateness: {len(valid)}), marks: {len(marks)}, span: {span_s/3600:.2f} h")
+    w(f"- frames: {len(frames)} (valid for lateness: {len(valid)}), marks: {len(marks)}, span: {span_s/3600:.2f} h"
+      + (f", device boots (epochs): {len(epochs)}" if len(epochs) > 1 else ""))
     w(f"- thresholds: warn {a.warn_ms} ms, stall {a.stall_ms} ms; attribution window {a.window_s} s before the stall's intended time")
     if lat_sorted:
         w(f"- lateness us: p50 {pct(lat_sorted,0.5)}  p90 {pct(lat_sorted,0.9)}  p99 {pct(lat_sorted,0.99)}  "
@@ -315,7 +342,7 @@ def main():
 
     (run_dir / "report.md").write_text("\n".join(out), encoding="utf-8")
     summary = {
-        "run": a.run, "frames": len(frames), "valid": len(valid), "span_s": span_s,
+        "run": a.run, "frames": len(frames), "valid": len(valid), "span_s": span_s, "epochs": len(epochs),
         "stalls": len(stalls), "warns": len(warns), "overrun": len(overrun), "pass": pass_bar,
         "lateness_p99_us": pct(lat_sorted, 0.99) if lat_sorted else 0,
         "lateness_max_us": lat_sorted[-1] if lat_sorted else 0,

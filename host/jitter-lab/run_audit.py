@@ -72,7 +72,50 @@ def main():
     if bj.exists():
         boots = [json.loads(l) for l in bj.read_text(encoding="utf-8").splitlines() if l.strip()]
 
-    out += [f"UART reset lines: {len(resets)}; puller-detected reboots (epochs): {len(boots)}", ""]
+    # Serial-link drops and boot banners: when the USB link itself goes away
+    # (cable / power event) the CH343 bridge re-enumerates, the logger sees
+    # "Access is denied" and the ROM "rst:" line is lost. The app's
+    # "cpu_start: Pro cpu start user code" line right after the reopen is
+    # then the only boot evidence.
+    link_drops, boot_banners = [], []
+    if uart.exists():
+        with uart.open(encoding="utf-8", errors="replace") as f:
+            for line in f:
+                ts = parse_ts(line[:23])
+                if ts is None:
+                    continue
+                if "### serial error" in line:
+                    link_drops.append((ts, line.strip()[24:140]))
+                elif "cpu_start: Pro cpu start user code" in line:
+                    boot_banners.append(ts)
+    out += [f"UART reset lines: {len(resets)}; puller-detected reboots (epochs): {len(boots)}; "
+            f"boot banners: {len(boot_banners)}; serial link drops: {len(link_drops)}", ""]
+    # Every puller epoch is a reboot. The puller notices up to one poll period
+    # late, so look back up to 150 s for the evidence: a captured ROM reset
+    # line (classified below), else a serial-link drop (external), else a
+    # panic / deliberate marker, else unknown.
+    if boots:
+        out += ["Reboots (puller epochs) and their evidence:", "",
+                "| epoch | detected (host) | class | evidence |", "|---|---|---|---|"]
+        for b in boots:
+            bt = parse_ts(b.get("host_ts"))
+            if bt is None:
+                continue
+            rst = [r for r in resets if r[0] and 0 <= (bt - r[0]).total_seconds() <= 150]
+            drop = [d for d in link_drops if 0 <= (bt - d[0]).total_seconds() <= 150]
+            mk = [m for m in markers if m[0] <= bt and (bt - m[0]).total_seconds() <= 150 + a.window_s]
+            if rst:
+                cls, ev = "see reset table", f"rst {rst[-1][1]} ({rst[-1][2]}) at {rst[-1][0].isoformat(timespec='seconds')}"
+            elif mk and mk[-1][1] == "panic":
+                cls, ev = "firmware (panic)", mk[-1][2]
+            elif mk and mk[-1][1] == "deliberate":
+                cls, ev = "deliberate (software reboot)", mk[-1][2]
+            elif drop:
+                cls, ev = "external (USB link dropped, ROM reset line lost)", f"{drop[-1][0].isoformat(timespec='seconds')} {drop[-1][1]}"
+            else:
+                cls, ev = "unknown (no reset line, no link drop, no marker)", ""
+            out.append(f"| {b.get('epoch')} | {bt.isoformat(timespec='seconds')} | {cls} | {ev} |")
+        out += [""]
     out += ["| # | host time | rst | reason | class | evidence (last marker before reset) |", "|---|---|---|---|---|---|"]
     classes = {}
     for i, (ts, code, reason) in enumerate(resets, 1):

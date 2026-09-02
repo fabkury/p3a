@@ -1,4 +1,4 @@
-# RUN-20260902-01 / -02 / -04 — CMD13 poll-storm reproducer, three busy-wait arms (esp-idf #19034)
+# RUN-20260902-01 / -02 / -05 — CMD13 poll-storm reproducer, three busy-wait arms (esp-idf #19034)
 
 Same diag build config (release `sdkconfig` + `sdkconfig.diag.defaults`),
 same day, same procedure (`arm_reproducer.py`: bar GIF uploaded and playing
@@ -11,7 +11,7 @@ device confirmed each arm at runtime (`/api/debug/frames/stats` → `config`).
 |-----|--------|-------------------------|
 | stock (RUN-01) | `build-diag-nowrap` 4f09523b25c4 | IDF v5.5.4 as shipped: CMD13 back-to-back, first yield after 100 ms |
 | patch (RUN-02) | `build-diag-patch` 14f03b740e1c | Espressif's patch: 100 µs doubling to 32 ms (sub-tick = spin, else `vTaskDelay`) |
-| wrap (RUN-04) | `build-diag` ec3d7abf18ae | p3a fix 8: one CMD13, then one per tick |
+| wrap (RUN-05) | `build-diag` ec3d7abf18ae | p3a fix 8: one CMD13, then one per tick |
 
 ## The reproducer condition: 8 x 32 KB `fwrite` from a PSRAM-misaligned buffer (512 B bounce path, one command per sector)
 
@@ -19,9 +19,9 @@ device confirmed each arm at runtime (`/api/debug/frames/stats` → `config`).
 |-----|--------|--------------------|------------------|----------------------|----------------------------------|
 | stock | 51 | 34.0 / 611 | 299 | 16.7 / **479** | **12 (4.0 %)** |
 | patch | 51 | 17.3 / 925 | 641 | 16.7 / **22** | **0** |
-| wrap | | | | | (pending) |
+| wrap | 51 | 31.0 / 619 | 323 | 16.8 / **18** | **0** |
 
-Baseline outside provocations, both arms so far: 0 anomalies in ~8800 frames,
+Baseline outside provocations, all three arms: 0 anomalies in ~8800 frames each,
 upscale median 16.4–16.5 ms, max 20 ms.
 
 ## Full matrix (all conditions; anomalies were 0 everywhere except stock misaligned 32 KB)
@@ -48,7 +48,35 @@ Patch (RUN-02):
 | internal 512 B | 1563 | 0.9 / 59 | 0.07 | 379 | 16.6 / 18 | 0 | 0.0% |
 | internal 32768 B | 51 | 4.9 / 58 | 1.08 | 44 | 16.7 / 18 | 0 | 0.0% |
 
-Wrap (RUN-04): pending.
+Wrap (RUN-05):
+
+| condition | writes | write med/max ms | MB/s | frames in window | upscale med/max ms | anomalies | rate |
+|---|---|---|---|---|---|---|---|
+| psram-misaligned 512 B | 1563 | 3.0 / 42 | 0.08 | 343 | 16.8 / 18 | 0 | 0.0% |
+| psram-misaligned 32768 B | 51 | 31.0 / 619 | 0.09 | 323 | 16.8 / 18 | 0 | 0.0% |
+| psram-aligned 512 B | 1563 | 2.9 / 79 | 0.10 | 275 | 16.8 / 18 | 0 | 0.0% |
+| psram-aligned 32768 B | 51 | 5.0 / 43 | 1.52 | 38 | 16.8 / 19 | 0 | 0.0% |
+| internal 512 B | 1563 | 2.5 / 69 | 0.10 | 293 | 16.8 / 18 | 0 | 0.0% |
+| internal 32768 B | 51 | 3.9 / 38 | 1.39 | 39 | 16.8 / 18 | 0 | 0.0% |
+
+## Write-completion latency by arm (median ms of the same condition)
+
+| condition (busy period after the command) | stock | patch | wrap |
+|---|---|---|---|
+| internal 512 B (sub-millisecond) | 0.7 | 0.9 | 2.5 |
+| psram-aligned 512 B (~2 ms) | 2.3 | 4.9 | 2.9 |
+| psram-misaligned 512 B (~2 ms) | 2.4 | 5.0 | 3.0 |
+| internal 32 KB (~3 ms) | 2.7 | 4.9 | 3.9 |
+| psram-aligned 32 KB (~4.5 ms) | 4.5 | 6.0 | 5.0 |
+| psram-misaligned 32 KB (64 single-block commands, card busy up to 45 ms each) | 34.0 | 17.3 | 31.0 |
+
+Stock is the floor (it never waits, at the price of the storm). The patch
+overshoots by up to 2x for busy periods of a few milliseconds (doubling
+sequence 0.1, 0.3, 0.7, 1.5, 3.1, 6.3 ms...) and by up to 32 ms once it is
+capped; the wrapper overshoots by at most one tick (1 ms here) but pays that
+tick even for sub-millisecond busy periods, where the patch's 100–400 µs
+spins win. The misaligned 32 KB row is a mixed bag (64 commands, some of
+which the storm itself made slow on stock).
 
 ## Reading so far
 
@@ -56,14 +84,18 @@ Wrap (RUN-04): pending.
   the same 3–50x cross-core slowdown as on 2026-08-30) and the patch removes
   it completely (0 anomalies, upscale max 22 ms). On the stall question the
   patch is as good as the wrapper on this hardware.
+- The wrapper (RUN-05) also removes the stall completely (0 anomalies, upscale
+  max 18 ms), matching 2026-08-30. Three arms, one variable, one outcome:
+  it is the CMD13 storm, and any pacing of it is enough.
 - The patch's back-off costs write latency. Every single-command write got
   slower: aligned 32 KB (one multi-block command) median 4.5 → 6.0 ms
   (+33 %), 512 B sector writes 2.3–2.4 → 4.9–5.0 ms (about 2x), internal
   32 KB 2.7 → 4.9 ms. That is the overshoot of the doubling sequence
   (0.1, 0.3, 0.7, 1.5, 3.1, 6.3 ms...): a card that is ready at 2 ms is only
   seen at 3.1 ms, one ready at 4.5 ms at 6.3 ms. The wrapper's overshoot is
-  bounded by one tick (1 ms here). The wrap arm's numbers will show whether
-  the once-per-tick variant keeps the stock write latency.
+  bounded by one tick (1 ms here). The wrap arm keeps within ~1 ms of stock on every
+  condition of a few milliseconds and loses only on sub-millisecond busy
+  periods (internal 512 B: 0.7 → 2.5 ms), where a tick is coarse.
 - Gotcha recorded: `POST /upload` makes a single-artwork playset the active
   one. The soak that followed RUN-02 started on the bar GIF for ~2 min before
   "Work mix" was re-activated by hand; `arm_reproducer.py` now re-activates

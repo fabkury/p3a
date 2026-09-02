@@ -783,6 +783,11 @@ stress; decision; reply; restore IDF tree; release build + flash.
 - IDF tree restored (`git checkout -- components/sdmmc`, Kconfig removed),
   release build + flash from PowerShell (`build.ps1 -Flash`).
 
-**Next:** Fab approves `espressif-patch/reply-draft.md`; post it; verify
-the device on the release build (`/api/debug/*` 404); memory; push at Fab's
-call.
+- Device verified on the release build (hostname p3a-fab, `/api/debug/*`
+  404, Work mix playing). Reply approved by Fab and posted:
+  https://github.com/espressif/esp-idf/issues/19034#issuecomment-5518162367
+
+**Next:** watch the issue for Espressif's answer on the one-tick cap and the
+`release/v5.5` backport; when a release carries the fix, remove the wrap
+(keep `P3A_SD_IDLE_WAIT_WRAP`). Residual class (producer-bound artwork +
+loader reads behind download writes) parked for a future probe.

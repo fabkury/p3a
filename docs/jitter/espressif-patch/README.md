@@ -105,8 +105,8 @@ rebuilt against another. A plain `-Flash` or `idf.py flash` WOULD rebuild.
 | Soak `wrap` 3.4 h | done RUN-20260902-06 (1.80 h, **2 stalls** = one event on a zero-margin artwork during download writes + loader reads) + RUN-20260902-07 continuation (1.63 h, 0 stalls); p99 42.0 / 34.3 ms; SD write p90/p99 35.6/44.3 ms | `../runs/RUN-20260902-06-07.md` |
 | Upload stress `wrap` | done RUN-20260902-08: 2325 frames, 0 anomalies, 0 stalls, upscale max 21 ms | |
 | Zero-margin probe `wrap` | done RUN-20260902-09/09L: decode flat at 64 ms under every write condition incl. the storm control; the RUN-06 class needs loader reads and is arm-independent | same file |
-| Decision + reply to Espressif | decided (below); reply text in `reply-draft.md`, posting awaits Fab's approval | |
-| IDF tree restored, device on release build | in progress 19:50 (`build.ps1 -Flash`) | `host/jitter-lab/runs/build-logs/build-release.log` |
+| Decision + reply to Espressif | done: reply posted 2026-09-02 19:54 local as https://github.com/espressif/esp-idf/issues/19034#issuecomment-5518162367 (text in `reply-draft.md`) | |
+| IDF tree restored, device on release build | done 19:40: tree clean, `build/` acbc70f6c424 flashed, `/api/debug/*` 404, Work mix playing | |
 
 ## Resume protocol (historical)
 

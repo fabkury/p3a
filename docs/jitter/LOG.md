@@ -731,3 +731,27 @@ tree; release build + flash.
   the controlled write-heavy comparison.
 - Wrap arm (`build-diag` ec3d7abf18ae) flashed 15:2x; RUN-05 reproducer
   running, then RUN-06 soak 3.3 h, RUN-07 upload stress.
+
+## 2026-09-02 17:15 — wrap soak interrupted at 1.8 h with 2 stalls; laptop sleep
+
+- RUN-20260902-05 (wrap reproducer): 0 anomalies, upscale max 18 ms; write
+  latency within ~1 ms of stock except sub-ms busy periods.
+  `runs/RUN-20260902-repro-arms.md` has the three-arm latency table.
+- RUN-20260902-06 (wrap soak, Work mix) stopped cleanly at 1.80 h because
+  the laptop (which powers the device) had to sleep. **2 in-scope stalls**
+  on consecutive frames (seq 186592/186593, gen 170, ~1.75 h): decode 220
+  and 282 ms with normal upscale, lateness 166/232 ms, while the download
+  task (5779a3e4, core 0) was in a download with a burst of 512 B
+  `sd_write` + `sd_read` marks. 5 UART stall reports. Not analysed yet; the
+  Monitor's `tail -F uart.log` never surfaced the `JTR|STALL` lines (Windows
+  tail on a file written by another process is unreliable; poll
+  `stalls.jsonl` instead). p99 42.0 ms, 0 reboots.
+- Open question for the resume: residual single-sector read-storm class
+  (RUN-11, 2026-08-29: loader/FAT walk storms hitting a zero-margin artwork)
+  that any arm can hit, or something the wrapper does not cover? RUN-03
+  (patch, 3.3 h) had none, but one event in 5 h of soaking today is within
+  the rate at which RUN-11 saw them.
+- Resume protocol: `espressif-patch/README.md`, section RESUME PROTOCOL.
+
+**Next:** analyse the RUN-06 stalls; wrap continuation soak 1.6 h; upload
+stress; decision; reply; restore IDF tree; release build + flash.

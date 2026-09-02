@@ -1,6 +1,6 @@
 # Reply draft for esp-idf #19034 (post only with Fab's approval)
 
-Placeholders in [brackets] are filled from RUN-20260902-06 once it ends.
+Final text (numbers from RUN-20260902-01..09).
 
 ---
 
@@ -27,9 +27,9 @@ Every other condition of the matrix (aligned PSRAM, internal RAM, 512 B and 32 K
 | arm | frames | presented-frame lateness ≥ 100 ms | 50–100 ms | lateness p99 / max ms |
 |---|---|---|---|---|
 | patch | 160 760 | 0 | 1 | 39.1 / 77.2 |
-| wrap | [N] | [S] | [W] | [p99] / [max] |
+| wrap | 154 837 | 2 | 2 | 42.0 / 231.9 |
 
-No regression either way. (The patched run had four reboots from a loose USB cable on our side, not the firmware; they are classified in our logs.)
+The two wrap-side frames are one event and not about the busy-wait: a producer-bound artwork (decode ~55 ms per 60 to 70 ms frame) met a download's 32 KB writes plus the loader's 64 KB reads queued behind them for up to 144 ms, and its decode stretched 3 to 5x. Reads never enter `sdmmc_wait_for_idle()`, and a targeted probe (the same kind of zero-margin artwork under paced 32 KB writes, with the once-per-tick wait) left decode flat at 64 ms in every condition, so the polling itself is not what did it. The patched run simply never drew that artwork. (The patched run also had four reboots from a loose USB cable on our side; they are classified in our logs and are not the firmware.)
 
 **3. Write-completion latency.** This is where the two approaches differ. Median duration of `sdmmc_write_sectors()` including the wait, per condition of the reproducer matrix:
 
@@ -45,7 +45,7 @@ And over the soaks, the duration of the application's ordinary 32 KB download wr
 | arm | SD write median / p90 / p99 ms |
 |---|---|
 | patch | 6.6 / 52.5 / 57.5 |
-| wrap | [med] / [p90] / [p99] |
+| wrap | 6.2 / 35.6 / 44.3 |
 
 The doubling sequence lands at 0.1, 0.3, 0.7, 1.5, 3.1, 6.3, 12.7, 25.5, 57.5 ms, so a busy period of 4.5 ms is seen at 6.3 ms and one of 30 to 45 ms at 57.5 ms. The per-tick variant is within one tick of the card on those, but loses on sub-millisecond busy periods, where the spins in your patch are the better tool.
 
@@ -53,4 +53,4 @@ The doubling sequence lands at 0.1, 0.3, 0.7, 1.5, 3.1, 6.3, 12.7, 25.5, 57.5 ms
 
 Either way the patch is good to merge from our side. The backport to `release/v5.5` question from my previous comment still stands: we will drop our wrap as soon as a release carries the fix.
 
-[Optional closing line, Fab's call: thanks for the fast turnaround.]
+Thanks again for the fast turnaround.

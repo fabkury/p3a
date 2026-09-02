@@ -102,57 +102,56 @@ rebuilt against another. A plain `-Flash` or `idf.py flash` WOULD rebuild.
 | Reproducer `wrap` | done RUN-20260902-05: 0 anomalies everywhere, upscale max 18 ms; write latency within ~1 ms of stock except sub-ms busy periods (tick granularity) | same file |
 | Soak `patch` 3 h | **done RUN-20260902-03: PASS**, 3.30 h, 160 760 frames, 0 stalls, 1 warn, p99 39.1 ms, max 77.2 ms; 4 reboots all external (cable, confirmed by Fab); SD write p90/p99 52.5/57.5 ms vs 37.2/46.8 on the wrapper (RUN-06) | `../runs/RUN-20260902-03.md` |
 | Upload stress `patch` | done RUN-20260902-04: 2342 frames, 0 anomalies, 0 stalls, upscale max 20 ms (wrapper reference RUN-20260830-08: 2 anomalies, max 21 ms) | `host/jitter-lab/runs/RUN-20260902-04/` |
-| Soak `wrap` 3 h | **INTERRUPTED at 1.80 h** (laptop sleep powers the device off, 17:13). RUN-20260902-06: 81 524 frames, **2 in-scope stalls** (seq 186592/186593, consecutive frames of gen 170 at ~1.75 h: decode 220 / 282 ms with normal upscale, lateness 166 / 232 ms, during a download with a burst of 512 B `sd_write`/`sd_read` marks from the download task 5779a3e4 on core 0; 5 UART `JTR\|STALL` reports), 1 warn, p99 42.0 ms, 0 reboots. **Not yet analysed**: is this the residual single-sector read-storm class (loader / FAT walk, see LOG 2026-08-29 RUN-11) that both arms can hit, or wrapper-specific? Remaining 1.5 h to be run as a continuation | `host/jitter-lab/runs/RUN-20260902-06/` (report.md, uart.log, stalls.jsonl) |
-| Soak `wrap` continuation 1.5 h | pending: RUN-20260902-07 (or next day's ID) | |
-| Upload stress `wrap` | pending | |
-| Decision + reply to Espressif | pending | `reply-draft.md` here |
-| IDF tree restored, device on release build | pending | |
+| Soak `wrap` 3.4 h | done RUN-20260902-06 (1.80 h, **2 stalls** = one event on a zero-margin artwork during download writes + loader reads) + RUN-20260902-07 continuation (1.63 h, 0 stalls); p99 42.0 / 34.3 ms; SD write p90/p99 35.6/44.3 ms | `../runs/RUN-20260902-06-07.md` |
+| Upload stress `wrap` | done RUN-20260902-08: 2325 frames, 0 anomalies, 0 stalls, upscale max 21 ms | |
+| Zero-margin probe `wrap` | done RUN-20260902-09/09L: decode flat at 64 ms under every write condition incl. the storm control; the RUN-06 class needs loader reads and is arm-independent | same file |
+| Decision + reply to Espressif | decided (below); reply text in `reply-draft.md`, posting awaits Fab's approval | |
+| IDF tree restored, device on release build | in progress 19:50 (`build.ps1 -Flash`) | `host/jitter-lab/runs/build-logs/build-release.log` |
 
-## RESUME PROTOCOL (written 2026-09-02 17:15 before a laptop sleep)
+## Resume protocol (historical)
 
-State on disk when the laptop slept:
-
-- Device: **wrap arm** flashed (`build-diag` ec3d7abf18ae, diag flavour, dev
-  endpoints on). It powers off with the laptop; on power-up it boots the same
-  binary. Verify with `GET /api/debug/frames/stats` → `config` =
-  `sd_idle_wait_wrap=true, idf_sdmmc_backoff_patch=false, dev_endpoints=true`.
-- IDF tree `C:/esp/v5.5.4/esp-idf` is **still patched** (3 modified files +
-  untracked `components/sdmmc/Kconfig`). Do not run a release build before
-  restoring it (step 6).
-- All three arm binaries exist in `build-diag*/`; `-FlashOnly` needs no
-  rebuild. Never `idf.py flash` / `-Flash` while the tree is patched.
-- No soak processes running (RUN-06 was stopped cleanly with `soak.ps1 -Stop`).
-- git: everything up to the RUN-06 stop is committed on `main` (not pushed).
-
-Steps to finish:
-
-1. **Analyse the RUN-06 stalls first** (`runs/RUN-20260902-06/report.md`
-   seq 186592/186593, `uart.log` around the `JTR|STALL` blocks, count of
-   512 B `sd_read` marks in the 2 s window, what the download task was
-   doing). Compare with the RUN-11 single-sector read-storm class
-   (LOG 2026-08-29) and check RUN-03's data for the same pattern.
-2. Plug in, wait for boot, check the arm identity, activate "Work mix"
-   (`POST /playset/Work%20mix`), then
-   `soak.ps1 -Start -Run <next id> -Hours 1.6 -Every 60 -Note "wrap arm continuation of RUN-20260902-06"`;
-   monitors as before (`tail -F` on `uart.log` for `JTR|STALL`, epochs,
-   `### serial error`; the earlier Monitor missed the STALL lines, so also
-   poll `stalls.jsonl` line count hourly).
-3. `soak.ps1 -Stop`, `run_audit.py`, `runs/RUN-*.md` for 06 + continuation
-   (report the wrap soak as the sum), then `stress.py <id> --phases upload`.
-4. Fill the placeholders in `reply-draft.md`; decision in this README and
-   `../LOG.md`; Fab approves the reply text; post with
-   `gh api repos/espressif/esp-idf/issues/19034/comments -F body=@file`.
-5. Commit (signed, sandbox off).
-6. Restore the IDF tree:
-   `git -C C:/esp/v5.5.4/esp-idf checkout -- components/sdmmc && rm C:/esp/v5.5.4/esp-idf/components/sdmmc/Kconfig`,
-   `git -C C:/esp/v5.5.4/esp-idf status --short` must be empty.
-7. Release build from PowerShell: `pwsh host/jitter-lab/build.ps1` (guards:
-   release `sdkconfig` unchanged, trace off, wrap on), then
-   `pwsh host/jitter-lab/build.ps1 -Flash -Port COM5`, verify
-   `/api/debug/frames/stats` → 404, `/api/device-name` → p3a-fab, playback
-   fine; `git status` clean apart from ignored build dirs.
-8. Memory + `../README.md` status line; push if Fab wants.
+Used once, 2026-09-02 17:15 → 17:47 (laptop sleep between two locations).
+Kept short: the on-disk state was (device on the wrap arm, IDF tree patched,
+no soak processes, all runs committed) and the steps were the remaining rows
+of the Status table. If this evaluation is ever re-run, start from the
+Status table and `../LOG.md`.
 
 ## Results
 
-(filled in as runs complete; committed summaries in `../runs/`)
+| | stock | patch | wrap (ours) |
+|---|---|---|---|
+| Reproducer (misaligned 32 KB bounce storm): producer anomalies / upscale max | 12 / 479 ms | 0 / 22 ms | 0 / 18 ms |
+| Soak, Work mix, same day: stalls ≥ 100 ms / hours | (not run) | 0 / 3.30 h | 2 / 3.43 h (one event, see below) |
+| Soak lateness p99 / max | | 39.1 / 77.2 ms | 42.0 / 231.9 ms (RUN-06), 34.3 / 75.4 ms (RUN-07) |
+| Upload stress: anomalies / stalls | | 0 / 0 | 0 / 0 |
+| SD write spans over the soak: p90 / p99 | | 52.5 / 57.5 ms | 35.6 / 44.3 ms |
+| Write latency, ms-scale busy periods (reproducer medians) | floor | up to 2x stock | within ~1 ms of stock |
+| Write latency, sub-ms busy periods | 0.7 ms | 0.9 ms | 2.5 ms |
+
+The wrap soak's one stall event (RUN-06, post 3621) is a producer-bound
+artwork meeting download writes plus loader reads queued behind them. The
+zero-margin probe shows the wrapper's one-poll-per-tick traffic does not
+inflate a saturated decoder at all, and loader reads never enter
+`sdmmc_wait_for_idle()`, so the event is not a property of either busy-wait.
+The patch soak simply never drew that artwork (0 picks vs 8). It stays on
+the books as the residual class from RUN-11 (2026-08-29), to be probed
+separately.
+
+## Decision (2026-09-02)
+
+**p3a keeps fix 8 (the once-per-tick wrapper) until an ESP-IDF release
+carries Espressif's fix; then the wrap comes out and the Kconfig stays.**
+
+- Both approaches kill the poll storm completely on this hardware; the
+  soaks are equivalent on stalls.
+- The wrapper has the better write-completion tail for our workload (32 KB
+  download writes on a card that is busy 20–45 ms): p99 44 vs 57 ms. The
+  patch wins only on sub-millisecond busy periods, which p3a does not care
+  about.
+- The wrapper is what v1.2.1 shipped and has field time; a patched IDF tree
+  is not something a public project can ask its builders to carry.
+- To Espressif: the patch is good to merge; the suggested refinement is to
+  cap the back-off at one tick period (the spin part of the patch fixes the
+  wrapper's only weakness, the tick-size overshoot on sub-ms busy periods),
+  and a backport to `release/v5.5`.
+

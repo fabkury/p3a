@@ -65,6 +65,8 @@ def main():
     ap.add_argument("--gap", type=float, default=12.0)
     ap.add_argument("--settle", type=float, default=25.0)
     ap.add_argument("--playset", default="Work mix")
+    ap.add_argument("--dwell", type=int, default=3600,
+                    help="dwell seconds; a short dwell on the single-artwork playset makes the loader re-read the file every dwell (loader traffic variant)")
     ap.add_argument("--no-restore", action="store_true")
     a = ap.parse_args()
     H = a.host
@@ -90,7 +92,7 @@ def main():
         r = requests.post(f"{H}/upload", files={"file": (gif.name, f, "image/gif")}, timeout=180)
     print("upload ->", r.status_code, r.text[:100], flush=True)
     r.raise_for_status()
-    subprocess.run([py, str(HERE / "snapshot_settings.py"), "set", a.run, "--host", H, "--dwell", "3600"], check=True)
+    subprocess.run([py, str(HERE / "snapshot_settings.py"), "set", a.run, "--host", H, "--dwell", str(a.dwell)], check=True)
     time.sleep(a.settle)
 
     # start the capture at the ring head, then calibrate on a few seconds of quiet playback
@@ -128,7 +130,13 @@ def main():
             subprocess.run([py, str(HERE / "snapshot_settings.py"), "set", a.run, "--host", H, "--playset", a.playset], check=False)
 
     frames, marks = load(run_dir)
-    frames = [f for f in frames if f["arg"] == gen]
+    if a.dwell >= 600:
+        frames = [f for f in frames if f["arg"] == gen]
+    else:
+        # short dwell: every reload of the same file starts a new generation; keep
+        # frames of this file (same frame period as the calibrated one)
+        frames = [f for f in frames if int(f["duration_ms"]) == int(dur_ms)]
+    loads = sum(1 for m in marks if m["kind"] == "loader_load" and m["phase"] == "2")
     pm = sorted([m for m in marks if m["kind"] == "provoke"], key=lambda x: int(x["t_us"]))
     intervals, t0 = [], None
     for m in pm:
@@ -150,7 +158,7 @@ def main():
         g["late100"] += sum(1 for f in fr if int(f["lateness_us"]) >= 100_000 and not (int(f["flags"]) & 3))
     inside = lambda t: any(ta - 300_000 <= t <= tb + 600_000 for ta, tb in intervals)
     base = [f for f in frames if not inside(int(f["t_us"]))]
-    out = [f"arm **{a.arm}**, artwork {a.gif}: frame {dur_ms:.0f} ms, produce median {prod:.1f} ms (decode {dec:.1f}), margin {dur_ms - prod:.1f} ms",
+    out = [f"arm **{a.arm}**, artwork {a.gif}, dwell {a.dwell} s ({loads} loader loads during the capture): frame {dur_ms:.0f} ms, produce median {prod:.1f} ms (decode {dec:.1f}), margin {dur_ms - prod:.1f} ms",
            "", "| condition | frames | decode med / max ms | produce med / max ms | lateness max ms | anomalies | late >= 100 ms |",
            "|---|---|---|---|---|---|---|"]
     for lab in dict.fromkeys(labels):

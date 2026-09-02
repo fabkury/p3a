@@ -755,3 +755,34 @@ tree; release build + flash.
 
 **Next:** analyse the RUN-06 stalls; wrap continuation soak 1.6 h; upload
 stress; decision; reply; restore IDF tree; release build + flash.
+
+## 2026-09-02 evening — wrap continuation clean; probe; decision; device back on release
+
+- RUN-20260902-07 (wrap continuation, other location, 1.63 h): 0 stalls,
+  1 warn, p99 34.3 ms, max 75.4 ms, 0 reboots. Wrap soak total 3.43 h,
+  2 stalls (the one RUN-06 event). `runs/RUN-20260902-06-07.md`.
+- RUN-08 upload stress on the wrap: 0 anomalies, 0 stalls (= patch's RUN-04).
+- RUN-06 event analysed: post 3621 (produce 72.5 ms per 60–70 ms frame)
+  while the download task wrote 32 KB chunks (35–43 ms busy) and the loader
+  read the next artwork in 64 KB reads queued 57–144 ms behind them; decode
+  189/219/281 ms. Post 3621 was picked 8x in the wrap soak and 0x in the
+  patch soak. 66 single-sector reads in 3 s: congestion, not a storm.
+- `zm_reproducer.py` (new, with `make_test_anim.py --noise`): a 360 px noise
+  GIF at 60 ms frames decodes in 63.7 ms (margin -22.8 ms). On the wrap arm
+  decode stayed 63.5–63.9 / max 65 ms under paced aligned writes, the bounce
+  storm and 512 single-sector writes: one CMD13 per tick does not touch a
+  saturated decoder. The loader-read variant (dwell 12 s on a single-artwork
+  playset) produced 0 loader loads; the residual class (RUN-11 family) is
+  parked for a future probe. Reads never call `sdmmc_wait_for_idle()`, so
+  it cannot separate the arms anyway.
+- SD write tail over the soaks: wrap p90/p99 35.6/44.3 ms, patch 52.5/57.5.
+- **Decision:** keep fix 8 until an IDF release carries Espressif's fix,
+  then drop the wrap (Kconfig stays). Suggest upstream: cap the back-off at
+  one tick; ask for the `release/v5.5` backport. Rationale in
+  `espressif-patch/README.md`.
+- IDF tree restored (`git checkout -- components/sdmmc`, Kconfig removed),
+  release build + flash from PowerShell (`build.ps1 -Flash`).
+
+**Next:** Fab approves `espressif-patch/reply-draft.md`; post it; verify
+the device on the release build (`/api/debug/*` 404); memory; push at Fab's
+call.

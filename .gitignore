@@ -20,3 +20,6 @@ scripts/apod_test/.env
 reference/makapix-club/
 build-diag/
 build-trace/
+
+# Content-sources showcase (untracked working folder, see content-sources-showcase/)
+content-sources-showcase/

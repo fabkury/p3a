@@ -791,3 +791,18 @@ stress; decision; reply; restore IDF tree; release build + flash.
 `release/v5.5` backport; when a release carries the fix, remove the wrap
 (keep `P3A_SD_IDLE_WAIT_WRAP`). Residual class (producer-bound artwork +
 loader reads behind download writes) parked for a future probe.
+
+## 2026-09-03 — Espressif revised the patch (one-tick cap); round 2 test
+
+- Overnight Adam posted v2 (`espressif-patch/patch/newer_...patch`): 100 µs
+  doubling, spins below one tick, one `vTaskDelay(1)` per poll from there,
+  start period clamped to a tick (Kconfig range 1–10000). Asked "OK to
+  merge to master?". Label now "Status: Reviewing".
+- Fab: test first, then answer with numbers (reproducer + zero-margin probe
+  + 1 h soak); re-ask the `release/v5.5` backport; offer to close the loop
+  in p3a.
+- v2 applied to the IDF tree, `build-diag-patch2` e8690dc8bec7 built and
+  flashed 12:00; RUN-20260903-01 (reproducer) and -02 (probe) running.
+
+**Next:** RUN-03 soak 1 h; reply draft 2; restore tree; release build +
+flash.

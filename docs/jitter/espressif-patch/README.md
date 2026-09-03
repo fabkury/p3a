@@ -137,6 +137,27 @@ The patch soak simply never drew that artwork (0 picks vs 8). It stays on
 the books as the residual class from RUN-11 (2026-08-29), to be probed
 separately.
 
+## Round 2 (2026-09-03): Espressif's revised patch (one-tick cap)
+
+Adam adopted the suggestion the same night: `patch/newer_sdmmc_back_off_between_CMD13_polls_v5.5.4.patch`
+(v2) doubles from 100 µs, spins while below one FreeRTOS tick, then one
+`vTaskDelay(1)` per poll; both the delay and the configured start period
+are clamped to a tick (Kconfig range 1–10000 µs, `SDMMC_READY_POLL_PERIOD_MAX_US`
+gone). At 1000 Hz this is our wrapper plus 100/200/400/800 µs spins before
+the first yield. He asked whether it is OK to merge to master. Fab's call:
+test it on the device first (reproducer, zero-margin probe, 1 h soak), then
+answer with numbers; re-ask about the `release/v5.5` backport; offer to close
+the loop in p3a.
+
+| Step | Status | Where |
+|------|--------|-------|
+| Apply v2 to the IDF tree, build `patch2` (`build-diag-patch2/`, wrap off) | done 11:57 (sha e8690dc8bec7), flashed 12:00; **IDF tree dirty until restored** | |
+| Reproducer `patch2` | done RUN-20260903-01: 0 anomalies, upscale max 22 ms; write medians internal 512 B 1.1, aligned 512 B 2.5, internal 32 KB 3.4, aligned 32 KB 4.7 ms (stock 0.7 / 2.3 / 2.7 / 4.5; v1 0.9 / 4.9 / 4.9 / 6.0; wrap 2.5 / 2.9 / 3.9 / 5.0) | `../runs/RUN-20260903-v2.md` |
+| Zero-margin probe `patch2` | done RUN-20260903-02: decode 62.8–63.0 / max 63–65 ms in every condition, 0 anomalies | same file |
+| Soak `patch2` 1 h | **running** RUN-20260903-03 12:10 → ~13:13 | |
+| Reply (tested OK) | pending, draft in `reply-draft-2.md` | |
+| IDF tree restored, device on release | pending | |
+
 ## Decision (2026-09-02)
 
 **p3a keeps fix 8 (the once-per-tick wrapper) until an ESP-IDF release

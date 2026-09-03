@@ -1,6 +1,6 @@
 # Reply draft 2 for esp-idf #19034 (post only with Fab's approval)
 
-Placeholders in [brackets] are filled from RUN-20260903-01..03.
+Final text (numbers from RUN-20260903-01..03).
 
 ---
 
@@ -19,7 +19,7 @@ Tested the new version, same setup and same three-arm procedure as before (v5.5.
 
 **Zero-margin probe** (an artwork whose decode fills its frame period, under paced 32 KB writes, the bounce storm and 512 B single-sector bursts): decode flat at 63 ms median / 65 ms max in every condition, 0 anomalies, same as our variant.
 
-**Soak**, 1 h on the normal workload: [SOAK_FRAMES] frames, [SOAK_STALLS] frames late ≥ 100 ms, [SOAK_WARNS] in 50–100 ms, lateness p99 / max [SOAK_P99] / [SOAK_MAX] ms; 32 KB download writes median / p90 / p99 [SDW] ms (v1 was 6.6 / 52.5 / 57.5, our variant 6.2 / 35.6 / 44.3).
+**Soak**, 1 h on the normal workload: 48 246 frames, 0 frames late ≥ 100 ms, 0 in 50–100 ms, lateness p99 / max 18.5 / 74.9 ms; 32 KB download writes median / p90 / p99 6.5 / 36.0 / 44.5 ms (v1 was 6.6 / 52.5 / 57.5, our variant 6.2 / 35.6 / 44.3).
 
 From our side this is good to merge. Two things:
 

@@ -804,5 +804,15 @@ loader reads behind download writes) parked for a future probe.
 - v2 applied to the IDF tree, `build-diag-patch2` e8690dc8bec7 built and
   flashed 12:00; RUN-20260903-01 (reproducer) and -02 (probe) running.
 
-**Next:** RUN-03 soak 1 h; reply draft 2; restore tree; release build +
-flash.
+- RUN-20260903-01 (reproducer): 0 anomalies, upscale max 22 ms; write
+  medians 1.1 / 2.5 / 3.4 / 4.7 ms on the four calibrated conditions, the
+  best of all arms (stock 0.7 / 2.3 / 2.7 / 4.5). RUN-02 (zero-margin
+  probe): decode flat at 63 ms. RUN-03 (1.08 h soak): 0 stalls, 0 warns,
+  p99 18.5 ms, max 74.9 ms, SD write p90/p99 36.0/44.5 ms (= wrapper).
+  `runs/RUN-20260903-v2.md`. Verdict: v2 is strictly at least as good as
+  fix 8 on this hardware.
+- IDF tree restored, release build + flash (13:20).
+
+**Next:** Fab approves `espressif-patch/reply-draft-2.md`; post; verify the
+device on release; then wait for the merge and a release that carries it,
+at which point fix 8 comes out (Kconfig stays).

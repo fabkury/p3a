@@ -154,9 +154,9 @@ the loop in p3a.
 | Apply v2 to the IDF tree, build `patch2` (`build-diag-patch2/`, wrap off) | done 11:57 (sha e8690dc8bec7), flashed 12:00; **IDF tree dirty until restored** | |
 | Reproducer `patch2` | done RUN-20260903-01: 0 anomalies, upscale max 22 ms; write medians internal 512 B 1.1, aligned 512 B 2.5, internal 32 KB 3.4, aligned 32 KB 4.7 ms (stock 0.7 / 2.3 / 2.7 / 4.5; v1 0.9 / 4.9 / 4.9 / 6.0; wrap 2.5 / 2.9 / 3.9 / 5.0) | `../runs/RUN-20260903-v2.md` |
 | Zero-margin probe `patch2` | done RUN-20260903-02: decode 62.8–63.0 / max 63–65 ms in every condition, 0 anomalies | same file |
-| Soak `patch2` 1 h | **running** RUN-20260903-03 12:10 → ~13:13 | |
-| Reply (tested OK) | pending, draft in `reply-draft-2.md` | |
-| IDF tree restored, device on release | pending | |
+| Soak `patch2` 1 h | done RUN-20260903-03: 1.08 h, 48 246 frames, 0 stalls, 0 warns, p99 18.5 ms, max 74.9 ms; SD write p90/p99 36.0/44.5 ms | same file |
+| Reply (tested OK) | text final in `reply-draft-2.md`, awaiting Fab's approval | |
+| IDF tree restored, device on release | done 13:25: tree clean, `build/` acbc70f6c424 flashed, `/api/debug/*` 404 | |
 
 ## Decision (2026-09-02)
 

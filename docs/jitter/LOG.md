@@ -813,6 +813,9 @@ loader reads behind download writes) parked for a future probe.
   fix 8 on this hardware.
 - IDF tree restored, release build + flash (13:20).
 
-**Next:** Fab approves `espressif-patch/reply-draft-2.md`; post; verify the
-device on release; then wait for the merge and a release that carries it,
-at which point fix 8 comes out (Kconfig stays).
+- Device verified on release (debug 404, Work mix). Tested-OK reply posted
+  with a context paragraph (what p3a is, why the storm is visible to us, where
+  the tooling lives): https://github.com/espressif/esp-idf/issues/19034#issuecomment-5529532353
+
+**Next:** wait for the merge to master and a `release/v5.5` backport; when a
+release carries it, remove fix 8's wrap (keep the Kconfig) and re-soak.

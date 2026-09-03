@@ -27,3 +27,5 @@ From our side this is good to merge. Two things:
 - Once it is in a release we will switch p3a to the stock function and report here if anything regresses in the field.
 
 Thanks for turning this around so quickly.
+
+Context, in case it helps: p3a (https://github.com/fabkury/p3a) is an open-source animated pixel art player on the ESP32-P4. It decodes and software-upscales a 720x720 frame every 16 to 60 ms on both cores while background tasks download artwork to the SD card, so a CMD13 storm shows up as a visible freeze of the animation, which is what let us measure this at all. The numbers above come from a frame trace compiled into the firmware (per-frame decode, upscale and presentation lateness, plus timestamped spans around every SD read and write) that a laptop pulls over HTTP during multi-hour soaks, with a provocation endpoint for the controlled writes; three otherwise identical builds differed only in `sdmmc_wait_for_idle()`, and each build reports at runtime which variant it carries. The instrumentation, the host tooling and every run record are in the repo under `docs/jitter/` and `host/jitter-lab/`, if any of it is useful to you.

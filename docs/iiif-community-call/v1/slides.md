@@ -48,7 +48,7 @@ style: |
 <!-- _class: title -->
 <!-- _paginate: false -->
 
-![bg right:42%](../../images/photos/p3a-museum-channel-5.jpg)
+![bg right:42%](../../../images/photos/p3a-museum-channel-5.jpg)
 
 # IIIF from the smallest patron
 
@@ -71,7 +71,7 @@ github.com/fabkury/p3a
 
 # What p3a is
 
-![bg right:38%](../../images/photos/p3a-with-makapix-club-artwork.jpg)
+![bg right:38%](../../../images/photos/p3a-with-makapix-club-artwork.jpg)
 
 - An open-hardware **desktop art frame**. Apache 2.0.
 - Began as a **pixel-art player**: Makapix Club (a pixel-art community I run), Giphy and Klipy, files on the SD card, artwork from a URL.
@@ -89,7 +89,7 @@ github.com/fabkury/p3a
 
 # The hardware, in one breath
 
-![bg right:40%](../../images/hardware/ESP32-P4-WIFI6-Touch-LCD-4B-details-size.jpg)
+![bg right:40%](../../../images/hardware/ESP32-P4-WIFI6-Touch-LCD-4B-details-size.jpg)
 
 - Waveshare ESP32-P4-WIFI6-Touch-LCD-4B, **$39.99** at the manufacturer. Under $70 with an SD card and a USB-C supply.
 - **ESP32-P4**: dual-core 400 MHz RISC-V. **32 MB PSRAM**, about 768 KB internal SRAM.
@@ -110,7 +110,7 @@ github.com/fabkury/p3a
 
 # Ninety seconds of the device
 
-<video src="demo.mp4" width="100%" controls muted></video>
+<video src="../demo.mp4" width="100%" controls muted></video>
 
 <!--
 - [2:30] Play demo.mp4 (fallback: images/videos/art-institution-channels/p3a-museums-2026-05-19.mp4). Narrate live over it; cues are in video-shot-list.md.
@@ -265,7 +265,7 @@ Servers serve JPEG far more reliably than WebP, and the chip has a hardware JPEG
 
 # Being a polite client
 
-![bg right:52% fit](figure-architecture.svg)
+![bg right:52% fit](../figure-architecture.svg)
 
 - **Identify yourself.** Every request: `p3a/{version} (pub@kury.dev)`.
 - **Honor `Retry-After`, remember it, share it.** One cooldown slot per museum; every layer that dials out checks it.
@@ -740,7 +740,7 @@ Both trends raise the value of everything IIIF got right. The Image API's unifor
 
 # Try it
 
-![bg right:40%](../../images/photos/p3a-museum-channel-1.jpg)
+![bg right:40%](../../../images/photos/p3a-museum-channel-1.jpg)
 
 - **Board:** Waveshare ESP32-P4-WIFI6-Touch-LCD-4B, $39.99, plus a microSD card and a USB-C supply.
 - **Flash from the browser:** fabkury.github.io/p3a/web-flasher

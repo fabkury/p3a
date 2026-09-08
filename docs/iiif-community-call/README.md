@@ -30,8 +30,27 @@ map live in this file; the content lives in the files it points to.
 ## Status
 
 - 2026-09-08: folder created; Fab interviewed (28 questions, 8 rounds);
-  `material.md`, `qa-prep.md`, `video-shot-list.md`, and the Marp deck
-  `slides.md` drafted. Nothing rehearsed yet.
+  `material.md`, `qa-prep.md`, `video-shot-list.md`, and the first deck
+  (`v1/`) drafted. Nothing rehearsed yet.
+- 2026-09-08, later: decks organized into version folders. `v2/` drafted
+  as a sparse, bullet-driven deck (21 slides) with everything that left
+  the slides moved into expanded speaker notes. **`v2/` is current.**
+
+## Versions
+
+One folder per deck version. Shared material (this README,
+`material.md`, `qa-prep.md`, `video-shot-list.md`,
+`figure-architecture.svg`, the demo clip) stays at the top level and
+serves every version. Each version folder holds `slides.md` plus its
+git-ignored exports.
+
+| Version | Slides | Character | Status |
+|---|---|---|---|
+| `v1/` | 32 (5 section dividers) | Verbose: full sentences and paragraphs on slides, bullet-prompt notes. | Superseded, kept for reference. |
+| `v2/` | 21 | Sparse: headline plus up to five short bullets, two tables (nine museums, adoption probe), two allowed exceptions (nine quirk one-liners, seven checklist items). Expanded bullet notes carry every fact and number that left the slides, with cumulative time marks. | Current. Not rehearsed. |
+
+To start a v3: copy the current version folder, edit `slides.md`, add a
+row here.
 
 ## Decision sheet (interview of 2026-09-08)
 
@@ -84,6 +103,25 @@ map live in this file; the content lives in the files it points to.
     closing slide.
 21. **Q&A prep:** separate file, `qa-prep.md`.
 
+Added for v2 (2026-09-08, second interview):
+
+22. **Versioning:** one folder per deck version; shared material at the
+    top level.
+23. **Density:** headline plus at most five bullets of about eight
+    words; no paragraphs; at most two small tables; the quirks list
+    (nine one-liners, two columns) and the seven-item checklist are the
+    two allowed exceptions.
+24. **Slide count:** about 20, always fewer than the 30 minutes. No
+    section dividers.
+25. **Notes:** expanded bullet notes inside `slides.md` only, no
+    separate script file. Everything removed from a slide lands in that
+    slide's notes.
+26. **Merges relative to v1:** hardware folded into "what p3a is";
+    museum-ubi and the AI disclosure share a slide; specification and
+    economics share a slide; Smithsonian and SMK share a two-column
+    slide; "what is changing" folded into the checklist notes; "try it"
+    folded into the closing slide.
+
 ## Files
 
 | File | What |
@@ -92,24 +130,25 @@ map live in this file; the content lives in the files it points to.
 | `material.md` | Everything that might go into the talk: facts, numbers, stories, timeline, quotes, asset inventory, with pointers to the sources in the repo. |
 | `qa-prep.md` | Anticipated questions from an IIIF audience with drafted answers. |
 | `video-shot-list.md` | Shot list for the 60-90 second demo clip. |
-| `slides.md` | The Marp deck, 32 slides. Speaker notes with cumulative time marks are the HTML comments under each slide. |
-| `figure-architecture.svg` | The article's architecture figure with its counts updated to nine museums. |
-| `slides.pdf`, `slides.pptx`, `slides.html` | Exports (git-ignored, regenerate with the commands below). The video slide is a placeholder in PDF and PPTX; the HTML export embeds `demo.mp4` if it sits in this folder. |
+| `figure-architecture.svg` | The article's architecture figure with its counts updated to nine museums. Shared by every version. |
+| `v1/slides.md`, `v2/slides.md` | The Marp decks. Speaker notes with cumulative time marks are the HTML comments under each slide. |
+| `v*/slides.pdf`, `v*/slides.pptx`, `v*/slides.html` | Exports (git-ignored, regenerate with the commands below). The video slide is a placeholder in PDF and PPTX; the HTML export plays `demo.mp4` if it sits at the top level of this folder. |
 
 ## Exporting the deck
 
 Marp CLI runs through `npx` and uses a local Chrome or Edge for PDF and
-PPTX. Run from the repo root:
+PPTX. Run from the repo root, substituting the version folder:
 
 ```powershell
-Set-Location docs/iiif-community-call
+Set-Location docs/iiif-community-call/v2
 npx --yes @marp-team/marp-cli slides.md --allow-local-files --html --pdf -o slides.pdf
 npx --yes @marp-team/marp-cli slides.md --allow-local-files --html --pptx -o slides.pptx
 npx --yes @marp-team/marp-cli slides.md --allow-local-files --html -o slides.html
 ```
 
-`--html` is required: the deck uses `<div>` grids and a `<video>` tag.
-To review every slide as an image: add `--images png -o out/s.png`.
+`--html` is required: the decks use `<div>` grids and a `<video>` tag.
+To review every slide as an image: add `--images png -o out/s.png`
+(`out/` is git-ignored).
 
 The PPTX export is one image per slide (Marp's default), which presents
 fine but is not editable in PowerPoint. Edit `slides.md` and re-export

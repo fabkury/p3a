@@ -812,18 +812,29 @@ esp_err_t play_scheduler_execute_playset(const ps_playset_t *playset, bool user_
     // Only trigger initial playback if we have entries
     // Otherwise, let download manager trigger it when first file is available
     if (has_entries) {
+        // Claim the first swap before picking. The refresh task may already
+        // have claimed it in the window between the mutex release above and
+        // here (an SD card index rebuild finishes well inside the ~100 ms
+        // active_playset_save takes): then the playset IS starting, our own
+        // pick would only be rejected as "swap already in progress", and
+        // reporting that as a failure would make the boot restore fall back
+        // to Promoted for a playset that was playing fine.
+        xSemaphoreTake(s_state->mutex, portMAX_DELAY);
+        bool claimed = ps_claim_first_swap(s_state, "execute_playset");
+        xSemaphoreGive(s_state->mutex);
+        if (!claimed) {
+            ESP_LOGI(TAG, "Playback already triggered during playset setup - skipping immediate pick");
+            return ESP_OK;
+        }
+
         esp_err_t next_err = play_scheduler_next(NULL);
-        // Set the flag only when the immediate pick actually succeeded. If
-        // it failed (e.g. every cached LAi file vanished from disk), leaving
-        // the flag false keeps the first-swap gates (LAi add, refresh-
-        // complete) armed so playback recovers as soon as content
-        // materializes. Set under the mutex so the invariant check sees a
-        // coherent total_available (the old single-byte write outside the
-        // mutex was racy with concurrent reads).
-        if (next_err == ESP_OK) {
+        // If the pick failed (e.g. every cached LAi file vanished from disk),
+        // release the claim so the first-swap gates (LAi add, refresh-
+        // complete) re-arm and playback recovers as soon as content
+        // materializes.
+        if (next_err != ESP_OK) {
             xSemaphoreTake(s_state->mutex, portMAX_DELAY);
-            s_state->first_swap_emitted = true;
-            ps_assert_first_swap_invariant(s_state, "execute_playset");
+            ps_release_first_swap(s_state, "execute_playset");
             xSemaphoreGive(s_state->mutex);
         }
         return next_err;

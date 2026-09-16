@@ -99,13 +99,14 @@ typedef struct {
     // emitted yet. The download manager used to maintain a parallel
     // `s_playback_initiated` for this same purpose, racing with the LAi
     // 0→1 trigger here; that flag was removed (S2). first_swap_emitted is
-    // now the single source of truth, set only inside the mutex-protected
-    // LAi first-available path, the refresh-complete paths, and execute-
-    // playset (on a successful immediate pick). It is cleared at playset
-    // teardown, and rolled back by play_scheduler_next()'s failure path
-    // when an optimistically-set first swap failed before anything played
-    // (empty history) — so the first-swap gates re-arm instead of
-    // stranding a cold playset on a status screen.
+    // now the single source of truth, set only through ps_claim_first_swap()
+    // (under the mutex, BEFORE the pick) by the LAi first-available path,
+    // the refresh-complete paths, and execute-playset. It is cleared at
+    // playset teardown, released by the claimant via ps_release_first_swap()
+    // when its pick failed, and rolled back by play_scheduler_next()'s
+    // failure path when a first swap failed before anything played (empty
+    // history) — so the first-swap gates re-arm instead of stranding a cold
+    // playset on a status screen.
     //
     // Invariant (S5): at the moment first_swap_emitted is set true, at
     // least one channel must have a downloaded artwork (Σ available_count
@@ -156,6 +157,38 @@ ps_state_t *ps_get_state(void);
  *               "execute_playset"). Included in the error log.
  */
 void ps_assert_first_swap_invariant(ps_state_t *state, const char *origin);
+
+/**
+ * @brief Claim the playset's first swap.
+ *
+ * The four first-swap triggers (LAi first-available add, execute-playset,
+ * async-refresh-complete, sync-refresh-complete) run on different tasks and
+ * used to race each other: each checked `!first_swap_emitted`, released the
+ * mutex, issued its pick, and only then set the flag. Two of them could pass
+ * the check, and the loser's swap request was rejected by the animation
+ * player ("swap already in progress"). At boot that rejection made
+ * execute_playset report failure for a playset that was in fact starting,
+ * and the boot restore fell back to Promoted.
+ *
+ * The claim closes that window: the flag is set under the mutex BEFORE the
+ * pick, so exactly one trigger owns the first swap. The owner must call
+ * ps_release_first_swap() if its pick fails, so the other gates re-arm.
+ *
+ * Caller MUST hold state->mutex.
+ *
+ * @return true if the caller now owns the first swap; false if it was
+ *         already claimed (the caller must not pick).
+ */
+bool ps_claim_first_swap(ps_state_t *state, const char *origin);
+
+/**
+ * @brief Give back a first-swap claim whose pick failed.
+ *
+ * Re-arms every first-swap gate so playback recovers as soon as content
+ * materializes (next LAi add, next refresh completion). Only the claimant
+ * may call this. Caller MUST hold state->mutex.
+ */
+void ps_release_first_swap(ps_state_t *state, const char *origin);
 
 /**
  * @brief Number of currently-playable artworks in a channel.

@@ -162,10 +162,11 @@ size_t ps_channel_available_count(const ps_channel_state_t *c)
  * Documented contract: at the moment first_swap_emitted is set true, at
  * least one channel must have a playable artwork
  * (Σ ps_channel_available_count() > 0). This is normally guaranteed by the
- * four call-site gates (LAi first-available add, execute-playset on a
- * successful immediate pick, async-refresh-complete with ch->active,
- * sync-refresh-complete with ch->active). A regression in any of those
- * would silently start the player against an empty LAi.
+ * four call-site gates (LAi first-available add, execute-playset with
+ * cached entries, async-refresh-complete with ch->active,
+ * sync-refresh-complete with ch->active), all of which now go through
+ * ps_claim_first_swap(). A regression in any of those would silently start
+ * the player against an empty LAi.
  *
  * Caller MUST hold s_state->mutex.
  *
@@ -185,6 +186,22 @@ void ps_assert_first_swap_invariant(ps_state_t *state, const char *origin)
                       "the player with no artwork to swap to.",
                  origin ? origin : "(unknown)", state->channel_count);
     }
+}
+
+bool ps_claim_first_swap(ps_state_t *state, const char *origin)
+{
+    if (!state || state->first_swap_emitted) return false;
+    state->first_swap_emitted = true;
+    ps_assert_first_swap_invariant(state, origin);
+    return true;
+}
+
+void ps_release_first_swap(ps_state_t *state, const char *origin)
+{
+    if (!state || !state->first_swap_emitted) return;
+    state->first_swap_emitted = false;
+    ESP_LOGW(TAG, "First swap from %s failed - re-arming first-swap triggers",
+             origin ? origin : "(unknown)");
 }
 
 // ============================================================================
@@ -261,10 +278,9 @@ void play_scheduler_on_download_complete(const char *channel_id, int32_t post_id
         // timer happened to rescue it. The relaxed condition re-fires on the
         // next landed file after a rollback (see play_scheduler_next()'s
         // failure path, which clears the flag when nothing has played yet).
-        if (!s_state->first_swap_emitted && new_channel_available > 0) {
+        if (new_channel_available > 0 &&
+            ps_claim_first_swap(s_state, "lai_first_available")) {
             ESP_LOGI(TAG, "First artwork available - triggering playback");
-            s_state->first_swap_emitted = true;
-            ps_assert_first_swap_invariant(s_state, "lai_first_available");
             xSemaphoreGive(s_state->mutex);
 
             // Trigger playback via event bus to avoid race condition

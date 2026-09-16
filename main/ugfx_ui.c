@@ -86,6 +86,11 @@ static bool s_usb_msc_rebooting = false;
 
 // OTA progress state
 static int s_ota_progress = 0;
+// True when the OTA screens (host and co-processor) must be redrawn: set by
+// show/update when something visible changed and by ugfx_ui_invalidate();
+// cleared by ugfx_ui_render_to_buffer() right before it draws. While false
+// the renderer keeps presenting its last frame instead of re-rendering.
+static bool s_ota_dirty = false;
 static char s_ota_status_text[64] = {0};
 static char s_ota_version_from[32] = {0};
 static char s_ota_version_to[32] = {0};
@@ -1399,27 +1404,48 @@ esp_err_t ugfx_ui_show_ota_progress(const char *version_from, const char *versio
     
     s_ota_progress = 0;
     strncpy(s_ota_status_text, "Preparing...", sizeof(s_ota_status_text) - 1);
+    s_ota_dirty = true;
     s_ui_mode = UI_MODE_OTA_PROGRESS;
     s_ui_active = true;
-    
-    ESP_LOGD(TAG, "OTA progress UI activated: %s -> %s", 
+
+    ESP_LOGD(TAG, "OTA progress UI activated: %s -> %s",
              version_from ? version_from : "?", 
              version_to ? version_to : "?");
     return ESP_OK;
 }
 
-void ugfx_ui_update_ota_progress(int percent, const char *status_text)
+/**
+ * Apply a progress/status update to the shared OTA screen state and mark
+ * the screen dirty only if something visible changed. The download loop
+ * reports progress on every 4 KB chunk, so most calls carry the same
+ * percentage; without this filter every call would cost a full redraw.
+ */
+static void ota_progress_apply(int percent, const char *status_text)
 {
+    if (percent < 0) percent = 0;
+    if (percent > 100) percent = 100;
+
+    bool changed = (percent != s_ota_progress);
     s_ota_progress = percent;
-    if (percent < 0) s_ota_progress = 0;
-    if (percent > 100) s_ota_progress = 100;
-    
-    if (status_text) {
+
+    if (status_text && strcmp(status_text, s_ota_status_text) != 0) {
         strncpy(s_ota_status_text, status_text, sizeof(s_ota_status_text) - 1);
         s_ota_status_text[sizeof(s_ota_status_text) - 1] = '\0';
+        changed = true;
     }
-    
+
+    if (changed) s_ota_dirty = true;
+}
+
+void ugfx_ui_update_ota_progress(int percent, const char *status_text)
+{
+    ota_progress_apply(percent, status_text);
     ESP_LOGD(TAG, "OTA progress: %d%% - %s", s_ota_progress, s_ota_status_text);
+}
+
+void ugfx_ui_invalidate(void)
+{
+    s_ota_dirty = true;
 }
 
 void ugfx_ui_hide_ota_progress(void)
@@ -1454,6 +1480,7 @@ esp_err_t ugfx_ui_show_slave_ota_progress(const char *version_from, const char *
 
     s_ota_progress = 0;
     strncpy(s_ota_status_text, "Preparing...", sizeof(s_ota_status_text) - 1);
+    s_ota_dirty = true;
     s_ui_mode = UI_MODE_SLAVE_OTA_PROGRESS;
     s_ui_active = true;
 
@@ -1465,15 +1492,7 @@ esp_err_t ugfx_ui_show_slave_ota_progress(const char *version_from, const char *
 
 void ugfx_ui_update_slave_ota_progress(int percent, const char *status_text)
 {
-    if (percent < 0) percent = 0;
-    if (percent > 100) percent = 100;
-    s_ota_progress = percent;
-
-    if (status_text) {
-        strncpy(s_ota_status_text, status_text, sizeof(s_ota_status_text) - 1);
-        s_ota_status_text[sizeof(s_ota_status_text) - 1] = '\0';
-    }
-
+    ota_progress_apply(percent, status_text);
     ESP_LOGD(TAG, "Slave OTA: %d%% - %s", s_ota_progress, s_ota_status_text);
 }
 
@@ -1626,12 +1645,19 @@ int ugfx_ui_render_to_buffer(uint8_t *buffer, size_t stride)
             return 500;
 
         case UI_MODE_OTA_PROGRESS:
+            // Redraw only when progress/status changed (see s_ota_dirty).
+            // The flag is cleared before drawing so an update that lands
+            // mid-draw re-arms the next frame instead of being lost.
+            if (!s_ota_dirty) return UGFX_UI_FRAME_UNCHANGED;
+            s_ota_dirty = false;
             ugfx_ui_draw_ota_progress();
-            return 50;  // Faster refresh for smooth progress updates
+            return 50;
 
         case UI_MODE_SLAVE_OTA_PROGRESS:
+            if (!s_ota_dirty) return UGFX_UI_FRAME_UNCHANGED;
+            s_ota_dirty = false;
             ugfx_ui_draw_slave_ota_progress();
-            return 50;  // Match host OTA refresh cadence
+            return 50;
             
         case UI_MODE_REGISTRATION:
             if (s_current_code[0] != '\0') {

@@ -590,9 +590,11 @@ void display_producer_task(void *arg)
     while (true) {
         display_render_mode_t mode = g_display_mode_request;
         if (mode != g_display_mode_active) {
-            // Mode switch: invalidate frames queued for the old mode.
+            // Mode switch: invalidate frames queued for the old mode, and
+            // make redraw-on-change UI screens draw a fresh first frame.
             frame_trace_mark(FT_MARK_MODE_SWITCH, FT_PHASE_EVENT, (uint32_t)mode);
             display_renderer_note_content_discontinuity();
+            ugfx_ui_invalidate();
         }
         g_display_mode_active = mode;
 
@@ -634,8 +636,10 @@ void display_producer_task(void *arg)
         bool black = anim_paused || brightness_zero;
         if (black != prev_black) {
             // Entering or leaving black output: drop queued frames so the
-            // change lands on the next vsync.
+            // change lands on the next vsync. Leaving black also needs a
+            // fresh UI frame (the last presented frame was black).
             display_renderer_note_content_discontinuity();
+            ugfx_ui_invalidate();
             prev_black = black;
         }
 
@@ -650,6 +654,23 @@ void display_producer_task(void *arg)
         } else {
             if (ui_mode) {
                 frame_delay_ms = ugfx_ui_render_to_buffer(back_buffer, g_display_row_stride);
+                if (frame_delay_ms == UGFX_UI_FRAME_UNCHANGED) {
+                    // Static screen, nothing new to show: release the buffer
+                    // without queuing it, so the panel keeps the last
+                    // submitted frame, and idle instead of re-rendering.
+                    // The OTA screens used to redraw in full every 50 ms;
+                    // each redraw took longer than that, so this task never
+                    // blocked, IDLE1 starved, and the task watchdog fired
+                    // every 15 s for the whole update. Its register dump
+                    // runs in interrupt context long enough to delay the
+                    // DSI vsync ISR, which shows as a blue frame.
+                    g_buffer_info[back_buffer_idx].state = BUFFER_STATE_FREE;
+                    if (g_buffer_free_sem) {
+                        xSemaphoreGive(g_buffer_free_sem);
+                    }
+                    vTaskDelay(pdMS_TO_TICKS(50));
+                    continue;
+                }
                 if (frame_delay_ms < 0) {
                     memset(back_buffer, 0, g_display_buffer_bytes);
                     frame_delay_ms = 100;

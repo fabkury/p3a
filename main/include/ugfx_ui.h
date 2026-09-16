@@ -209,9 +209,31 @@ gBool ugfx_ui_is_active(void);
  * 
  * @param buffer Pointer to the back buffer to draw into
  * @param stride Row stride in bytes
- * @return Frame delay in ms (100 for UI), or -1 on error
+ * @return Frame delay in ms (100 for UI), UGFX_UI_FRAME_UNCHANGED when the
+ *         current screen is static and was NOT drawn (the caller must keep
+ *         showing its last frame instead of presenting this buffer), or -1
+ *         on error
  */
 int ugfx_ui_render_to_buffer(uint8_t *buffer, size_t stride);
+
+/**
+ * Returned by ugfx_ui_render_to_buffer() for screens that redraw only when
+ * their content changes (host and co-processor OTA progress). The buffer
+ * was not touched. Full-screen uGFX redraws are expensive (a 720x720 RGB888
+ * clear plus text, pixel by pixel into PSRAM) and the OTA screens used to
+ * redraw every 50 ms, which saturated the producer's core for the whole
+ * update and tripped the task watchdog every 15 s.
+ */
+#define UGFX_UI_FRAME_UNCHANGED 0
+
+/**
+ * @brief Force the next ugfx_ui_render_to_buffer() call to redraw
+ *
+ * For screens that redraw only on change. The renderer calls it whenever
+ * the last presented frame can no longer be trusted to show the UI (render
+ * mode switch, return from a black/paused frame, rotation change).
+ */
+void ugfx_ui_invalidate(void);
 
 /**
  * @brief Show USB Mass Storage screen

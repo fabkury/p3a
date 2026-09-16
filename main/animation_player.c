@@ -108,7 +108,9 @@ static int animation_player_render_dispatch_cb(uint8_t *dest_buffer, void *user_
     // This ensures channel messages show even if state machine isn't set up correctly
     if (ugfx_ui_is_active()) {
         int ui_delay = ugfx_ui_render_to_buffer(dest_buffer, stride);
-        if (ui_delay >= 0) {
+        // 0 (UGFX_UI_FRAME_UNCHANGED): static screen, buffer not drawn;
+        // fall through to -1 so the last frame stays on the panel.
+        if (ui_delay > 0) {
             return ui_delay;
         }
     }

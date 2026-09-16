@@ -242,8 +242,11 @@ static esp_err_t render_animation_playback(uint8_t *buffer, size_t stride, p3a_r
         // Fall back to channel message UI if available
         if (ugfx_ui_render_to_buffer) {
             delay = ugfx_ui_render_to_buffer(buffer, stride);
+            // 0 (UGFX_UI_FRAME_UNCHANGED) means the screen is static and
+            // the buffer was not drawn: report it unmodified so the caller
+            // keeps its last frame.
             result->frame_delay_ms = delay > 0 ? delay : 100;
-            result->buffer_modified = (delay >= 0);
+            result->buffer_modified = (delay > 0);
             return ESP_OK;
         }
         
@@ -297,11 +300,12 @@ static esp_err_t render_provisioning(uint8_t *buffer, size_t stride, p3a_render_
 
 static esp_err_t render_ota(uint8_t *buffer, size_t stride, p3a_render_result_t *result)
 {
-    // Delegate to µGFX UI for OTA progress screen
+    // Delegate to µGFX UI for OTA progress screen. 0 (UGFX_UI_FRAME_UNCHANGED)
+    // means the screen is static and the buffer was not drawn.
     if (ugfx_ui_render_to_buffer) {
         int delay = ugfx_ui_render_to_buffer(buffer, stride);
         result->frame_delay_ms = delay > 0 ? delay : 100;
-        result->buffer_modified = true;
+        result->buffer_modified = (delay != 0);
         return ESP_OK;
     }
     

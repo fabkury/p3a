@@ -389,13 +389,16 @@ esp_err_t animation_player_restore_boot_playset(void)
     }
 
     /* Fallback: Makapix Promoted. Build it inline rather than depending on
-       ps_create_channel_playset() so this path stays cheap and self-contained. */
+       ps_create_channel_playset() so this path stays cheap and self-contained.
+       persist=false: the fallback must never overwrite the snapshot. If one
+       exists and merely failed to restore this boot, the next boot tries it
+       again; if none exists, Promoted is the default anyway. */
     memset(playset, 0, sizeof(*playset));
     playset->channel_count = 1;
     playset->channels[0].type = PS_CHANNEL_TYPE_NAMED;
     strlcpy(playset->channels[0].name, "promoted", sizeof(playset->channels[0].name));
     playset->channels[0].weight = 1;
-    err = play_scheduler_execute_playset(playset, false);
+    err = play_scheduler_execute_playset_ex(playset, false, false);
     free(playset);
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "Default Promoted execute failed: %s", esp_err_to_name(err));

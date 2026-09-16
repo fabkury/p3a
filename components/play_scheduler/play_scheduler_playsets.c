@@ -527,6 +527,12 @@ esp_err_t ps_load_channel_cache(ps_channel_state_t *ch)
 
 esp_err_t play_scheduler_execute_playset(const ps_playset_t *playset, bool user_initiated)
 {
+    return play_scheduler_execute_playset_ex(playset, user_initiated, true);
+}
+
+esp_err_t play_scheduler_execute_playset_ex(const ps_playset_t *playset, bool user_initiated,
+                                            bool persist)
+{
     ps_state_t *s_state = ps_get_state();
 
     if (!s_state->initialized) {
@@ -793,10 +799,14 @@ esp_err_t play_scheduler_execute_playset(const ps_playset_t *playset, bool user_
     // Persist the active-playset snapshot. This is the single chokepoint that
     // makes boot-restore work: every "play X" path eventually flows through
     // here, so saving once at this point captures everything. Non-fatal on
-    // failure — the user just loses boot-restore for this session.
-    esp_err_t save_err = active_playset_save(playset);
-    if (save_err != ESP_OK) {
-        ESP_LOGW(TAG, "active_playset_save failed: %s", esp_err_to_name(save_err));
+    // failure — the user just loses boot-restore for this session. The boot
+    // fallback to Promoted passes persist=false so it never overwrites the
+    // snapshot it failed to restore.
+    if (persist) {
+        esp_err_t save_err = active_playset_save(playset);
+        if (save_err != ESP_OK) {
+            ESP_LOGW(TAG, "active_playset_save failed: %s", esp_err_to_name(save_err));
+        }
     }
 
     // Dismiss info-screen overlay if active, so playback is visible immediately.

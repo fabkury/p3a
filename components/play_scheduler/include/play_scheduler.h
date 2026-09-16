@@ -78,6 +78,19 @@ void play_scheduler_deinit(void);
  */
 esp_err_t play_scheduler_execute_playset(const ps_playset_t *playset, bool user_initiated);
 
+/**
+ * @brief Execute a playset, optionally without persisting it
+ *
+ * Same as play_scheduler_execute_playset(), which is this call with
+ * persist=true. With persist=false the boot-restore snapshot
+ * ({sd-root}/active_playset.bin) is left untouched: used by the boot
+ * fallback to Promoted so a snapshot that failed to restore this time
+ * (slow SD card, transient scheduler state) is not replaced by Promoted
+ * for every later boot.
+ */
+esp_err_t play_scheduler_execute_playset_ex(const ps_playset_t *playset, bool user_initiated,
+                                            bool persist);
+
 // ============================================================================
 // Asynchronous Playset Switching
 // ============================================================================

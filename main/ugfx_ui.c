@@ -297,8 +297,8 @@ static void ugfx_ui_draw_ota_progress(void)
     gCoord screen_h = gdispGetHeight();
 
     // Title (box heights 36+ per the descender-safe rule — see FONTS comment
-    // at the top of this file; 30/25 clipped "Downloading..." and
-    // "DO NOT POWER OFF" on device in v1.1.2)
+    // at the top of this file; 30/25 clipped "Downloading..." and the
+    // since-removed "DO NOT POWER OFF" footer on device in v1.1.2)
     gdispFillStringBox(0, 60, screen_w, 36, "FIRMWARE UPDATE",
                      gdispOpenFont("* DejaVu Sans 24"), HTML2COLOR(0x00FF88), GFX_BLACK, gJustifyCenter);
 
@@ -342,9 +342,11 @@ static void ugfx_ui_draw_ota_progress(void)
     gdispFillStringBox(0, bar_y + bar_h + 80, screen_w, 36, s_ota_status_text,
                      gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xFFFF00), GFX_BLACK, gJustifyCenter);
 
-    // Warning at bottom
-    gdispFillStringBox(0, screen_h - 60, screen_w, 36, "DO NOT POWER OFF",
-                     gdispOpenFont("* DejaVu Sans 16"), HTML2COLOR(0xFF6666), GFX_BLACK, gJustifyCenter);
+    // No "do not power off" footer on purpose: the image is written to the
+    // inactive OTA partition and the boot pointer switches only at the very
+    // end, so a power cut at any point just boots the previous firmware.
+    // The warning was true but scary for no benefit. (The SD-format screen
+    // keeps its warning; a half-formatted card is real damage.)
 }
 
 /**

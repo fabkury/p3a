@@ -369,7 +369,7 @@ p3a supports Over-the-Air (OTA) firmware updates. After the initial firmware fla
 - Progress is shown on both the device screen and the web interface; the device reboots automatically when done
 - The ESP32-C6 co-processor's firmware is updated automatically when needed
 
-> **Important:** Do not power off the device during an update. The update takes 1-2 minutes.
+> The update takes 1-2 minutes. Losing power midway is harmless: the new firmware is written to a spare partition and only activated at the very end, so the device simply boots the previous firmware and you can start the update again.
 
 ### Rollback to previous version
 

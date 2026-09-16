@@ -323,12 +323,40 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
     return ESP_OK;
 }
 
+/* True if the scheduler committed `playset` as its active playset: execute
+   got past the point where the channels were installed, and only the
+   immediate pick failed. The active copy is a struct copy of the same
+   object, so a byte comparison of the channel specs is exact. */
+static bool boot_playset_committed(const ps_playset_t *playset)
+{
+    ps_playset_t *active = psram_calloc(1, sizeof(ps_playset_t));
+    if (!active) return false;
+    bool committed = (play_scheduler_get_active_playset(active) == ESP_OK &&
+                      active->channel_count == playset->channel_count &&
+                      strcmp(active->name, playset->name) == 0 &&
+                      memcmp(active->channels, playset->channels,
+                             playset->channel_count * sizeof(ps_channel_spec_t)) == 0);
+    free(active);
+    return committed;
+}
+
 esp_err_t animation_player_restore_boot_playset(void)
 {
-    /* Try the saved snapshot first. Any failure mode (missing file, version
-       mismatch, corrupted CRC, execute failure) falls through to the Makapix
-       Promoted default. The snapshot file is deleted by active_playset_load
-       on corruption / version mismatch, so we don't accumulate stale state. */
+    /* Try the saved snapshot first. A snapshot that cannot be loaded
+       (missing file, version mismatch, corrupted CRC) or that the scheduler
+       refuses to install falls through to the Makapix Promoted default.
+
+       A snapshot that WAS installed counts as restored even if the
+       immediate pick failed: the playset is now the scheduler's active
+       playset and its first-swap gates (refresh completion, LAi add, dwell
+       timer) start playback as soon as content is available. Falling back
+       in that case would replace the user's choice with Promoted over a
+       transient condition (a swap already in flight, a vanished cached
+       file), which is the bug users reported as "the device forgets my
+       SD-card playset on reboot".
+
+       The snapshot file is never deleted here; a corrupt one is simply
+       ignored and replaced by the next successful save. */
 
     ps_playset_t *playset = psram_calloc(1, sizeof(ps_playset_t));
     if (!playset) {
@@ -342,6 +370,12 @@ esp_err_t animation_player_restore_boot_playset(void)
                  playset->name, playset->channel_count);
         err = play_scheduler_execute_playset(playset, false);
         if (err == ESP_OK) {
+            free(playset);
+            return ESP_OK;
+        }
+        if (boot_playset_committed(playset)) {
+            ESP_LOGW(TAG, "Restore pick failed: %s — playset installed, playback starts when content is available",
+                     esp_err_to_name(err));
             free(playset);
             return ESP_OK;
         }

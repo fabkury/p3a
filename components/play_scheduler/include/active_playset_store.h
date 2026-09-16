@@ -20,9 +20,11 @@
  *
  * Atomic write: write to .tmp, fsync, rename.
  *
- * On version mismatch / corruption, the file is deleted and the call returns
- * ESP_ERR_INVALID_VERSION / ESP_ERR_INVALID_CRC. The boot-restore path treats
- * these the same as "no snapshot" — falls back to the Makapix Promoted default.
+ * On version mismatch / corruption the call returns ESP_ERR_INVALID_VERSION /
+ * ESP_ERR_INVALID_CRC and the file is deliberately left in place (a dying SD
+ * card can misread a healthy file; the next successful save replaces it).
+ * The boot-restore path treats these the same as "no snapshot" — falls back
+ * to the Makapix Promoted default.
  */
 
 #ifndef ACTIVE_PLAYSET_STORE_H
@@ -49,8 +51,8 @@ esp_err_t active_playset_save(const ps_playset_t *playset);
  * @param out_playset Receives the deserialized playset on success.
  * @return ESP_OK on success;
  *         ESP_ERR_NOT_FOUND if the file does not exist;
- *         ESP_ERR_INVALID_VERSION on version mismatch (file deleted);
- *         ESP_ERR_INVALID_CRC on magic/checksum failure (file deleted);
+ *         ESP_ERR_INVALID_VERSION on version mismatch (file kept);
+ *         ESP_ERR_INVALID_CRC on magic/checksum failure (file kept);
  *         ESP_FAIL on IO error.
  */
 esp_err_t active_playset_load(ps_playset_t *out_playset);

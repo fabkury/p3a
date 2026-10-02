@@ -118,23 +118,23 @@ void lai_rebuild_hash(channel_cache_t *cache)
     ESP_LOGD(TAG, "LAi hash rebuilt: %zu entries", cache->available_count);
 }
 
-// Pair used to sort LAi by the Ci-derived created_at without repeated hash
+// Pair used to sort LAi by the Ci-derived sort_at without repeated hash
 // lookups during the comparator (one lookup per entry beforehand).
 typedef struct {
     int32_t  post_id;
-    uint32_t created_at;
+    uint32_t sort_at;
 } lai_sort_pair_t;
 
 static int compare_lai_sort_pair_desc(const void *a, const void *b)
 {
     const lai_sort_pair_t *pa = (const lai_sort_pair_t *)a;
     const lai_sort_pair_t *pb = (const lai_sort_pair_t *)b;
-    if (pa->created_at > pb->created_at) return -1;
-    if (pa->created_at < pb->created_at) return 1;
+    if (pa->sort_at > pb->sort_at) return -1;
+    if (pa->sort_at < pb->sort_at) return 1;
     return 0;
 }
 
-void lai_sort_by_created_at_desc(channel_cache_t *cache)
+void lai_sort_by_sort_at_desc(channel_cache_t *cache)
 {
     if (!cache || !cache->available_post_ids || cache->available_count <= 1) {
         return;
@@ -150,11 +150,11 @@ void lai_sort_by_created_at_desc(channel_cache_t *cache)
     for (size_t i = 0; i < cache->available_count; i++) {
         int32_t pid = cache->available_post_ids[i];
         pairs[i].post_id = pid;
-        pairs[i].created_at = 0;
+        pairs[i].sort_at = 0;
         ci_post_id_node_t *node;
         HASH_FIND_INT(cache->post_id_hash, &pid, node);
         if (node && node->ci_index < cache->entry_count && cache->entries) {
-            pairs[i].created_at = cache->entries[node->ci_index].created_at;
+            pairs[i].sort_at = cache->entries[node->ci_index].sort_at;
         }
     }
 
@@ -166,7 +166,7 @@ void lai_sort_by_created_at_desc(channel_cache_t *cache)
     }
 
     free(pairs);
-    ESP_LOGD(TAG, "LAi sorted by created_at DESC: %zu entries",
+    ESP_LOGD(TAG, "LAi sorted by sort_at DESC: %zu entries",
              cache->available_count);
 }
 
@@ -175,19 +175,19 @@ void lai_sort_by_created_at_desc(channel_cache_t *cache)
 // ============================================================================
 
 /**
- * @brief Look up a post_id's created_at via the Ci hash (caller holds mutex).
+ * @brief Look up a post_id's sort_at via the Ci hash (caller holds mutex).
  *
  * Returns 0 if the post_id isn't in Ci or the index is out of range — entries
  * with unknown timestamps cluster at the tail of LAi after a sort.
  */
-static uint32_t lai_lookup_created_at(const channel_cache_t *cache, int32_t post_id)
+static uint32_t lai_lookup_sort_at(const channel_cache_t *cache, int32_t post_id)
 {
     ci_post_id_node_t *node;
     HASH_FIND_INT(cache->post_id_hash, &post_id, node);
     if (!node || node->ci_index >= cache->entry_count || !cache->entries) {
         return 0;
     }
-    return cache->entries[node->ci_index].created_at;
+    return cache->entries[node->ci_index].sort_at;
 }
 
 bool lai_add_entry(channel_cache_t *cache, int32_t post_id, int *out_position)
@@ -237,15 +237,15 @@ bool lai_add_entry(channel_cache_t *cache, int32_t post_id, int *out_position)
         ESP_LOGI(TAG, "LAi array grew to capacity %zu", new_capacity);
     }
 
-    // Find insertion position to keep LAi sorted by Ci.created_at DESC.
+    // Find insertion position to keep LAi sorted by Ci.sort_at DESC.
     // Linear scan; binary search wouldn't help asymptotically because the
     // memmove below is also O(N). Inserts run at download-completion rate
     // (bandwidth-limited), so this is comfortably under the budget.
-    uint32_t new_created_at = lai_lookup_created_at(cache, post_id);
+    uint32_t new_sort_at = lai_lookup_sort_at(cache, post_id);
     size_t pos = cache->available_count;  // Default: append at tail (oldest)
     for (size_t i = 0; i < cache->available_count; i++) {
-        uint32_t other = lai_lookup_created_at(cache, cache->available_post_ids[i]);
-        if (new_created_at > other) {
+        uint32_t other = lai_lookup_sort_at(cache, cache->available_post_ids[i]);
+        if (new_sort_at > other) {
             pos = i;
             break;
         }
@@ -297,7 +297,7 @@ bool lai_remove_entry(channel_cache_t *cache, int32_t post_id, int *out_position
     HASH_DEL(cache->lai_hash, node);
     free(node);
 
-    // Shift-preserving remove keeps LAi sorted by Ci.created_at DESC. Entries
+    // Shift-preserving remove keeps LAi sorted by Ci.sort_at DESC. Entries
     // at positions > removed_pos shift left by one, so an external recency
     // cursor at cursor > removed_pos must decrement to keep referencing the
     // same logical entry. cursor == removed_pos stays put: the slot now holds

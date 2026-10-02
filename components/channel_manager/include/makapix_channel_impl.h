@@ -51,7 +51,10 @@ typedef struct __attribute__((packed)) {
     uint8_t extension;               // For artwork posts only (0=webp, 1=gif, 2=png, 3=jpg)
     uint16_t filter_flags;           // Filter flags (NSFW, etc.) - 0 if unknown/not applicable
 
-    uint32_t created_at;             // Unix timestamp (0 if unknown)
+    uint32_t sort_at;                // Unix timestamp the channel orders by, newest first (0 if unknown):
+                                     // the server's listed_at, or promoted_at on the promoted channel,
+                                     // falling back to created_at. Giphy, Klipy and museum entries keep
+                                     // their own timestamp at this offset, so shared LAi code sorts them all.
     uint32_t artwork_modified_at;    // Unix timestamp (0 if unknown, artwork posts only)
 
     int32_t total_artworks;          // Playlist posts: total artworks (0 if unknown)

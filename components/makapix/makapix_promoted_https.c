@@ -96,6 +96,11 @@ static bool parse_promoted_item(const cJSON *item, makapix_post_t *out)
         strlcpy(out->created_at, ca->valuestring, sizeof(out->created_at));
     }
 
+    const cJSON *pa = cJSON_GetObjectItem(item, "promoted_at");
+    if (cJSON_IsString(pa) && pa->valuestring) {
+        strlcpy(out->promoted_at, pa->valuestring, sizeof(out->promoted_at));
+    }
+
     const cJSON *ama = cJSON_GetObjectItem(item, "artwork_modified_at");
     if (cJSON_IsString(ama) && ama->valuestring) {
         strlcpy(out->artwork_modified_at, ama->valuestring, sizeof(out->artwork_modified_at));
@@ -130,13 +135,13 @@ static esp_err_t fetch_promoted_page(char *response_buf, size_t buf_size,
     if (cursor && cursor[0] != '\0') {
         snprintf(url, sizeof(url),
                  "https://%s/api/feed/promoted"
-                 "?fields=id,storage_key,created_at,artwork_modified_at"
+                 "?fields=id,storage_key,created_at,artwork_modified_at,promoted_at"
                  "&limit=%d&cursor=%s",
                  CONFIG_MAKAPIX_CLUB_HOST, PAGE_LIMIT, cursor);
     } else {
         snprintf(url, sizeof(url),
                  "https://%s/api/feed/promoted"
-                 "?fields=id,storage_key,created_at,artwork_modified_at"
+                 "?fields=id,storage_key,created_at,artwork_modified_at,promoted_at"
                  "&limit=%d",
                  CONFIG_MAKAPIX_CLUB_HOST, PAGE_LIMIT);
     }
@@ -310,7 +315,8 @@ esp_err_t makapix_promoted_https_refresh(const char *channel_id)
         channel_cache_lifecycle_lock();
         channel_cache_t *batch_cache = channel_cache_registry_find(channel_id);
         esp_err_t merge_err = batch_cache
-            ? channel_cache_merge_posts(batch_cache, posts, page_count, channels_path, vault_path)
+            ? channel_cache_merge_posts(batch_cache, posts, page_count, channels_path, vault_path,
+                                        true /* sort_by_promotion */)
             : ESP_ERR_NOT_FOUND;
         size_t cache_entry_count = batch_cache ? batch_cache->entry_count : 0;
         size_t cache_available = batch_cache ? batch_cache->available_count : 0;

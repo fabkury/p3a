@@ -79,6 +79,8 @@ typedef struct {
     makapix_post_kind_t kind;
     char owner_handle[64];
     char created_at[40];
+    char listed_at[40];              // Listing time the server sorts on (absent on older servers)
+    char promoted_at[40];            // Promotion time, present only on promoted posts
 
     // For artwork posts:
     char storage_key[64];

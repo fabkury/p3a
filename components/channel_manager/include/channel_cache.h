@@ -238,7 +238,7 @@ void channel_cache_free(channel_cache_t *cache);
  * @brief Add an entry to LAi
  *
  * Called when a download completes. Thread-safe (takes mutex). LAi is kept
- * sorted descending by Ci.created_at, so the new entry is insertion-sorted
+ * sorted descending by Ci.sort_at, so the new entry is insertion-sorted
  * (O(LAi)) into its date-ranked slot. Entries below the insertion point
  * shift down by 1.
  *
@@ -256,7 +256,7 @@ bool lai_add_entry(channel_cache_t *cache, int32_t post_id, int *out_position);
  * @brief Remove an entry from LAi
  *
  * Called when a file is deleted or fails to load. Shift-preserves order so
- * the array stays sorted by Ci.created_at DESC. Thread-safe (takes mutex).
+ * the array stays sorted by Ci.sort_at DESC. Thread-safe (takes mutex).
  *
  * @param cache Cache to modify
  * @param post_id Post ID of the artwork to remove
@@ -455,13 +455,17 @@ esp_err_t channel_cache_get_missing_batch(channel_cache_t *cache,
  * @param count Number of posts
  * @param channels_path Base path for channel files
  * @param vault_path Base path for vault files (for deleting outdated artwork files)
+ * @param sort_by_promotion true for the promoted channel: entries sort by the
+ *                          server's promoted_at instead of listed_at (both fall
+ *                          back to created_at)
  * @return ESP_OK on success
  */
 esp_err_t channel_cache_merge_posts(channel_cache_t *cache,
                                     const makapix_post_t *posts,
                                     size_t count,
                                     const char *channels_path,
-                                    const char *vault_path);
+                                    const char *vault_path,
+                                    bool sort_by_promotion);
 
 
 // ============================================================================

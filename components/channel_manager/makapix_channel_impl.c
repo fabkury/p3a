@@ -477,7 +477,7 @@ static esp_err_t makapix_impl_get_post(channel_handle_t channel, size_t post_ind
 
     out_post->post_id = entry->post_id;
     out_post->kind = (entry->kind == MAKAPIX_INDEX_POST_KIND_PLAYLIST) ? CHANNEL_POST_KIND_PLAYLIST : CHANNEL_POST_KIND_ARTWORK;
-    out_post->created_at = entry->created_at;
+    out_post->created_at = entry->sort_at;
 
     if (out_post->kind == CHANNEL_POST_KIND_PLAYLIST) {
         out_post->u.playlist.total_artworks = entry->total_artworks;

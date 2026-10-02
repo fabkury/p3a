@@ -437,7 +437,7 @@ static bool pick_recency_makapix(ps_state_t *state, size_t channel_index, ps_art
         out_artwork->post_id = entry->post_id;
         strlcpy(out_artwork->filepath, filepath, sizeof(out_artwork->filepath));
         strlcpy(out_artwork->storage_key, storage_key, sizeof(out_artwork->storage_key));
-        out_artwork->created_at = entry->created_at;
+        out_artwork->created_at = entry->sort_at;
         out_artwork->dwell_time_ms = 0;  // Use global config default
         out_artwork->type = get_asset_type_from_extension(entry->extension);
         ps_artwork_stamp_channel(out_artwork, channel_index, ch);
@@ -713,7 +713,7 @@ static bool pick_random_makapix(ps_state_t *state, size_t channel_index, ps_artw
         out_artwork->post_id = entry->post_id;
         strlcpy(out_artwork->filepath, filepath, sizeof(out_artwork->filepath));
         strlcpy(out_artwork->storage_key, storage_key, sizeof(out_artwork->storage_key));
-        out_artwork->created_at = entry->created_at;
+        out_artwork->created_at = entry->sort_at;
         out_artwork->dwell_time_ms = 0;  // Use global config default
         out_artwork->type = get_asset_type_from_extension(entry->extension);
         ps_artwork_stamp_channel(out_artwork, channel_index, ch);

@@ -58,16 +58,30 @@ void build_vault_path_from_entry(const makapix_channel_entry_t *entry,
 }
 
 /**
- * @brief Helper: comparison function for qsort (entries by created_at, newest first)
+ * @brief Helper: comparison function for qsort (entries by sort_at, newest first)
  */
-static int compare_entries_by_created_at_desc(const void *a, const void *b)
+static int compare_entries_by_sort_at_desc(const void *a, const void *b)
 {
     const makapix_channel_entry_t *ea = (const makapix_channel_entry_t *)a;
     const makapix_channel_entry_t *eb = (const makapix_channel_entry_t *)b;
     // Descending: newer entries first
-    if (ea->created_at > eb->created_at) return -1;
-    if (ea->created_at < eb->created_at) return 1;
+    if (ea->sort_at > eb->sort_at) return -1;
+    if (ea->sort_at < eb->sort_at) return 1;
     return 0;
+}
+
+/**
+ * @brief Helper: the timestamp a post sorts by in this channel
+ *
+ * The server orders the promoted channel by promoted_at and every other
+ * channel by listed_at, both falling back to created_at. Older servers send
+ * neither key, so the fallback keeps the previous created_at order.
+ */
+static uint32_t post_sort_at(const makapix_post_t *post, bool sort_by_promotion)
+{
+    const char *key = sort_by_promotion ? post->promoted_at : post->listed_at;
+    uint32_t t = (uint32_t)parse_iso8601_utc(key);
+    return t ? t : (uint32_t)parse_iso8601_utc(post->created_at);
 }
 
 // ============================================================================
@@ -78,7 +92,8 @@ esp_err_t channel_cache_merge_posts(channel_cache_t *cache,
                                     const makapix_post_t *posts,
                                     size_t count,
                                     const char *channels_path,
-                                    const char *vault_path)
+                                    const char *vault_path,
+                                    bool sort_by_promotion)
 {
     if (!cache || !posts || count == 0 || !channels_path || !vault_path) {
         return ESP_ERR_INVALID_ARG;
@@ -129,7 +144,7 @@ esp_err_t channel_cache_merge_posts(channel_cache_t *cache,
         makapix_channel_entry_t tmp = {0};
         tmp.post_id = post->post_id;
         tmp.kind = entry_kind;
-        tmp.created_at = (uint32_t)parse_iso8601_utc(post->created_at);
+        tmp.sort_at = post_sort_at(post, sort_by_promotion);
         tmp.filter_flags = 0;
 
         if (post->kind == MAKAPIX_POST_KIND_ARTWORK) {
@@ -231,7 +246,7 @@ esp_err_t channel_cache_merge_posts(channel_cache_t *cache,
                             if (node) {
                                 HASH_DEL(cache->lai_hash, node);
                                 free(node);
-                                // Shift-preserving remove keeps LAi sorted by created_at DESC.
+                                // Shift-preserving remove keeps LAi sorted by sort_at DESC.
                                 for (size_t k = 0; k < cache->available_count; k++) {
                                     if (cache->available_post_ids[k] == post->post_id) {
                                         memmove(&cache->available_post_ids[k],
@@ -260,9 +275,10 @@ esp_err_t channel_cache_merge_posts(channel_cache_t *cache,
         ESP_LOGI(TAG, "Ci exceeds limit (%zu > %zu), truncating oldest entries",
                  all_count, (size_t)CHANNEL_CACHE_MAX_ENTRIES);
 
-        // Sort by created_at descending (newest first)
+        // Sort by sort_at descending (newest first), the same key the
+        // picker walks, so a freshly bumped old post is not the first to go
         qsort(all_entries, all_count, sizeof(makapix_channel_entry_t),
-              compare_entries_by_created_at_desc);
+              compare_entries_by_sort_at_desc);
 
         // Evict entries beyond the limit (oldest ones, now at the end)
         for (size_t i = CHANNEL_CACHE_MAX_ENTRIES; i < all_count; i++) {
@@ -281,7 +297,7 @@ esp_err_t channel_cache_merge_posts(channel_cache_t *cache,
                 HASH_DEL(cache->lai_hash, node);
                 free(node);
 
-                // Remove from LAi array (shift-preserving: keeps sort by created_at DESC).
+                // Remove from LAi array (shift-preserving: keeps sort by sort_at DESC).
                 for (size_t k = 0; k < cache->available_count; k++) {
                     if (cache->available_post_ids[k] == post_id) {
                         memmove(&cache->available_post_ids[k],

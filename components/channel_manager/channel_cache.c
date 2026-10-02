@@ -286,11 +286,14 @@ static esp_err_t load_new_format(FILE *f, channel_cache_t *cache)
     // Build LAi hash table
     lai_rebuild_hash(cache);
 
-    // Sort loaded LAi by Ci.created_at DESC. Caches written before the
+    // Sort loaded LAi by Ci.sort_at DESC. Caches written before the
     // sorted-LAi invariant existed are stored in download-completion order;
     // this one-time fixup brings them in line with what lai_add_entry now
-    // maintains. Cache isn't published to the registry yet, so no mutex.
-    lai_sort_by_created_at_desc(cache);
+    // maintains. It also picks up sort_at values a refresh changed on
+    // already-downloaded posts (a feed bump with no new artwork, such as a
+    // moderator approval): merges don't re-sort LAi, so those move here, on
+    // the next load. Cache isn't published to the registry yet, so no mutex.
+    lai_sort_by_sort_at_desc(cache);
 
     free(file_data);
     return ESP_OK;
@@ -436,7 +439,7 @@ static void cache_trim_to_cap(channel_cache_t *cache,
             HASH_DEL(cache->lai_hash, node);
             free(node);
             if (cache->available_post_ids) {
-                // Shift-preserving remove keeps LAi sorted by created_at DESC.
+                // Shift-preserving remove keeps LAi sorted by sort_at DESC.
                 for (size_t k = 0; k < cache->available_count; k++) {
                     if (cache->available_post_ids[k] == post_id) {
                         memmove(&cache->available_post_ids[k],

@@ -56,8 +56,7 @@ Query N posts from a channel with sorting and pagination.
 - `reactions`: Posts that an arbitrary user (specified by `user_handle`/`user_sqid`) has reacted to. Deduped per post, latest-reaction-first. The `next_cursor` for this channel is an opaque base64 keyset string — echo it back verbatim, do not parse.
 
 **Sort Options:**
-- `server_order`: Original insertion order (by post ID)
-- `created_at`: Chronological order by creation timestamp
+- `server_order` and `created_at`: newest listing first. The listing time (`listed_at`) is when a post was last placed at the top of the feeds: its upload, its first moderator approval, or an artwork replacement the artist chose to bump. On `promoted` the order is newest promotion first (`promoted_at`); on `reactions`, latest reaction first.
 - `random`: Random order with optional seed for reproducibility
 
 **Response Schema:**
@@ -77,7 +76,9 @@ Query N posts from a channel with sorting and pagination.
       "frame_count": 1,
       "has_transparency": false,
       "owner_handle": "artist123",
-      "created_at": "2025-12-08T17:00:00Z"
+      "created_at": "2025-12-08T17:00:00Z",
+      "listed_at": "2025-12-08T17:00:00Z",  // always present; equals created_at until bumped
+      "promoted_at": "2025-12-09T09:00:00Z"  // promoted posts only
     }
   ],
   "next_cursor": "50",  // null if no more results

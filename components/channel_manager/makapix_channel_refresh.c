@@ -90,7 +90,9 @@ static esp_err_t merge_refresh_batch(makapix_channel_t *ch, const makapix_post_t
         return ESP_ERR_NOT_FOUND;
     }
 
-    esp_err_t err = channel_cache_merge_posts(cache, posts, count, ch->channels_path, ch->vault_path);
+    bool sort_by_promotion = (strcmp(ch->channel_key, "promoted") == 0);
+    esp_err_t err = channel_cache_merge_posts(cache, posts, count, ch->channels_path, ch->vault_path,
+                                              sort_by_promotion);
     channel_cache_lifecycle_unlock();
     return err;
 }

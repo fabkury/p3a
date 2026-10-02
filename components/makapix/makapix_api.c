@@ -370,6 +370,12 @@ static void parse_post_object(cJSON *post_obj, makapix_post_t *out_post)
     cJSON *created = cJSON_GetObjectItem(post_obj, "created_at");
     if (cJSON_IsString(created)) strncpy(out_post->created_at, created->valuestring, sizeof(out_post->created_at) - 1);
 
+    cJSON *listed = cJSON_GetObjectItem(post_obj, "listed_at");
+    if (cJSON_IsString(listed)) strncpy(out_post->listed_at, listed->valuestring, sizeof(out_post->listed_at) - 1);
+
+    cJSON *promoted = cJSON_GetObjectItem(post_obj, "promoted_at");
+    if (cJSON_IsString(promoted)) strncpy(out_post->promoted_at, promoted->valuestring, sizeof(out_post->promoted_at) - 1);
+
     if (out_post->kind == MAKAPIX_POST_KIND_PLAYLIST) {
         // Parse playlist-specific fields
         cJSON *total_artworks = cJSON_GetObjectItem(post_obj, "total_artworks");

@@ -55,8 +55,8 @@ Don't have Chrome or Edge, or want an offline Windows app? See the alternatives 
 
 The first time the board boots, it doesn't know your Wi-Fi yet, so it broadcasts its own temporary network for setup:
 
-1. On your phone or laptop, open the Wi-Fi settings and join the network called **`p3a-setup`**. If the device asks if you want to stay connected despite no internet, click yes.
-2. Open a web browser and go to `http://p3a.local/` or `http://192.168.4.1/`.
+1. On your phone or laptop, open the Wi-Fi settings and join the network called **`p3a-setup`**. The setup page should open by itself within a few seconds, usually as a sign-in window. If the device asks if you want to stay connected despite no internet, click yes.
+2. If the setup page doesn't open, open a web browser and go to `http://192.168.4.1/` or `http://p3a.local/`.
 3. Enter your home Wi-Fi name and password, then click **Save & connect**.
 4. The board reboots and joins your Wi-Fi.
 

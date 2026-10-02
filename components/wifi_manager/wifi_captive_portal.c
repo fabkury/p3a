@@ -473,37 +473,35 @@ static esp_err_t setup_get_handler(httpd_req_t *req)
     return serve_file_simple(req, filepath);
 }
 
-// Captive portal detection handlers for various OS platforms
-// Android connectivity check
-static esp_err_t generate_204_handler(httpd_req_t *req)
-{
-    httpd_resp_set_status(req, "204 No Content");
-    httpd_resp_send(req, NULL, 0);
-    return ESP_OK;
-}
+/* Captive portal detection. On joining a network every OS fetches a known URL
+ * (the DNS hijack below sends it here) and compares the reply with what the
+ * real server returns. A match means "online" and nothing happens; anything
+ * else, such as a redirect, makes the OS open its sign-in sheet on the target.
+ * So every probe is answered with a redirect to the setup page, never with the
+ * genuine 204 / "Success" reply. The target is the IP, not p3a.local, because
+ * mDNS often does not resolve inside the sign-in sheet. */
+#define CAPTIVE_PORTAL_URL "http://192.168.4.1/"
 
-// iOS/macOS captive portal check
-static esp_err_t hotspot_detect_handler(httpd_req_t *req)
+static esp_err_t send_portal_redirect(httpd_req_t *req)
 {
+    httpd_resp_set_status(req, "302 Found");
+    httpd_resp_set_hdr(req, "Location", CAPTIVE_PORTAL_URL);
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
     httpd_resp_set_type(req, "text/html");
-    httpd_resp_send(req, "<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>", HTTPD_RESP_USE_STRLEN);
-    return ESP_OK;
+    return httpd_resp_send(req, "<a href=\"" CAPTIVE_PORTAL_URL "\">p3a setup</a>", HTTPD_RESP_USE_STRLEN);
 }
 
-// Windows connectivity check
-static esp_err_t connecttest_handler(httpd_req_t *req)
+static esp_err_t probe_handler(httpd_req_t *req)
 {
-    httpd_resp_set_type(req, "text/plain");
-    httpd_resp_send(req, "Microsoft Connect Test", HTTPD_RESP_USE_STRLEN);
-    return ESP_OK;
+    return send_portal_redirect(req);
 }
 
-// Firefox captive portal check
-static esp_err_t canonical_handler(httpd_req_t *req)
+// Any other unknown URL (probe paths not listed below, pages the user had open
+// on another network) also lands on the setup page.
+static esp_err_t not_found_handler(httpd_req_t *req, httpd_err_code_t err)
 {
-    httpd_resp_set_status(req, "200 OK");
-    httpd_resp_send(req, "success\n", HTTPD_RESP_USE_STRLEN);
-    return ESP_OK;
+    (void)err;
+    return send_portal_redirect(req);
 }
 
 static httpd_uri_t root = {
@@ -534,33 +532,17 @@ static httpd_uri_t setup_pages = {
     .user_ctx  = NULL
 };
 
-// Captive portal detection URIs
-static httpd_uri_t generate_204 = {
-    .uri       = "/generate_204",
-    .method    = HTTP_GET,
-    .handler   = generate_204_handler,
-    .user_ctx  = NULL
-};
-
-static httpd_uri_t hotspot_detect = {
-    .uri       = "/hotspot-detect.html",
-    .method    = HTTP_GET,
-    .handler   = hotspot_detect_handler,
-    .user_ctx  = NULL
-};
-
-static httpd_uri_t connecttest = {
-    .uri       = "/connecttest.txt",
-    .method    = HTTP_GET,
-    .handler   = connecttest_handler,
-    .user_ctx  = NULL
-};
-
-static httpd_uri_t canonical = {
-    .uri       = "/canonical.html",
-    .method    = HTTP_GET,
-    .handler   = canonical_handler,
-    .user_ctx  = NULL
+// Captive portal detection URIs, all served by probe_handler
+static const char *const s_probe_uris[] = {
+    "/generate_204",               // Android, ChromeOS
+    "/gen_204",                    // Android
+    "/hotspot-detect.html",        // iOS/macOS
+    "/library/test/success.html",  // iOS/macOS (older)
+    "/connecttest.txt",            // Windows 10+
+    "/ncsi.txt",                   // Windows (older)
+    "/redirect",                   // Windows opens this once it detects a portal
+    "/canonical.html",             // Firefox
+    "/success.txt",                // Firefox
 };
 
 // PSRAM-backed stack for the captive-portal DNS server task. Allocated once
@@ -658,19 +640,28 @@ static void start_captive_portal(void)
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = 80;
     config.uri_match_fn = httpd_uri_match_wildcard;  // Enable wildcard URI matching
+    config.max_uri_handlers = 16;  // 9 probe URIs + 4 setup routes; the default of 8 is too few
 
     if (httpd_start(&s_captive_portal_server, &config) == ESP_OK) {
         // Register captive portal detection handlers first (various OS platforms)
-        httpd_register_uri_handler(s_captive_portal_server, &generate_204);     // Android
-        httpd_register_uri_handler(s_captive_portal_server, &hotspot_detect);   // iOS/macOS
-        httpd_register_uri_handler(s_captive_portal_server, &connecttest);      // Windows
-        httpd_register_uri_handler(s_captive_portal_server, &canonical);        // Firefox
+        for (size_t i = 0; i < sizeof(s_probe_uris) / sizeof(s_probe_uris[0]); i++) {
+            httpd_uri_t probe = {
+                .uri      = s_probe_uris[i],
+                .method   = HTTP_GET,
+                .handler  = probe_handler,
+                .user_ctx = NULL
+            };
+            if (httpd_register_uri_handler(s_captive_portal_server, &probe) != ESP_OK) {
+                ESP_LOGW(TAG, "Failed to register captive probe %s", s_probe_uris[i]);
+            }
+        }
 
         // Register setup page handlers
         httpd_register_uri_handler(s_captive_portal_server, &root);
         httpd_register_uri_handler(s_captive_portal_server, &save);
         httpd_register_uri_handler(s_captive_portal_server, &erase);
         httpd_register_uri_handler(s_captive_portal_server, &setup_pages);
+        httpd_register_err_handler(s_captive_portal_server, HTTPD_404_NOT_FOUND, not_found_handler);
         ESP_LOGD(TAG, "HTTP server started on port 80");
     } else {
         ESP_LOGE(TAG, "Failed to start HTTP server");

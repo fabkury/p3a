@@ -11,7 +11,7 @@
 ### Provisioning Flow
 
 1. **Boot**: Attempts to connect using saved NVS credentials
-2. **Failure**: Starts captive portal AP mode (`p3a-setup`)
+2. **Failure**: Starts captive portal AP mode (`p3a-setup`). A DNS server answers every name with `192.168.4.1`, and the OS connectivity probes (`/generate_204`, `/hotspot-detect.html`, `/connecttest.txt` and the rest listed in `wifi_captive_portal.c`), like any other unknown URL, get a `302` to `http://192.168.4.1/`. That redirect is what makes phones and laptops open the setup page by themselves; answering a probe with its genuine reply (`204`, Apple's "Success" page) would tell the OS it is online and suppress the sign-in sheet.
 3. **Configuration**: User submits SSID/password via the captive portal form (served at `/`, posts to `/save`)
 4. **Reconnection**: Device saves credentials to NVS and reboots into STA mode
 

@@ -17,7 +17,7 @@
 - **Color depth**: RGB565 or RGB888 (configurable via `P3A_PIXEL_FORMAT` Kconfig choice)
 - **Frame buffer**: Triple buffering in PSRAM (720x720x3 bytes each for RGB888)
 - **Abstraction**: `p3a_board.h` provides `P3A_DISPLAY_WIDTH` (720), `P3A_DISPLAY_HEIGHT` (720)
-- **Brightness**: Software-controlled via `p3a_board_set_brightness()` / `p3a_board_get_brightness()` / `p3a_board_adjust_brightness()`
+- **Brightness**: Software-controlled via `p3a_board_set_brightness()` / `p3a_board_get_brightness()` / `p3a_board_adjust_brightness()`. The user's level persists in `config_store` and is applied before the backlight turns on at boot; a saved level below 18% boots at 100% because the panel would be dark
 
 ### Touch Controller
 

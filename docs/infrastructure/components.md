@@ -171,8 +171,8 @@ All 32 components live under `components/`: 29 p3a components, described in orde
 - **Purpose**: Persistent configuration with NVS backend
 - **Key files**: `config_store.c`, `config_store_settings.c`, `config_store_giphy.c`, `config_store_klipy.c`, plus internal headers
 - **Public API**: `config_store.h`
-- **Stores**: rotation, background color, dwell time, refresh interval, randomize playlist, show FPS, max-speed playback, view-ack, SD card root, channel-cache size, processing-notification options, channel-selection mode, Giphy fields (api_key, rendition, format, rating, country code, random_id, cache size, refresh interval, prefer-downsized), Klipy fields (api_key, format, rating, cache size, refresh interval), device name and hostname, Wi-Fi/touch recovery counters
-- **Stored elsewhere**: Wi-Fi credentials live in NVS namespaces handled by `wifi_manager`; brightness is owned by `p3a_board`; Makapix credentials live in `makapix_store`; playsets are persisted by `playset_store`.
+- **Stores**: rotation, brightness, background color, dwell time, refresh interval, randomize playlist, show FPS, max-speed playback, view-ack, SD card root, channel-cache size, processing-notification options, channel-selection mode, Giphy fields (api_key, rendition, format, rating, country code, random_id, cache size, refresh interval, prefer-downsized), Klipy fields (api_key, format, rating, cache size, refresh interval), device name and hostname, Wi-Fi/touch recovery counters
+- **Stored elsewhere**: Wi-Fi credentials live in NVS namespaces handled by `wifi_manager`; Makapix credentials live in `makapix_store`; playsets are persisted by `playset_store`.
 
 ## 15. ota_manager — Over-the-Air Updates
 

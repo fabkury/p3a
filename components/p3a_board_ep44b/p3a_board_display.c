@@ -59,7 +59,7 @@ static void prepaint_buffers(uint8_t r, uint8_t g, uint8_t b)
     }
 }
 
-esp_err_t p3a_board_display_init(uint8_t bg_r, uint8_t bg_g, uint8_t bg_b)
+esp_err_t p3a_board_display_init(uint8_t bg_r, uint8_t bg_g, uint8_t bg_b, int brightness_percent)
 {
     if (s_initialized) {
         ESP_LOGW(TAG, "Display already initialized");
@@ -132,9 +132,10 @@ esp_err_t p3a_board_display_init(uint8_t bg_r, uint8_t bg_g, uint8_t bg_b)
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "Brightness init failed: %s (continuing without)", esp_err_to_name(err));
     } else {
-        s_brightness = 100;
-        bsp_display_brightness_set(s_brightness);
+        p3a_board_set_brightness(brightness_percent);
     }
+#else
+    (void)brightness_percent;
 #endif
 
     ESP_LOGI(TAG, "Display initialized: %d buffers, stride=%zu, size=%zu bytes",

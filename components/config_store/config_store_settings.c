@@ -154,6 +154,66 @@ uint16_t config_store_get_rotation(void)
 }
 
 // ============================================================================
+// Brightness
+// ============================================================================
+
+#define CFG_BRIGHTNESS_DEFAULT 100
+
+static int cfg_brightness_from_cfg(const cJSON *cfg)
+{
+    const cJSON *item = cJSON_GetObjectItem((cJSON *)cfg, "brightness");
+    if (!item || !cJSON_IsNumber((cJSON *)item)) {
+        return CFG_BRIGHTNESS_DEFAULT;
+    }
+    double value = cJSON_GetNumberValue((cJSON *)item);
+    if (value < 0) return 0;
+    if (value > 100) return 100;
+    return (int)value;
+}
+
+esp_err_t config_store_set_brightness(int percent)
+{
+    if (percent < 0) percent = 0;
+    if (percent > 100) percent = 100;
+
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to load config for brightness update");
+        return err;
+    }
+
+    cJSON *item = cJSON_GetObjectItem(cfg, "brightness");
+    if (item && cJSON_IsNumber(item) && cfg_brightness_from_cfg(cfg) == percent) {
+        cJSON_Delete(cfg);
+        return ESP_OK;
+    }
+
+    if (item) {
+        cJSON_DeleteItemFromObject(cfg, "brightness");
+    }
+    cJSON_AddNumberToObject(cfg, "brightness", (double)percent);
+
+    err = config_store_save(cfg);
+    cJSON_Delete(cfg);
+    return err;
+}
+
+int config_store_get_brightness(void)
+{
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to load config for brightness, using default");
+        return CFG_BRIGHTNESS_DEFAULT;
+    }
+
+    int brightness = cfg_brightness_from_cfg(cfg);
+    cJSON_Delete(cfg);
+    return brightness;
+}
+
+// ============================================================================
 // Playback Settings
 // ============================================================================
 

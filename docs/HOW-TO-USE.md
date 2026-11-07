@@ -127,7 +127,7 @@ Open `http://p3a.local/` in any browser on the same Wi-Fi network to access the 
 The web interface provides:
 - **Device status** — current artwork (Wi-Fi info is on the Settings → Network tab; uptime on Settings → System)
 - **Playback controls** — next, previous, pause, resume
-- **Configuration** — brightness, screen rotation, settings
+- **Configuration** — brightness, screen rotation, settings. Saved brightness is restored after a restart; a level below 18% is too dark to see, so the device starts at 100% instead
 - **Boot animation** — the device plays one of 22 intro animations, picked at random on each boot; under Settings → Display → "Boot Logo Animation" you can pick a specific one instead and set how long it plays (1–7.5 s, default 3 s)
 - **PICO-8 button** (if the feature is enabled in firmware)
 

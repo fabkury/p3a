@@ -13,6 +13,7 @@
 #include "playback_service.h"
 #include "app_lcd.h"
 #include "animation_player.h"
+#include "config_store.h"
 #include "version.h"
 #include "esp_err.h"
 #include "esp_log.h"
@@ -311,6 +312,12 @@ static bool handle_set_brightness(const cJSON *payload, const char *command_id)
     if (err != ESP_OK) {
         publish_ack(command_id, "error", esp_err_to_name(err));
         return true;
+    }
+
+    // The change already took effect, so a failed save is not a command error.
+    esp_err_t save_err = config_store_set_brightness(v);
+    if (save_err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to persist brightness: %s", esp_err_to_name(save_err));
     }
 
     publish_ack(command_id, "ok", NULL);

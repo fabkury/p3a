@@ -69,6 +69,25 @@ esp_err_t config_store_set_rotation(uint16_t rotation_degrees);
 uint16_t config_store_get_rotation(void);
 
 /**
+ * @brief Persist the user's display brightness
+ *
+ * Call only for user-intended changes. Pause blanks the backlight through
+ * app_lcd_set_brightness(0), which must not reach this function. Skips the NVS
+ * write when the stored value already matches.
+ *
+ * @param percent Brightness percentage (0-100), will be clamped
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t config_store_set_brightness(int percent);
+
+/**
+ * @brief Get the persisted display brightness
+ *
+ * @return Stored brightness percentage (0-100), or 100 if not set
+ */
+int config_store_get_brightness(void);
+
+/**
  * @brief Set randomize playlist mode
  * 
  * @param enable True to randomize playlists internally

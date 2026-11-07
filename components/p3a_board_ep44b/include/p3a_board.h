@@ -129,9 +129,10 @@ extern "C" {
  * @param bg_r Background color red   component (0-255) used to prepaint buffers
  * @param bg_g Background color green component (0-255)
  * @param bg_b Background color blue  component (0-255)
+ * @param brightness_percent Backlight level to light the panel at (0-100)
  * @return ESP_OK on success, error code otherwise
  */
-esp_err_t p3a_board_display_init(uint8_t bg_r, uint8_t bg_g, uint8_t bg_b);
+esp_err_t p3a_board_display_init(uint8_t bg_r, uint8_t bg_g, uint8_t bg_b, int brightness_percent);
 
 /**
  * @brief Get LCD panel handle

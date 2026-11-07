@@ -38,6 +38,23 @@ static int fatal_error_render_cb(uint8_t *buffer, void *ctx)
     return ugfx_ui_render_to_buffer(buffer, stride);
 }
 
+// Lowest brightness that lights the panel: the cubic curve in
+// p3a_board_set_brightness() rounds anything below this to backlight level 0.
+#define APP_LCD_MIN_VISIBLE_BRIGHTNESS 18
+
+// Brightness has no on-device control, so a device that booted dark would look
+// dead and a reboot would not recover it. A saved level too low to see boots at
+// full brightness instead; the saved value itself is left alone.
+static int boot_brightness(void)
+{
+    int brightness = config_store_get_brightness();
+    if (brightness < APP_LCD_MIN_VISIBLE_BRIGHTNESS) {
+        ESP_LOGW(TAG, "Saved brightness %d is not visible, booting at 100", brightness);
+        return 100;
+    }
+    return brightness;
+}
+
 esp_err_t app_lcd_init(void)
 {
     ESP_LOGI(TAG, "P3A: Initialize display");
@@ -48,11 +65,15 @@ esp_err_t app_lcd_init(void)
     // a black/garbage frame, and the boot logo then fades in over it.
     uint8_t bg_r, bg_g, bg_b;
     config_store_get_background_color(&bg_r, &bg_g, &bg_b);
-    esp_err_t err = p3a_board_display_init(bg_r, bg_g, bg_b);
+    esp_err_t err = p3a_board_display_init(bg_r, bg_g, bg_b, boot_brightness());
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize board display: %s", esp_err_to_name(err));
         return err;
     }
+
+    // makapix_opc snapshots brightness before this runs, so tell it what the
+    // panel actually came up at.
+    event_bus_emit_i32(P3A_EVENT_BRIGHTNESS_CHANGED, p3a_board_get_brightness());
 
     // Step 1.5: Arm the boot logo. This only initializes logo state — the
     // display timer starts on the first rendered frame (once the render tasks

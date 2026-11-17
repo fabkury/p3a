@@ -8,6 +8,7 @@
     python host/p3a-lab/lab.py up                        test build, flash, wait for the console, print identity
     python host/p3a-lab/lab.py boot                      reset and print the boot log
     python host/p3a-lab/lab.py cmd <name> [json]         send one test-console command
+    python host/p3a-lab/lab.py shot <file.png> [divisor] save what the test hooks last put on the panel
     python host/p3a-lab/lab.py port                      print the dev unit's serial port
 
 Also imported by tests/device/conftest.py. Background: docs/2.0/TESTING.md.
@@ -209,6 +210,7 @@ class Uart:
         self.port = port or find_port()
         self.redact = sorted(redact or [], key=len, reverse=True)
         self.lines: list[str] = []
+        self.last_data: list[str] = []
         self._cond = threading.Condition()
         self._stop = False
         RUNS.mkdir(exist_ok=True)
@@ -221,6 +223,11 @@ class Uart:
         self._ser.dtr = False  # both low before open(): no reset, no bootloader entry
         self._ser.rts = False
         self._ser.open()
+        # Windows gives a serial port a 4 KB receive buffer by default. A burst
+        # (a screenshot is 200 KB) can overflow it whenever this process is
+        # held up for a moment, and the bytes are lost silently.
+        if hasattr(self._ser, "set_buffer_size"):
+            self._ser.set_buffer_size(rx_size=1 << 20)
         self._thread = threading.Thread(target=self._reader, name="uart-reader", daemon=True)
         self._thread.start()
 
@@ -254,6 +261,10 @@ class Uart:
                 self._append(f"[lab] serial error: {exc}")
                 return
             if not chunk:
+                # Idle: a good moment to push the log to disk. Flushing after
+                # every line stalls the reader while the folder is being synced.
+                with self._cond:
+                    self._log.flush()
                 continue
             pending += chunk
             while b"\n" in pending:
@@ -265,7 +276,6 @@ class Uart:
         with self._cond:
             self.lines.append(line)
             self._log.write(f"{time.strftime('%H:%M:%S')} {line}\n")
-            self._log.flush()
             self._cond.notify_all()
 
     def mark(self) -> int:
@@ -332,7 +342,27 @@ class Uart:
         m = self.wait_for(r"TEST\|(ok|err)\|(.*)", timeout, pos)
         if m.group(1) == "err":
             raise LabError(f"command {name!r} failed: {m.group(2)}")
+        # Bulk output, if the command produced any, arrives as TEST|data| lines before the reply.
+        with self._cond:
+            self.last_data = [line.split("TEST|data|", 1)[1] for line in self.lines[pos:] if "TEST|data|" in line]
         return json.loads(m.group(2))
+
+    def screenshot(self, path, divisor: int = 8, timeout: float = 60.0):
+        """Saves a downscaled copy of what the test hooks last showed, as a PNG.
+
+        This is the framebuffer, not the glass. divisor must divide 720; 8
+        gives 90x90 in about 5 seconds over the UART, 4 gives 180x180 in 20.
+        """
+        from PIL import Image  # imported here so that the lab works without Pillow
+
+        reply = self.command(f"lcd shot {divisor}", timeout=timeout)
+        width, height = reply["width"], reply["height"]
+        rows = self.last_data
+        if len(rows) != height or any(len(r) != width * 6 for r in rows):
+            raise LabError(f"screenshot is incomplete: {len(rows)} rows for {width}x{height}")
+        image = Image.frombytes("RGB", (width, height), bytes.fromhex("".join(rows)))
+        image.save(path)
+        return path
 
 
 def bring_up(config: str = "test", do_flash: bool = True) -> tuple[Uart, dict]:
@@ -389,6 +419,9 @@ def main(argv: list[str]) -> int:
                 pos = uart.reset()
                 time.sleep(float(rest[0]) if rest else 4.0)
                 print("\n".join(uart.lines[pos:]))
+        elif verb == "shot":
+            with Uart(log_name="cmd.log") as uart:
+                print(uart.screenshot(rest[0], int(rest[1]) if len(rest) > 1 else 8))
         elif verb == "cmd":
             with Uart(log_name="cmd.log") as uart:
                 print(json.dumps(uart.command(rest[0], json.loads(rest[1]) if len(rest) > 1 else None)))

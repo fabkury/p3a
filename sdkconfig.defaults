@@ -65,12 +65,15 @@ CONFIG_MQTT_PROTOCOL_311=n
 CONFIG_MQTT_PROTOCOL_5=y
 CONFIG_MQTT_TASK_CORE_SELECTION_ENABLED=y
 
+# Board (Waveshare BSP): 720x720 panel, 24-bit, three framebuffers for the
+# display pipeline's triple buffering. LVGL comes with the BSP and is unused.
+CONFIG_BSP_LCD_TYPE_720_720_4_INCH=y
+CONFIG_BSP_LCD_COLOR_FORMAT_RGB888=y
+CONFIG_BSP_LCD_DPI_BUFFER_NUMS=3
+CONFIG_LV_BUILD_EXAMPLES=n
+
 # --- Parked until their component arrives -----------------------------------
-# M1.2 board (Waveshare BSP, esp_hosted co-processor link):
-# CONFIG_BSP_LCD_COLOR_FORMAT_RGB888=y
-# CONFIG_BSP_LCD_DPI_BUFFER_NUMS=3
-# CONFIG_BSP_LCD_TYPE_720_720_4_INCH=y
-# CONFIG_LV_BUILD_EXAMPLES=n
+# M1.2 board, co-processor step (esp_hosted link to the ESP32-C6):
 # CONFIG_ESP_HOSTED_SDIO_TX_Q_SIZE=40
 # CONFIG_ESP_HOSTED_SDIO_RX_Q_SIZE=40
 # CONFIG_ESP_HOSTED_TRANSPORT_RESTART_ON_FAILURE=n

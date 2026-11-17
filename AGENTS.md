@@ -108,6 +108,11 @@ All in `components/p3a_util`; each header explains itself at the top.
   `p3a_mem_pressure.c`), the thin device part beside it.
 - **Test hooks** live only in `components/p3a_test_hooks`, one command file
   per area, every symbol prefixed `p3a_test_`.
+- **Managed components** are declared in the `idf_component.yml` of the
+  component that needs them, pinned to exact versions. `dependencies.lock`
+  is tracked. A version changes on purpose, in its own commit.
+- **Long loops yield.** Console output is a busy wait, and the task
+  watchdog reports a task that starves the idle task for 15 seconds.
 
 ### Moving code out of `legacy/`
 

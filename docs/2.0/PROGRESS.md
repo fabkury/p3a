@@ -10,7 +10,7 @@ times.
 |---|---|
 | Phase | 1, platform (Phase 0 complete) |
 | Current milestone | M1.2 board |
-| Next action | Start M1.2: read `legacy/components/p3a_board_ep44b`, `sdio_bus`, `sd_idle_wait`, `slave_ota` and the LCD and touch parts of `legacy/main`; decide the component split for the `board` layer; un-park the BSP and esp_hosted lines in `sdkconfig.defaults` (mind the `ESP_IDF_VERSION=5.5` trap); bring up the panel first, with a test-pattern console command |
+| Next action | Continue M1.2. Done: panel, framebuffers, backlight, BOOT button. Remaining, in order: (1) touch: move the I2C recovery and init parked in `legacy/components/p3a_board_ep44b/p3a_board_touch_init.c.part` and the driver half of `legacy/main/app_touch.c` (audit H5), with a `touch` console probe; (2) SD card: mount with the aligned FatFS glue (`legacy/main/ffsystem_aligned.c`), `sdio_bus`, `sd_idle_wait` (it requires `frame_trace` and uses a weak reference, which the linter forbids: decide how); (3) co-processor: esp_hosted (un-park its three sdkconfig lines, mind `ESP_IDF_VERSION=5.5`), `slave_ota` and its `slave_fw` flashing, without its dependency on `p3a_core` |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -19,7 +19,7 @@ times.
 
 | | |
 |---|---|
-| Running | `2.0.0-dev`, test configuration (`build-test`), flashed 2026-11-17 by the device tests |
+| Running | `2.0.0-dev`, test configuration (`build-test`), flashed 2026-11-17 by the device tests. Left showing colour bars |
 | Flash state | Bootloader, 2.x partition table, app in `ota_0`. NVS empty. `slave_fw` empty (the C6 keeps its own firmware, 2.7.0 as last reported by 1.x) |
 | SD card | 32 GB, healthy (D8). Still holds 1.x content under `/p3a2`; to be wiped at M0.4 or M1.3 |
 | 1.x flash backup | `%USERPROFILE%\.p3a-lab\backups\p3a-fab_v1.2.4_full-flash_2026-11-17.bin` (see the session log for size and hash) |
@@ -37,7 +37,7 @@ reopened (why).
 | M0.3 Continuous integration | done 2026-11-17. Tiers: CI green on GitHub for tree checks, host tests and the firmware build; each linter rule proven to fail by its self-test (29 cases). No deliberately broken commit was pushed |
 | M0.4 Device lab | done 2026-11-17. Tiers: device tests (6 cases, run four times), lab unit tests (4 cases), both builds checked. Provisioning waits for M1.4 and M1.5 |
 | M1.1 util | done 2026-11-17. Tiers: host tests (6 programs, under ASan and UBSan too), device tests (21 cases, run twice), both builds checked, CI. `p3a_limits.h` is not created yet: it arrives with its first constant |
-| M1.2 board | next |
+| M1.2 board | in progress: display, backlight and button done 2026-11-17 (31 device tests, both builds). Touch, SD card and co-processor remain |
 | M1.3 storage | not started |
 | M1.4 settings | not started |
 | M1.5 net base | not started |
@@ -73,7 +73,22 @@ check reopens its milestone.
 
 Open:
 
-- None yet.
+- **M1.2-a, the panel shows what the framebuffer holds.** Run
+  `python host/p3a-lab/lab.py cmd "lcd bars"`. The panel should show eight
+  vertical bars of equal width, left to right: white, yellow, cyan, green,
+  magenta, red, blue, black. Edges sharp, colours pure, no flicker or
+  tearing. Then `python host/p3a-lab/lab.py cmd "lcd gradient"`: a smooth
+  gradient with a thin white border on all four edges and a red square in
+  the top-left corner (top-left as the board is normally held, USB ports at
+  the bottom).
+- **M1.2-b, the backlight dims.** Run
+  `python host/p3a-lab/lab.py cmd "lcd brightness 20"`: clearly dimmer.
+  `... "lcd brightness 0"`: backlight off. `... "lcd brightness 100"`: full
+  again.
+- **M1.2-c, the BOOT button is seen.** Run
+  `python host/p3a-lab/lab.py cmd button` (prints `"presses": 0` or the
+  count so far), press BOOT (the top button) twice, run it again: the count
+  is two higher.
 
 Cleared:
 
@@ -143,6 +158,15 @@ M0.1, 2026-11-17 (paths relative to the 1.x tree):
 Dead functions inside files that are otherwise live were not hunted down;
 they are simply not moved when their file is.
 
+M1.2, 2026-11-17:
+
+- `components/p3a_board_ep44b/p3a_board_fs.c`: the LittleFS mount and the
+  web UI health check. Gone with change A.
+- `components/p3a_board_ep44b/CMakeLists.txt` and `Kconfig`: replaced by
+  the new component's. The Kconfig held the pixel-format choice, the
+  capability flags (`P3A_HAS_*`) and the button GPIO; 2.0 targets one board
+  with one format, so none of them is an option any more (audit M28).
+
 M1.1, 2026-11-17:
 
 - `components/event_bus/` (342 lines). Rewritten as `p3a_event` in
@@ -156,6 +180,50 @@ M1.1, 2026-11-17:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-17: M1.2 first step, panel, backlight, button
+
+- CI on the M1.1 commit (`f544925f`): all four jobs green.
+- New component `components/p3a_board` (layer `board`).
+  `p3a_board_display.c`, `p3a_board_button.c` and `p3a_board.h` moved from
+  `legacy/components/p3a_board_ep44b`. The header is rewritten for one
+  board and one pixel format: no capability flags, no RGB565 path, no
+  redefinition of Kconfig symbols (audit M28).
+- The BOOT button no longer emits an event or knows about the co-processor
+  update: the board reports a debounced press to one callback, and what a
+  press means is the caller's business. One listener, so not an event (D22).
+- Dependencies: the Waveshare BSP and everything it pulls in are declared
+  in `components/p3a_board/idf_component.yml`, pinned to the exact versions
+  1.x shipped with. `dependencies.lock` at the root is tracked. LVGL comes
+  with the BSP and is not used; dropping the BSP for the bare panel driver
+  would remove it, which is an idea for `ideas.md`, not part of this work.
+- `sdkconfig.defaults`: the three BSP display lines are live; the
+  esp_hosted lines stay parked for the co-processor step.
+- `app_main` brings the display up painted black. The background colour
+  will come from the settings store (M1.4).
+- Test hooks: `p3a_test_board.c` with `lcd` (info, fill, bars, gradient,
+  pixel, crc, shot, brightness) and `button`. `lab.py shot <file>` saves a
+  downscaled PNG of the framebuffer over the UART, so the agent can look at
+  what was drawn before the HTTP screenshot hook exists (M1.5).
+- Found by the tests: a 180x180 screenshot always had one short row. The
+  first theory, bytes lost in the host's serial buffer, was wrong. The
+  console task printed for more than 15 seconds without yielding, the task
+  watchdog reported the starved idle task, and that report landed in the
+  middle of a row. The screenshot command now yields once per row. The lab
+  changes made while chasing the wrong theory (a 1 MB receive buffer, log
+  flushed when idle instead of per line) are kept; they are sound, but
+  they were not the fix.
+- The agent looked at two screenshots (gradient at 360x360, bars at
+  180x180): both correct.
+- Memory with the board up: internal DMA pool 434 KB total, 378 KB free,
+  largest block 254 KB.
+- Image size: release 286 KB, test 367 KB.
+- Verified, device tests: 31 pass after a flash and again without one.
+  Framebuffer contents are checked by pixel probes and by a CRC of the
+  whole frame against a value computed on the host. Verified, build
+  checks: release and test. Awaiting manual checks M1.2-a, b and c: the
+  tests read the framebuffer, not the glass, and nothing can press the
+  button.
 
 ### 2026-11-17: M1.1 complete, jobs, events, memory pressure
 

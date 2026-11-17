@@ -20,3 +20,5 @@ void p3a_test_reply_err(const char *message);
 // Command tables.
 extern const p3a_test_command_t p3a_test_util_commands[];
 extern const size_t p3a_test_util_command_count;
+extern const p3a_test_command_t p3a_test_board_commands[];
+extern const size_t p3a_test_board_command_count;

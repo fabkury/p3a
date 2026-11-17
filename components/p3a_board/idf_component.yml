@@ -1,0 +1,11 @@
+## The board support package and what it pulls in, pinned to the versions
+## p3a 1.x shipped with (legacy/dependencies.lock). Bump one on purpose, never
+## by letting the resolver drift.
+dependencies:
+  waveshare/esp32_p4_wifi6_touch_lcd_4b: "1.0.1"
+  lvgl/lvgl: "9.4.0"                       # only because the BSP requires it; p3a does not use LVGL
+  espressif/esp_lvgl_port: "2.8.0~1"
+  espressif/esp_codec_dev: "1.2.0"
+  espressif/esp_lcd_touch: "1.2.1"
+  espressif/esp_lcd_touch_gt911: "1.2.0~2"
+  waveshare/esp_lcd_st7703: "1.0.5"

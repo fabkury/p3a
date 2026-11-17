@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2025-2026 p3a Contributors
 
-/**
- * @file p3a_board_display.c
- * @brief Display hardware implementation for EP44B board
- */
+// The panel, its framebuffers and the backlight. Touch joins this file's
+// neighbours in a later step of M1.2.
 
 #include "p3a_board.h"
 #include "bsp/esp-bsp.h"
@@ -32,9 +30,7 @@ static bool s_initialized = false;
 // Fills the first visible row pixelwise, then replicates it via memcpy for speed.
 static void prepaint_buffers(uint8_t r, uint8_t g, uint8_t b)
 {
-    // Implemented for the active 24-bit BGR888 framebuffer format; other
-    // formats fall through with no prepaint (legacy behavior).
-    if (P3A_DISPLAY_BPP != 24 || s_buffer_count == 0 || !s_buffers[0]) {
+    if (s_buffer_count == 0 || !s_buffers[0]) {
         return;
     }
 
@@ -104,8 +100,7 @@ esp_err_t p3a_board_display_init(uint8_t bg_r, uint8_t bg_g, uint8_t bg_b)
     s_buffer_count = P3A_DISPLAY_BUFFERS;
 
     // Calculate row stride and buffer size
-    const size_t bytes_per_pixel = P3A_DISPLAY_BPP / 8;
-    s_row_stride = (size_t)P3A_DISPLAY_WIDTH * bytes_per_pixel;
+    s_row_stride = (size_t)P3A_DISPLAY_WIDTH * P3A_DISPLAY_BYTES_PER_PIXEL;
     s_buffer_bytes = s_row_stride * P3A_DISPLAY_HEIGHT;
 
     // Check if hardware uses padding (detect from buffer spacing)
@@ -127,7 +122,6 @@ esp_err_t p3a_board_display_init(uint8_t bg_r, uint8_t bg_g, uint8_t bg_b)
     prepaint_buffers(bg_r, bg_g, bg_b);
 
     // Enable the backlight last, now that the framebuffers show the background.
-#if P3A_HAS_BRIGHTNESS
     err = bsp_display_brightness_init();
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "Brightness init failed: %s (continuing without)", esp_err_to_name(err));
@@ -135,7 +129,6 @@ esp_err_t p3a_board_display_init(uint8_t bg_r, uint8_t bg_g, uint8_t bg_b)
         s_brightness = 100;
         bsp_display_brightness_set(s_brightness);
     }
-#endif
 
     ESP_LOGI(TAG, "Display initialized: %d buffers, stride=%zu, size=%zu bytes",
              s_buffer_count, s_row_stride, s_buffer_bytes);
@@ -178,7 +171,6 @@ size_t p3a_board_get_buffer_bytes(void)
 
 esp_err_t p3a_board_set_brightness(int percent)
 {
-#if P3A_HAS_BRIGHTNESS
     // Clamp to valid range
     if (percent < 0) percent = 0;
     if (percent > 100) percent = 100;
@@ -197,96 +189,9 @@ esp_err_t p3a_board_set_brightness(int percent)
         s_brightness = percent;
     }
     return err;
-#else
-    (void)percent;
-    return ESP_ERR_NOT_SUPPORTED;
-#endif
 }
 
 int p3a_board_get_brightness(void)
 {
     return s_brightness;
 }
-
-esp_err_t p3a_board_adjust_brightness(int delta_percent)
-{
-    return p3a_board_set_brightness(s_brightness + delta_percent);
-}
-
-// ============================================================================
-// Touch initialization
-// ============================================================================
-
-#if P3A_HAS_TOUCH
-#include "bsp/touch.h"
-
-// If a slave (e.g. the GT911 mid-transaction across a reboot) is holding SDA low,
-// the I2C peripheral will busy-spin forever in i2c_ll_is_bus_busy. Clock-pulse SCL
-// as a raw GPIO before the I2C controller takes over the pins to give the slave a
-// chance to release the bus. Standard SMBus recovery procedure.
-static void i2c_bus_recovery(int scl_gpio, int sda_gpio)
-{
-    gpio_config_t io_conf = {
-        .pin_bit_mask = (1ULL << scl_gpio) | (1ULL << sda_gpio),
-        .mode = GPIO_MODE_INPUT_OUTPUT_OD,
-        .pull_up_en = GPIO_PULLUP_ENABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_DISABLE,
-    };
-    if (gpio_config(&io_conf) != ESP_OK) {
-        return;
-    }
-
-    gpio_set_level(scl_gpio, 1);
-    gpio_set_level(sda_gpio, 1);
-    esp_rom_delay_us(10);
-
-    if (gpio_get_level(sda_gpio) == 1) {
-        // Bus is healthy; release pins so the I2C peripheral can take them.
-        gpio_reset_pin(scl_gpio);
-        gpio_reset_pin(sda_gpio);
-        return;
-    }
-
-    ESP_LOGW(TAG, "I2C bus stuck (SDA low on GPIO%d); attempting clock-pulse recovery", sda_gpio);
-
-    int clocks = 0;
-    for (clocks = 0; clocks < 16; clocks++) {
-        gpio_set_level(scl_gpio, 0);
-        esp_rom_delay_us(5);
-        gpio_set_level(scl_gpio, 1);
-        esp_rom_delay_us(5);
-        if (gpio_get_level(sda_gpio) == 1) {
-            break;
-        }
-    }
-
-    // Generate STOP: SDA low->high while SCL high
-    gpio_set_level(sda_gpio, 0);
-    esp_rom_delay_us(5);
-    gpio_set_level(scl_gpio, 1);
-    esp_rom_delay_us(5);
-    gpio_set_level(sda_gpio, 1);
-    esp_rom_delay_us(5);
-
-    bool recovered = (gpio_get_level(sda_gpio) == 1);
-    gpio_reset_pin(scl_gpio);
-    gpio_reset_pin(sda_gpio);
-
-    if (recovered) {
-        ESP_LOGI(TAG, "I2C bus recovered after %d SCL pulse(s)", clocks + 1);
-    } else {
-        ESP_LOGE(TAG, "I2C bus recovery failed; SDA still held low after 16 pulses + STOP");
-    }
-}
-
-esp_err_t p3a_board_touch_init(esp_lcd_touch_handle_t *handle)
-{
-    if (!handle) {
-        return ESP_ERR_INVALID_ARG;
-    }
-    i2c_bus_recovery(BSP_I2C_SCL, BSP_I2C_SDA);
-    return bsp_touch_new(NULL, handle);
-}
-#endif
-

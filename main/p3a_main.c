@@ -7,6 +7,7 @@
 #include "esp_app_desc.h"
 #include "esp_chip_info.h"
 #include "esp_log.h"
+#include "p3a_board.h"
 #include "p3a_err.h"
 #include "p3a_event.h"
 #include "p3a_job.h"
@@ -39,6 +40,10 @@ void app_main(void)
     p3a_mem_install_alloc_failure_report();
     boot_step("event bus", p3a_event_bus_start());
     boot_step("job runners", p3a_jobs_start());
+
+    // The panel comes up painted black. The background colour will come from
+    // the settings store once it exists (M1.4).
+    boot_step("display", p3a_board_display_init(0, 0, 0));
 
 #if CONFIG_P3A_TEST_HOOKS
     ESP_LOGW(TAG, "TEST BUILD: test hooks are compiled in. Not for release.");

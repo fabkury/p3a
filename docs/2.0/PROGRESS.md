@@ -9,8 +9,8 @@ times.
 | | |
 |---|---|
 | Phase | 0, tooling |
-| Current milestone | M0.2 Host test harness |
-| Next action | Create `tests/host/` with Unity, CMake and CTest, a FreeRTOS stub, and one real test; run it with MinGW and in WSL |
+| Current milestone | M0.3 Continuous integration |
+| Next action | Write the GitHub Actions workflow for `v2` (host tests, firmware build, lints, size check), push, and prove each check can go red |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -33,8 +33,8 @@ reopened (why).
 | Milestone | Status |
 |---|---|
 | M0.1 Tree reset and empty app | done 2026-11-17. Tiers: local release build; flashed, boot log read over UART. No CI yet (M0.3), no test configuration yet (M0.4) |
-| M0.2 Host test harness | in progress |
-| M0.3 Continuous integration | not started |
+| M0.2 Host test harness | done 2026-11-17. Tiers: host tests pass with MinGW gcc 16.1 and with gcc 13.3 under ASan and UBSan in WSL; firmware builds with the new component |
+| M0.3 Continuous integration | in progress |
 | M0.4 Device lab | not started |
 | M1.1 util | not started |
 | M1.2 board | not started |
@@ -147,6 +147,24 @@ they are simply not moved when their file is.
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-17: M0.2 host test harness
+
+- `tests/host/`: CMake project, Unity 2.x vendored unmodified from the IDF
+  tree, `p3a_host_test()` helper, warnings as errors, sanitizers on by
+  default off Windows. Conventions in `tests/host/README.md`.
+- First 2.0 component, `components/p3a_util`, with its first unit:
+  `p3a_version` (parse and order `MAJOR.MINOR.PATCH[-suffix]`). It is the
+  real code that proves the wiring, and OTA needs it at M5.2. Unlike the 1.x
+  comparison, a string that fails to parse has no version instead of
+  comparing as equal, and a release orders above its own pre-releases.
+- No FreeRTOS stub yet: nothing needs one. `tests/host/stubs/` is created
+  with the first stand-in, most likely at M1.1.
+- Installed `cmake` and `ninja-build` in the WSL Ubuntu so the sanitizer run
+  works locally.
+- Verified, host tests: 7 cases pass with MinGW and in WSL under ASan and
+  UBSan. Verified, local release build: firmware builds with `p3a_util`.
+  Not flashed; the app does not use the unit yet.
 
 ### 2026-11-17: M0.1 tree reset and empty app
 

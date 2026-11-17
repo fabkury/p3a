@@ -1,0 +1,73 @@
+name: v2
+
+# Checks for the p3a 2.0 branch (tiers T1 and T2 in docs/2.0/TESTING.md).
+# Device tests, soaks and manual checks cannot run here.
+
+on:
+  push:
+    branches: [v2]
+  pull_request:
+    branches: [v2]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v2-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tree:
+    name: Tree checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Linter self-test
+        run: python3 tools/test_check_tree.py
+      - name: Layer rule, forbidden patterns, configuration guard
+        run: python3 tools/check_tree.py
+
+  host-tests:
+    name: Host tests (ASan, UBSan)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Ninja
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ninja-build
+      - name: Configure
+        run: cmake -S tests/host -B build-host -G Ninja
+      - name: Build
+        run: cmake --build build-host
+      - name: Run
+        run: ctest --test-dir build-host --output-on-failure
+
+  firmware:
+    name: Firmware build (release)
+    runs-on: ubuntu-latest
+    container: espressif/idf:v5.5.4
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        shell: bash
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          . "$IDF_PATH/export.sh"
+          # esp_wifi_remote keys its Kconfig fragments on major.minor (AGENTS.md).
+          export ESP_IDF_VERSION=5.5
+          idf.py build
+      - name: Build checks (revision guard, image size, no test hooks)
+        shell: bash
+        run: |
+          . "$IDF_PATH/export.sh" >/dev/null
+          python tools/check_tree.py --build build
+      - name: Keep the binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: p3a-${{ github.sha }}
+          path: |
+            build/p3a.bin
+            build/bootloader/bootloader.bin
+            build/partition_table/partition-table.bin
+            build/ota_data_initial.bin
+            build/flash_args
+          retention-days: 14

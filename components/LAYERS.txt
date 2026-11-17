@@ -1,0 +1,11 @@
+# Which layer each p3a 2.0 component belongs to. Checked by tools/check_tree.py.
+#
+# Layers, bottom to top: util board storage sources library player ui net
+# (main is implicit, on top). A component may require components in its own
+# layer or below, never above, and never main.
+#
+# Add "vendored" as a third field for third-party code kept in the tree; it
+# is layered like any other component but not scanned for forbidden patterns.
+#
+# component    layer
+p3a_util       util

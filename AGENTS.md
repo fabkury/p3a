@@ -24,17 +24,29 @@ production.
 
 ## Ground rules
 
-- **Never build, flash, or monitor on your own initiative.** Do not run
-  `idf.py build`, `idf.py flash`, `idf.py monitor`, or anything else that
-  compiles or flashes the firmware unless the user directly and explicitly asks
-  for it, not even to "check that it compiles". The user does the building and
-  the testing on hardware. A work-stream README may relax this for that stream
-  (`docs/jitter/README.md` did); such a grant applies only while the user has
-  you working in that stream.
-- **A change is unverified until the user confirms it on the device.** Say so
-  plainly. Do not describe untested work as done, working, or verified.
+- **Build, flash, and monitor whenever it helps.** Compiling to check a
+  change, flashing the dev unit, and reading its serial log are ordinary parts
+  of the work and need no permission. The dev unit is the board attached to
+  the workstation by USB. It belongs to the development work: its flash, NVS,
+  and SD card may be erased when the work calls for it. It is the only device
+  you flash. Every other unit gets firmware through GitHub Releases, and the
+  user cuts those.
+- **Say what was tested.** A change that has not run on the device is
+  unverified. Report how far each change got (built only, flashed and
+  exercised, soaked) and what was left untested. Do not describe untested work
+  as done, working, or verified.
 - **Clarifying questions are always welcome.** Ask when different readings of a
   request would lead to materially different work.
+
+## Branches
+
+- `main` is the 1.x line and is production. It takes critical fixes only. One
+  more release is planned, 1.2.5: what is already on `main` plus the lock-order
+  fix from the 2.0 review (finding 25). No new 1.x features.
+- `v2` is p3a 2.0, a clean break with no OTA path from 1.x (2.0 is installed
+  over USB). All 2.0 work happens on that branch, and its work-stream
+  documents live there in `docs/2.0/`; start with `docs/2.0/README.md`. A fix
+  made on `main` reaches 2.0 only if it is ported by hand.
 
 ## Toolchain and environment
 
@@ -74,8 +86,6 @@ production.
   `serial_logger.py` captures logs without resetting it.
 
 ## Build commands
-
-Reference only; the ground rules above govern whether you may run them.
 
 ```powershell
 Set-Location <repo root>               # in the same command as idf.py, every time
@@ -222,7 +232,7 @@ issues and deferred ideas before re-opening a problem.
 | `docs/deferred/` | Parked ideas, one page each, with what would unblock them (exFAT, ESP-IDF 6, Gallica, Library of Congress, aspect-ratio filter, long Wellcome labels). |
 | `docs/makapix-cert-renewal/` | In-flight work stream (device certificate renewal, 1.2.4): `PLAN.md` is the design, `PROGRESS.md` the status. |
 | `docs/jitter/` | Finished playback-jitter work stream: `REPORT.md` is the summary; `README.md` holds the diagnostic builds, the lab tooling, and the follow-up for esp-idf #19034. |
-| `docs/2.0-architecture-review/` | Fresh-eyes architecture review ahead of 2.0 (2026-11): `README.md` holds the thesis and a 25-row verdict table with migration costs; one page per area; `target-architecture.md` is the proposed 2.0 skeleton; `ideas.md` is the running list of 2.0 ideas, append new ones there. |
+| `docs/2.0-architecture-review/` | Fresh-eyes architecture review ahead of 2.0 (2026-11): `README.md` holds the thesis and a 25-row verdict table with migration costs; one page per area; `target-architecture.md` is the proposed 2.0 skeleton; `ideas.md` is the running list of 2.0 ideas, append new ones there. The build itself is tracked on the `v2` branch in `docs/2.0/`. |
 | `docs/intro-animations/`, `docs/klipy/`, `docs/title-view/`, `docs/brand-identity/` | Reference for shipped features: how to add a boot animation, Klipy API notes, per-source artwork-info endpoints, the web UI theme system. |
 | `README.md` | Public front page. Its feature list, component table, and storage layout must match reality. |
 

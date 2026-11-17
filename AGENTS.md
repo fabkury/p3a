@@ -5,6 +5,18 @@ file: `CLAUDE.md` imports it, so project guidance goes here and only
 Claude-specific notes go there. It is read at the start of every session, so
 keep it accurate and keep it short.
 
+## This branch is p3a 2.0 under construction
+
+`v2` rebuilds p3a on a new architecture. Before doing anything here, read
+`docs/2.0/README.md` and then `docs/2.0/PROGRESS.md`: they say where the work
+stands, what comes next, and the rules of the work stream. Record progress
+there as part of every step.
+
+Until milestone M0.1 resets the tree, the code on this branch is still the
+1.x code, and the architecture, storage, versioning and release sections
+below describe it. From M0.1 on, this file is updated in the same commit as
+the tree it describes.
+
 ## Project overview
 
 p3a is an ESP32-P4 Wi-Fi pixel art player. It plays WebP, GIF, PNG, APNG, JPEG,
@@ -222,6 +234,7 @@ issues and deferred ideas before re-opening a problem.
 
 | Where | What |
 |-------|------|
+| `docs/2.0/` | The 2.0 work stream: `README.md` (session protocol and rules), `PROGRESS.md` (the ledger), `PLAN.md` (milestones), `DECISIONS.md`, `TESTING.md`, `PARITY.md`. |
 | `docs/infrastructure/README.md` | Developer index: architecture, directory structure, build system, components, hardware, network and API, display pipeline, configuration. |
 | `docs/QUICK-START.md`, `docs/HOW-TO-USE.md` | User-facing behavior, from first boot to the REST API. The source of truth for what the product does from the user's side. |
 | `docs/flash-p3a.md`, `docs/web-flasher/` | Flashing methods, and the browser flasher served from GitHub Pages (`firmware/{tag}/` is filled by CI on each release). |
@@ -232,7 +245,7 @@ issues and deferred ideas before re-opening a problem.
 | `docs/deferred/` | Parked ideas, one page each, with what would unblock them (exFAT, ESP-IDF 6, Gallica, Library of Congress, aspect-ratio filter, long Wellcome labels). |
 | `docs/makapix-cert-renewal/` | In-flight work stream (device certificate renewal, 1.2.4): `PLAN.md` is the design, `PROGRESS.md` the status. |
 | `docs/jitter/` | Finished playback-jitter work stream: `REPORT.md` is the summary; `README.md` holds the diagnostic builds, the lab tooling, and the follow-up for esp-idf #19034. |
-| `docs/2.0-architecture-review/` | Fresh-eyes architecture review ahead of 2.0 (2026-11): `README.md` holds the thesis and a 25-row verdict table with migration costs; one page per area; `target-architecture.md` is the proposed 2.0 skeleton; `ideas.md` is the running list of 2.0 ideas, append new ones there. The build itself is tracked on the `v2` branch in `docs/2.0/`. |
+| `docs/2.0-architecture-review/` | Fresh-eyes architecture review ahead of 2.0 (2026-11): `README.md` holds the thesis and a 25-row verdict table with migration costs; one page per area; `target-architecture.md` is the proposed 2.0 skeleton; `ideas.md` is the running list of 2.0 ideas, append new ones there. This is the design; `docs/2.0/` tracks the build. |
 | `docs/intro-animations/`, `docs/klipy/`, `docs/title-view/`, `docs/brand-identity/` | Reference for shipped features: how to add a boot animation, Klipy API notes, per-source artwork-info endpoints, the web UI theme system. |
 | `README.md` | Public front page. Its feature list, component table, and storage layout must match reality. |
 

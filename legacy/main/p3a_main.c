@@ -1,0 +1,671 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file p3a_main.c
+ * @brief Boot sequence entry point: NVS, filesystem, display, WiFi, and service initialization
+ */
+
+#include "esp_err.h"
+#include "frame_trace.h"
+#include "esp_log.h"
+#include "esp_system.h"
+#include "esp_app_desc.h"
+#include "nvs_flash.h"
+#include "nvs.h"
+#include "esp_netif.h"
+#include "esp_event.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "esp_heap_caps.h"
+#include "esp_rom_sys.h"
+#include <stdatomic.h>
+
+#include "app_lcd.h"
+#include "app_touch.h"
+#include "app_usb.h"
+#include "app_wifi.h"
+#include "p3a_board.h"  // For p3a_board_littlefs_mount()
+#include "makapix.h"
+#include "sntp_sync.h"
+#include "ugfx_ui.h"
+#include "animation_player.h"  // For animation_player_is_ui_mode()
+#include "play_scheduler.h"
+#include "config_store.h"
+#include "ota_manager.h"       // For OTA boot validation
+#include "slave_ota.h"         // For ESP32-C6 co-processor OTA
+#include "sdio_bus.h"          // SDIO bus coordination
+#include "p3a_state.h"         // Unified p3a state machine
+#include "p3a_render.h"        // State-aware rendering
+#include "event_bus.h"
+#include "content_service.h"
+#include "playback_service.h"
+#include "connectivity_service.h"
+#include "fresh_boot.h"        // Fresh boot debug helpers
+#include "channel_cache.h"       // LAi persistence for channel caches
+#include "pin_lists.h"           // Pinned-artworks vault init (post-SD)
+#include "show_url.h"            // show-url download command
+#include "freertos/task.h"
+#include "esp_timer.h"
+#include "cJSON.h"               // cJSON_InitHooks: route JSON parse heap to PSRAM
+#include "mem_stats.h"           // Shared memory snapshot helpers (also used by GET /api/memory)
+
+static const char *TAG = "p3a";
+
+// Timer for dismissing registration success screen
+static esp_timer_handle_t s_reg_success_timer = NULL;
+
+// Debug provisioning mode - toggle every 5 seconds
+#define DEBUG_PROVISIONING_ENABLED 0
+#define DEBUG_PROVISIONING_TOGGLE_MS 5000
+
+// Dwell time management delegates to play_scheduler
+
+#define MAX_DWELL_TIME_SECONDS 100000
+
+// Automatic periodic memory report. When P3A_MEMORY_REPORT_ENABLED is 1, every
+// MEMORY_REPORT_INTERVAL_SECONDS the device logs a full heap breakdown to the
+// console — behaving exactly as if the HTTP endpoint GET /api/memory had been
+// called, but with no HTTP interaction. Both paths share the mem_stats helpers,
+// so the console output is identical.
+//
+// Disabled by default (the 2-minute console report is noisy in normal use). The
+// on-demand GET /api/memory endpoint is unaffected by this toggle. Flip to 1 to
+// re-enable the periodic console report when debugging the internal-RAM /
+// SDIO-RX pressure issues (see docs/known-issues.md, "SDIO RX: internal-RAM
+// exhaustion").
+#define P3A_MEMORY_REPORT_ENABLED 0
+#define MEMORY_REPORT_INTERVAL_SECONDS 120
+
+uint32_t animation_player_get_dwell_time(void)
+{
+    return play_scheduler_get_dwell_time();
+}
+
+esp_err_t animation_player_set_dwell_time(uint32_t dwell_time)
+{
+    if (dwell_time > MAX_DWELL_TIME_SECONDS) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // Store in config
+    esp_err_t err = config_store_set_dwell_time(dwell_time * 1000u);
+    if (err != ESP_OK) return err;
+
+    // Update play_scheduler
+    play_scheduler_set_dwell_time(dwell_time);
+    return ESP_OK;
+}
+
+// Phase 7: auto_swap_task removed - timer task now in play_scheduler
+
+// Route all cJSON allocations (DOM nodes + duplicated strings) to PSRAM,
+// internal-RAM only as a last resort. cJSON builds a full parse tree of many
+// small nodes per API response (Giphy / museum / Makapix JSON is 96 KB-1 MB);
+// with CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=8192 those per-node mallocs would
+// otherwise land in the DMA-capable internal pool the esp_hosted SDIO RX path
+// needs, fragmenting/exhausting it during refresh paging. See
+// docs/known-issues.md, "SDIO RX: internal-RAM exhaustion" (Option E). Same
+// allocator-redirection pattern as main/ffsystem_aligned.c (FATFS) and
+// channel_manager/psram_alloc.h.
+static void *cjson_psram_malloc(size_t sz)
+{
+    void *p = heap_caps_malloc(sz, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!p) p = heap_caps_malloc(sz, MALLOC_CAP_8BIT);  // internal fallback
+    return p;
+}
+
+// esp_hosted SDIO RX requests this exact cap mask in sdio_rx_get_buffer()
+// (see managed_components/.../sdio_drv.c). When *that* allocation returns
+// NULL, the driver asserts and the chip panics — so this is the mask whose
+// free/largest values actually predict the SDIO assert.
+#define HEAP_DIAG_SDIO_RX_CAPS (MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA | MALLOC_CAP_8BIT)
+
+// One-shot guard: only the first failed allocation since boot dumps a
+// snapshot. Prevents recursive logging or flooding if many allocations fail
+// back-to-back during a heap-exhaustion cascade.
+static atomic_flag s_alloc_failed_fired = ATOMIC_FLAG_INIT;
+
+// Heap allocation-failed hook. Registered unconditionally; cost is zero
+// unless an allocation fails. Uses esp_rom_printf so it is safe from any
+// context (task, ISR, critical section). Calls heap_caps query functions,
+// which are documented safe from the failed-alloc callback because the
+// heap mutex is released before the hook is invoked.
+static void heap_diag_alloc_failed_hook(size_t size, uint32_t caps, const char *function_name)
+{
+    if (atomic_flag_test_and_set(&s_alloc_failed_fired)) {
+        return;
+    }
+    const char *task_name = xPortInIsrContext() ? "ISR" : pcTaskGetName(NULL);
+    if (!task_name) task_name = "?";
+
+    esp_rom_printf("\n*** HEAP ALLOC FAILED (one-shot snapshot) ***\n");
+    esp_rom_printf("  func=%s  size=%u  caps=0x%08x  task=%s\n",
+                   function_name ? function_name : "?",
+                   (unsigned)size, (unsigned)caps, task_name);
+    esp_rom_printf("  INT+DMA+8BIT (SDIO RX): free=%u largest=%u total=%u\n",
+                   (unsigned)heap_caps_get_free_size(HEAP_DIAG_SDIO_RX_CAPS),
+                   (unsigned)heap_caps_get_largest_free_block(HEAP_DIAG_SDIO_RX_CAPS),
+                   (unsigned)heap_caps_get_total_size(HEAP_DIAG_SDIO_RX_CAPS));
+    esp_rom_printf("  INTERNAL:               free=%u largest=%u\n",
+                   (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+                   (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
+    esp_rom_printf("  DMA:                    free=%u largest=%u\n",
+                   (unsigned)heap_caps_get_free_size(MALLOC_CAP_DMA),
+                   (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_DMA));
+    esp_rom_printf("  SPIRAM:                 free=%u largest=%u\n",
+                   (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM),
+                   (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
+    esp_rom_printf("  DEFAULT:                free=%u largest=%u\n",
+                   (unsigned)heap_caps_get_free_size(MALLOC_CAP_DEFAULT),
+                   (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT));
+    esp_rom_printf("*********************************************\n\n");
+}
+
+#if P3A_MEMORY_REPORT_ENABLED
+/**
+ * @brief Always-on periodic memory reporter.
+ *
+ * Every MEMORY_REPORT_INTERVAL_SECONDS this collects a memory snapshot and
+ * logs it to the console — behaving exactly as if GET /api/memory had been
+ * called, but without any HTTP interaction. The on-demand HTTP endpoint and
+ * this task funnel through the same mem_stats helpers, so their output is
+ * identical (the only difference is the "auto" vs "http" header tag).
+ */
+static void memory_report_task(void *arg)
+{
+    (void)arg;
+    const TickType_t delay_ticks = pdMS_TO_TICKS(MEMORY_REPORT_INTERVAL_SECONDS * 1000);
+
+    ESP_LOGI(TAG, "Memory reporting task started: will report every %d seconds", MEMORY_REPORT_INTERVAL_SECONDS);
+
+    // Wait a bit for the system to initialize before the first report.
+    vTaskDelay(pdMS_TO_TICKS(2000));
+
+    while (true) {
+        mem_stats_t st;
+        mem_stats_collect(&st);
+        mem_stats_log(&st, "auto");
+        vTaskDelay(delay_ticks);
+    }
+}
+#endif // P3A_MEMORY_REPORT_ENABLED
+
+static void handle_playback_event(const p3a_event_t *event, void *ctx)
+{
+    (void)ctx;
+    if (!event) return;
+
+    switch (event->type) {
+        case P3A_EVENT_SWAP_NEXT:
+            app_lcd_cycle_animation();
+            break;
+        case P3A_EVENT_SWAP_BACK:
+            app_lcd_cycle_animation_backward();
+            break;
+        case P3A_EVENT_PAUSE:
+            playback_service_pause();
+            break;
+        case P3A_EVENT_RESUME:
+            playback_service_resume();
+            break;
+        case P3A_EVENT_TOGGLE_PAUSE:
+            if (playback_service_is_paused()) {
+                playback_service_resume();
+            } else {
+                playback_service_pause();
+            }
+            break;
+        default:
+            break;
+    }
+}
+
+static void handle_system_event(const p3a_event_t *event, void *ctx)
+{
+    (void)ctx;
+    if (!event) return;
+
+    switch (event->type) {
+        case P3A_EVENT_WIFI_CONNECTED:
+            p3a_state_on_wifi_connected();
+            ugfx_ui_hide_captive_ap_info();
+            app_lcd_exit_ui_mode();
+            break;
+        case P3A_EVENT_SOFTAP_STARTED: {
+            static bool softap_info_shown = false;
+            if (!softap_info_shown) {
+                softap_info_shown = true;
+                app_lcd_enter_ui_mode();
+                ugfx_ui_show_captive_ap_info();
+            }
+            break;
+        }
+        case P3A_EVENT_WIFI_DISCONNECTED:
+            p3a_state_on_wifi_disconnected();
+            break;
+        case P3A_EVENT_MQTT_CONNECTED:
+            p3a_state_on_mqtt_connected();
+            break;
+        case P3A_EVENT_MQTT_DISCONNECTED:
+            p3a_state_on_mqtt_disconnected();
+            break;
+        case P3A_EVENT_REGISTRATION_CHANGED:
+            p3a_state_on_registration_changed(event->payload.i32 != 0);
+            break;
+        case P3A_EVENT_INTERNET_CHECK:
+            p3a_state_check_internet();
+            break;
+        default:
+            break;
+    }
+}
+
+static void reg_success_timer_cb(void *arg)
+{
+    (void)arg;
+    p3a_state_exit_to_playback();
+    app_lcd_exit_ui_mode();
+    ugfx_ui_hide_registration();
+    app_lcd_cycle_animation();
+    ESP_LOGI(TAG, "Registration success screen dismissed");
+}
+
+static void handle_makapix_state_event(const p3a_event_t *event, void *ctx)
+{
+    (void)ctx;
+    static bool s_ui_ready = false;
+    static makapix_state_t last_makapix_state = MAKAPIX_STATE_IDLE;
+
+    if (!event) return;
+
+    makapix_state_t current_makapix_state = (makapix_state_t)event->payload.i32;
+    if (current_makapix_state == last_makapix_state) {
+        return;
+    }
+
+    ESP_LOGD(TAG, "Makapix state changed: %d -> %d", last_makapix_state, current_makapix_state);
+
+    if (!s_ui_ready) {
+        esp_err_t err = ugfx_ui_init();
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to initialize µGFX UI: %s", esp_err_to_name(err));
+        } else {
+            s_ui_ready = true;
+        }
+    }
+
+    if (current_makapix_state == MAKAPIX_STATE_PROVISIONING) {
+        if (p3a_state_get() == P3A_STATE_ANIMATION_PLAYBACK) {
+            p3a_state_enter_provisioning();
+        }
+        p3a_state_set_provisioning_substate(P3A_PROV_STATUS);
+
+        app_lcd_enter_ui_mode();
+
+        char status[128];
+        if (makapix_get_provisioning_status(status, sizeof(status)) == ESP_OK) {
+            p3a_render_set_provisioning_status(status);
+            ugfx_ui_show_provisioning_status(status);
+        } else {
+            p3a_render_set_provisioning_status("Starting...");
+            ugfx_ui_show_provisioning_status("Starting...");
+        }
+        ESP_LOGD(TAG, "Provisioning UI displayed");
+    } else if (current_makapix_state == MAKAPIX_STATE_SHOW_CODE) {
+        p3a_state_set_provisioning_substate(P3A_PROV_SHOW_CODE);
+
+        char code[8];
+        char expires[64];
+        if (makapix_get_registration_code(code, sizeof(code)) == ESP_OK &&
+            makapix_get_registration_expires(expires, sizeof(expires)) == ESP_OK) {
+            p3a_render_set_provisioning_code(code, expires);
+            esp_err_t show_err = ugfx_ui_show_registration(code, expires);
+            if (show_err != ESP_OK) {
+                ESP_LOGE(TAG, "Failed to show registration UI: %s", esp_err_to_name(show_err));
+            }
+            ESP_LOGI(TAG, "============================================");
+            ESP_LOGI(TAG, "   REGISTRATION CODE: %s", code);
+            ESP_LOGI(TAG, "   Expires: %s", expires);
+            ESP_LOGI(TAG, "   Enter at makapix.club");
+            ESP_LOGI(TAG, "============================================");
+        }
+    } else if ((last_makapix_state == MAKAPIX_STATE_PROVISIONING || last_makapix_state == MAKAPIX_STATE_SHOW_CODE) &&
+               current_makapix_state != MAKAPIX_STATE_PROVISIONING && current_makapix_state != MAKAPIX_STATE_SHOW_CODE) {
+        bool still_in_ui = app_lcd_is_ui_mode();
+        if (still_in_ui && current_makapix_state == MAKAPIX_STATE_CONNECTING) {
+            // Registration succeeded — show success screen for 10 seconds
+            ugfx_ui_show_registration_success();
+
+            // Create timer lazily
+            if (!s_reg_success_timer) {
+                const esp_timer_create_args_t args = {
+                    .callback = reg_success_timer_cb,
+                    .name = "reg_success",
+                };
+                esp_timer_create(&args, &s_reg_success_timer);
+            }
+            esp_timer_start_once(s_reg_success_timer, 10 * 1000 * 1000);  // 10 seconds
+            ESP_LOGI(TAG, "Registration successful, showing success screen for 10s");
+        } else if (still_in_ui) {
+            // Manual cancel or other non-success transition
+            p3a_state_exit_to_playback();
+            app_lcd_exit_ui_mode();
+            ugfx_ui_hide_registration();
+            app_lcd_cycle_animation();
+            ESP_LOGD(TAG, "Registration mode exited (cancelled)");
+        } else {
+            // UI already dismissed
+            app_lcd_cycle_animation();
+            ESP_LOGD(TAG, "Registration mode exited (cleanup already done)");
+        }
+    }
+
+    last_makapix_state = current_makapix_state;
+}
+
+static void handle_provisioning_status_event(const p3a_event_t *event, void *ctx)
+{
+    (void)ctx;
+    if (!event) return;
+
+    const char *status = (const char *)event->payload.ptr;
+    if (!status || status[0] == '\0') {
+        return;
+    }
+
+    p3a_render_set_provisioning_status(status);
+    ugfx_ui_show_provisioning_status(status);
+}
+
+#if DEBUG_PROVISIONING_ENABLED
+/**
+ * @brief Debug task that toggles in/out of debug provisioning mode every 5 seconds
+ * Does not make any API calls - displays mock registration code using µGFX
+ */
+static void debug_provisioning_task(void *arg)
+{
+    (void)arg;
+    bool in_debug_mode = false;
+    static const char *mock_code = "DBG123";
+    static const char *mock_expires = "2099-12-31T23:59:59Z";
+
+    ESP_LOGD(TAG, "Debug provisioning task started (toggle every %d ms)", DEBUG_PROVISIONING_TOGGLE_MS);
+
+    // Wait for LCD to be initialized
+    while (!app_lcd_get_panel_handle()) {
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+    
+    // Initialize µGFX once (framebuffer will be set when entering UI mode)
+    esp_err_t err = ugfx_ui_init();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize µGFX UI: %s", esp_err_to_name(err));
+        return;
+    }
+    ESP_LOGD(TAG, "µGFX initialized, debug task ready");
+
+    while (true) {
+        vTaskDelay(pdMS_TO_TICKS(DEBUG_PROVISIONING_TOGGLE_MS));
+
+        in_debug_mode = !in_debug_mode;
+
+        if (in_debug_mode) {
+            ESP_LOGD(TAG, ">>> ENTERING DEBUG PROVISIONING MODE <<<");
+            
+            // Enter UI mode - this gets the framebuffer and sets it for µGFX
+            err = app_lcd_enter_ui_mode();
+            if (err != ESP_OK) {
+                ESP_LOGE(TAG, "Failed to enter UI mode: %s", esp_err_to_name(err));
+                continue;
+            }
+            
+            // Show µGFX registration screen
+            err = ugfx_ui_show_registration(mock_code, mock_expires);
+            if (err != ESP_OK) {
+                ESP_LOGE(TAG, "Failed to show registration UI: %s", esp_err_to_name(err));
+            }
+            
+            // Log mock registration info
+            ESP_LOGD(TAG, "[DEBUG] Registration code: %s (expires: %s)", mock_code, mock_expires);
+        } else {
+            ESP_LOGD(TAG, ">>> EXITING DEBUG PROVISIONING MODE <<<");
+            // Exit UI mode FIRST, then hide registration
+            // This ensures animation takes over immediately without an intermediate black frame
+            app_lcd_exit_ui_mode();
+            ugfx_ui_hide_registration();
+        }
+    }
+}
+#endif
+
+void app_main(void)
+{
+    ESP_LOGI(TAG, "Starting p3a");
+
+    // Route cJSON's allocator to PSRAM (internal fallback) before ANY cJSON
+    // parse runs (config_store, boot-playset restore, refresh paging). Safe
+    // here: PSRAM heap is already up (CONFIG_SPIRAM_BOOT_INIT=y) and no cJSON
+    // runs before app_main(). Keeps the large transient JSON parse trees out of
+    // the DMA-capable internal pool that esp_hosted SDIO RX needs — see
+    // docs/known-issues.md, "SDIO RX: internal-RAM exhaustion" (Option E).
+    // free() is heap-region-aware, so it releases PSRAM and internal blocks
+    // correctly.
+    cJSON_InitHooks(&(cJSON_Hooks){ .malloc_fn = cjson_psram_malloc, .free_fn = free });
+
+    // Arm the heap allocation-failed hook as early as possible — well before
+    // WiFi / esp_hosted / SDIO come up. Cost is one function-pointer slot;
+    // the hook only runs when an allocation returns NULL. The first such
+    // failure dumps a one-shot snapshot via esp_rom_printf so the log lands
+    // even if it happens immediately before a driver-level assert/panic.
+    {
+        esp_err_t hook_err = heap_caps_register_failed_alloc_callback(heap_diag_alloc_failed_hook);
+        if (hook_err != ESP_OK) {
+            ESP_LOGW(TAG, "heap_caps_register_failed_alloc_callback failed: %s",
+                     esp_err_to_name(hook_err));
+        }
+    }
+
+    // Suppress harmless I2C pull-up warning (board has external pull-ups)
+    esp_log_level_set("i2c.master", ESP_LOG_ERROR);
+
+    // ESP-IDF logs an info line per validated TLS chain ("Certificate
+    // validated"). With Giphy refresh, Makapix MQTT, art-institution
+    // refresh/resolve/download all in flight that fires several times a
+    // minute and crowds out the actually-useful messages. Warnings and
+    // errors (chain rejection, missing root, etc.) still come through.
+    esp_log_level_set("esp-x509-crt-bundle", ESP_LOG_WARN);
+
+    // Initialize NVS
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
+
+#if CONFIG_P3A_FORCE_FRESH_NVS
+    // Debug: Erase p3a NVS namespaces to simulate fresh boot
+    ESP_LOGW(TAG, "CONFIG_P3A_FORCE_FRESH_NVS enabled - erasing p3a NVS namespaces");
+    fresh_boot_erase_nvs();
+#endif
+
+    // Set timezone to UTC for consistent timestamps (logging, MQTT, etc.)
+    setenv("TZ", "UTC", 1);
+    tzset();
+    ESP_LOGD(TAG, "Timezone set to UTC");
+
+    // Initialize SDIO bus coordinator early
+    // This provides mutual exclusion for SDIO operations (WiFi and SD card)
+    esp_err_t sdio_err = sdio_bus_init();
+    if (sdio_err != ESP_OK) {
+        ESP_LOGW(TAG, "SDIO bus coordinator init failed: %s (continuing anyway)", esp_err_to_name(sdio_err));
+    }
+
+    // Initialize unified p3a state machine (must be after NVS)
+    // This loads the remembered channel and sets initial state
+    esp_err_t state_err = p3a_state_init();
+    if (state_err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize p3a state machine: %s", esp_err_to_name(state_err));
+        // Continue anyway - state machine will use defaults
+    }
+
+    // Initialize event bus (core decoupling mechanism)
+    esp_err_t bus_err = event_bus_init();
+    if (bus_err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize event bus: %s", esp_err_to_name(bus_err));
+    } else {
+        event_bus_subscribe(P3A_EVENT_SWAP_NEXT, handle_playback_event, NULL);
+        event_bus_subscribe(P3A_EVENT_SWAP_BACK, handle_playback_event, NULL);
+        event_bus_subscribe(P3A_EVENT_PAUSE, handle_playback_event, NULL);
+        event_bus_subscribe(P3A_EVENT_RESUME, handle_playback_event, NULL);
+        event_bus_subscribe(P3A_EVENT_TOGGLE_PAUSE, handle_playback_event, NULL);
+
+        event_bus_subscribe(P3A_EVENT_WIFI_CONNECTED, handle_system_event, NULL);
+        event_bus_subscribe(P3A_EVENT_WIFI_DISCONNECTED, handle_system_event, NULL);
+        event_bus_subscribe(P3A_EVENT_MQTT_CONNECTED, handle_system_event, NULL);
+        event_bus_subscribe(P3A_EVENT_MQTT_DISCONNECTED, handle_system_event, NULL);
+        event_bus_subscribe(P3A_EVENT_REGISTRATION_CHANGED, handle_system_event, NULL);
+        event_bus_subscribe(P3A_EVENT_INTERNET_CHECK, handle_system_event, NULL);
+        event_bus_subscribe(P3A_EVENT_SOFTAP_STARTED, handle_system_event, NULL);
+
+        event_bus_subscribe(P3A_EVENT_MAKAPIX_STATE_CHANGED, handle_makapix_state_event, NULL);
+        event_bus_subscribe(P3A_EVENT_PROVISIONING_STATUS_CHANGED, handle_provisioning_status_event, NULL);
+    }
+
+    // Initialize channel cache subsystem (LAi persistence, debounced saves)
+    esp_err_t cache_err = content_service_init();
+    if (cache_err != ESP_OK) {
+        ESP_LOGW(TAG, "content_service_init failed: %s", esp_err_to_name(cache_err));
+    }
+
+    // Initialize play_scheduler (the deterministic playback engine)
+    esp_err_t ps_err = playback_service_init();
+    if (ps_err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize playback service: %s", esp_err_to_name(ps_err));
+    }
+
+    // Validate OTA boot early - this must be done before any complex operations
+    // If running a new OTA firmware, this marks it as valid to prevent rollback
+    esp_err_t ota_err = ota_manager_validate_boot();
+    if (ota_err != ESP_OK) {
+        ESP_LOGW(TAG, "OTA boot validation issue: %s", esp_err_to_name(ota_err));
+    }
+
+    // Initialize network interface and event loop
+    ESP_ERROR_CHECK(esp_netif_init());
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
+
+    // Initialize LittleFS filesystem
+    esp_err_t fs_ret = p3a_board_littlefs_mount();
+    if (fs_ret != ESP_OK) {
+        ESP_LOGW(TAG, "LittleFS initialization failed: %s (continuing anyway)", esp_err_to_name(fs_ret));
+    } else {
+        // Check web UI partition health (sets s_webui_healthy flag)
+        p3a_board_littlefs_check_health();
+    }
+
+    // Initialize Makapix module early (after LittleFS mount, before animation player/channel load).
+    // This ensures Makapix API layer is ready before any Makapix channel refresh tasks may start.
+    ESP_ERROR_CHECK(makapix_init());
+
+    // Jitter work stream (docs/jitter): no-op unless CONFIG_P3A_FRAME_TRACE.
+    frame_trace_init();
+
+    // Initialize LCD and touch
+    ESP_ERROR_CHECK(app_lcd_init());
+    {
+        esp_err_t touch_err = app_touch_init();
+        if (touch_err == ESP_ERR_NOT_FINISHED) {
+            ESP_LOGW(TAG, "Touch disabled (degraded mode) - continuing boot without touch");
+        } else if (touch_err != ESP_OK && touch_err != ESP_ERR_NOT_SUPPORTED) {
+            ESP_LOGE(TAG, "Touch init failed: %s (continuing without touch)", esp_err_to_name(touch_err));
+        }
+    }
+
+    // Initialize the pinned-artworks vault. Deferred to here (rather than
+    // content_service_init) because pin_lists creates files under
+    // {sd-root}/pinned/, which requires the SD card to be mounted and
+    // sd_path_ensure_directories() to have run. Both happen inside
+    // app_lcd_init -> animation_player_init. Non-fatal on failure —
+    // pinning will be unavailable but the rest of the app continues.
+    esp_err_t pl_err = pin_lists_init();
+    if (pl_err != ESP_OK) {
+        ESP_LOGW(TAG, "pin_lists_init failed: %s", esp_err_to_name(pl_err));
+    }
+
+    // Restore the previously-active playset. Deferred until after pin_lists_init
+    // so a PS_CHANNEL_TYPE_PINNED snapshot can load its order.bin successfully.
+    // Falls back to channel_promoted on any failure.
+    esp_err_t restore_err = animation_player_restore_boot_playset();
+    if (restore_err != ESP_OK) {
+        ESP_LOGW(TAG, "Boot playset restore returned: %s", esp_err_to_name(restore_err));
+    }
+
+#if P3A_HAS_BUTTONS
+    // Initialize BOOT button for pause/resume toggle
+    ESP_ERROR_CHECK(p3a_board_button_init());
+#endif
+
+    // Initialize state-aware rendering (after display is ready)
+    esp_err_t render_err = p3a_render_init();
+    if (render_err != ESP_OK) {
+        ESP_LOGW(TAG, "p3a_render_init failed: %s (continuing anyway)", esp_err_to_name(render_err));
+    }
+
+    ESP_ERROR_CHECK(app_usb_init());
+
+    // Phase 7: auto_swap_task removed - timer task now in play_scheduler
+
+#if P3A_MEMORY_REPORT_ENABLED
+    // Create the always-on periodic memory reporting task (logs a full heap
+    // breakdown every MEMORY_REPORT_INTERVAL_SECONDS; same data as the on-demand
+    // GET /api/memory endpoint). 4 KB stack covers the %f formatting in mem_stats_log.
+    const BaseType_t mem_task_created = xTaskCreate(memory_report_task, "mem_report", 4096, NULL,
+                                                    tskIDLE_PRIORITY + 1, NULL);
+    if (mem_task_created != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create memory reporting task");
+    }
+#endif // P3A_MEMORY_REPORT_ENABLED
+
+    // Initialize Wi-Fi (will start captive portal if needed, or connect to saved network)
+    ESP_ERROR_CHECK(connectivity_service_init());
+
+    // Initialize show-url module (download task for show_url command)
+    esp_err_t show_url_err = show_url_init();
+    if (show_url_err != ESP_OK) {
+        ESP_LOGW(TAG, "show_url_init failed: %s (show-url command unavailable)", esp_err_to_name(show_url_err));
+    }
+
+    // Check and update ESP32-C6 co-processor firmware if needed
+    // This uses the ESP-Hosted OTA feature to update the WiFi chip.
+    // Hand slave_ota the predicate it should use to detect USB-MSC activity
+    // (USB and the C6 share the SDIO bus — running OTA during MSC export risks
+    // contention). The function tolerates slave_ota being called before
+    // registration, so app_usb_is_stream_active is safe to register here.
+    slave_ota_set_usb_busy_check(app_usb_is_stream_active);
+    esp_err_t slave_ota_err = slave_ota_check_and_update();
+    if (slave_ota_err != ESP_OK && slave_ota_err != ESP_ERR_NOT_FOUND) {
+        ESP_LOGW(TAG, "Slave OTA check failed: %s (continuing anyway)", esp_err_to_name(slave_ota_err));
+    }
+
+    // NOTE: boot-time channel restore happens earlier during animation player initialization,
+    // so the first animation shown is already from the last remembered channel.
+
+    // Initialize OTA manager - starts periodic update checks
+    // (checks are skipped if WiFi is not connected)
+    esp_err_t ota_init_err = ota_manager_init();
+    if (ota_init_err != ESP_OK) {
+        ESP_LOGW(TAG, "OTA manager init failed: %s (OTA updates disabled)", esp_err_to_name(ota_init_err));
+    }
+
+#if DEBUG_PROVISIONING_ENABLED
+    // Debug mode: toggle provisioning every 5 seconds without API calls
+    ESP_LOGW(TAG, "DEBUG PROVISIONING MODE ENABLED - toggling every %d ms", DEBUG_PROVISIONING_TOGGLE_MS);
+    xTaskCreate(debug_provisioning_task, "debug_prov", 4096, NULL, 5, NULL);
+#else
+    // Production: Makapix UI transitions are event-driven (event bus)
+#endif
+
+    ESP_LOGI(TAG, "p3a ready: tap the display to cycle animations (auto-swap enabled)");
+}

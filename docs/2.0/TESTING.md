@@ -54,7 +54,7 @@ listing parser fed with recorded responses.
   table.
 - Forbidden in project code: `__attribute__((weak))`, `WHOLE_ARCHIVE`,
   includes from `main/`, anything from `legacy/`.
-- The silicon-revision lines are present in the `sdkconfig` in use.
+- The generated `sdkconfig` shows `CONFIG_ESP32P4_REV_MIN_FULL=1`.
 - A release build contains no test-hook symbols.
 
 ### T3 Device tests
@@ -113,13 +113,13 @@ failed check reopens that milestone.
 
 | Configuration | sdkconfig | Use |
 |---|---|---|
-| Release | the tracked `sdkconfig` | What ships. No test or trace code |
+| Release | `sdkconfig.defaults` | What ships. No test or trace code |
 | Test | release plus `sdkconfig.test.defaults` | Device tests. Adds `CONFIG_P3A_TEST_HOOKS` |
 | Trace | release plus `sdkconfig.trace.defaults` | The jitter pass bar |
 | Diag | release plus `sdkconfig.diag.defaults` | Investigating a regression |
 
-Overlay builds go to their own build directories and never modify the
-tracked `sdkconfig`, as in the jitter work. The dev unit normally runs the
+Overlay builds go to their own build directories with their own generated
+`sdkconfig`, as in the jitter work. The dev unit normally runs the
 test build.
 
 ### Test hooks

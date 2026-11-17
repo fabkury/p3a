@@ -8,26 +8,22 @@ times.
 
 | | |
 |---|---|
-| Phase | Foundations laid. Building has not started |
-| Current milestone | None. M0.1 is first |
-| Next action | Wait for Fab's go. Then start M0.1 (tree reset and empty app) in [PLAN.md](PLAN.md) |
-| Blocked on | Fab's go to start building |
+| Phase | 0, tooling |
+| Current milestone | M0.2 Host test harness |
+| Next action | Create `tests/host/` with Unity, CMake and CTest, a FreeRTOS stub, and one real test; run it with MinGW and in WSL |
+| Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
-
-Before M0.4 can provision the unit unattended, Fab needs to put the Wi-Fi
-password into `%USERPROFILE%\.p3a-lab\secrets.json` (the `FILL-ME-IN` value).
-Nothing before M0.4 needs it.
 
 ## Dev unit
 
 | | |
 |---|---|
-| Running | 1.2.4 release build of 2026-10-02, untouched by this work stream so far |
-| Last flashed by this stream | Never |
+| Running | `2.0.0-dev` empty app (M0.1), release configuration, flashed 2026-11-17 after a full erase |
+| Flash state | Bootloader, 2.x partition table, app in `ota_0`. NVS empty. `slave_fw` empty (the C6 keeps its own firmware, 2.7.0 as last reported by 1.x) |
 | SD card | 32 GB, healthy (D8). Still holds 1.x content under `/p3a2`; to be wiped at M0.4 or M1.3 |
 | 1.x flash backup | `%USERPROFILE%\.p3a-lab\backups\p3a-fab_v1.2.4_full-flash_2026-11-17.bin` (see the session log for size and hash) |
-| Secrets file | Created 2026-11-17 with the four API keys read from the unit; Wi-Fi password still to be filled in by Fab |
+| Secrets file | Complete: four API keys read from the unit, Wi-Fi password filled in by Fab |
 
 ## Milestones
 
@@ -36,8 +32,8 @@ reopened (why).
 
 | Milestone | Status |
 |---|---|
-| M0.1 Tree reset and empty app | not started |
-| M0.2 Host test harness | not started |
+| M0.1 Tree reset and empty app | done 2026-11-17. Tiers: local release build; flashed, boot log read over UART. No CI yet (M0.3), no test configuration yet (M0.4) |
+| M0.2 Host test harness | in progress |
 | M0.3 Continuous integration | not started |
 | M0.4 Device lab | not started |
 | M1.1 util | not started |
@@ -102,7 +98,7 @@ and proposals are in [DECISIONS.md](DECISIONS.md) under "Open decisions".
 | O14 | A second board for the field test | M6.3 |
 | O13 | How `v2` becomes `main` | M6.4 |
 
-The remaining open decisions (O7 to O11) may be taken as working decisions
+The remaining open decisions (O7 to O10) may be taken as working decisions
 by the agent and are reported when taken.
 
 ## Ports from main
@@ -124,12 +120,73 @@ it concerns should not exist; confirm at M4.1 and mark it not applicable.
 What was deleted from `legacy/` without being moved, and why. Filled from
 M0.1 on.
 
-- Nothing yet.
+M0.1, 2026-11-17 (paths relative to the 1.x tree):
+
+- PICO-8 (decision C5): `components/pico8/`, `webui/pico8/`,
+  `components/http_api/http_api_pico8.c` and `pico8_logo_data.h`,
+  `main/playback_controller.c` and its header,
+  `scripts/convert_pico8_logo.py`.
+- Dead code (finding 23): `components/content_cache/`,
+  `components/playback_queue/`; in `channel_manager`: `channel_interface.h`,
+  `sdcard_channel_impl.c/.h`, `playlist_manager.c/.h`,
+  `channel_settings.c/.h`; in `makapix`: `makapix_channel_switch.c`,
+  `makapix_single_artwork.c`. `makapix_channel_switch.c` also held the live
+  `makapix_show_artwork`, a thin call into the scheduler; M4.5 writes its
+  equivalent.
+- Forwarding services (finding 13): `main/connectivity_service.c`,
+  `content_service.c`, `render_engine.c` and their headers.
+- Web UI update stack (change A):
+  `components/ota_manager/ota_manager_webui.c`,
+  `components/http_api/surrogate_ui.h`, `webui/static/compat.js` and
+  `compat.js.in`, `webui/metadata.json`.
+
+Dead functions inside files that are otherwise live were not hunted down;
+they are simply not moved when their file is.
 
 ## Session log
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-17: M0.1 tree reset and empty app
+
+- Fab filled in the Wi-Fi password, approved pushing `main` (pushed), and
+  gave the go.
+- Moved the 1.x tree to `legacy/` with `git mv` (`components/`, `main/`,
+  `webui/`, the root build files, the sdkconfig files, `flasher/`), and the
+  untracked `managed_components/` with it. Deleted what never moves; see the
+  deletion log.
+- New root project: `CMakeLists.txt` (version `2.0.0-dev`), `main/p3a_main.c`
+  (prints version and chip revision), the D1 `partitions.csv`,
+  `sdkconfig.defaults`.
+- Decision D21 (closes O11): the configuration is `sdkconfig.defaults`, and
+  `sdkconfig` is generated and untracked. Found while doing it: a tracked
+  full `sdkconfig` in a tree without esp_hosted would silently lose the
+  esp_hosted and BSP settings on its first regeneration, and they would come
+  back as defaults at M1.2. `idf.py save-defconfig` on the 1.x project
+  reduced its configuration to 60 lines; the 2.0 file keeps the IDF-level
+  ones and parks the BSP, esp_hosted and TinyUSB ones, commented, under
+  their milestones.
+- Verified, local release build: builds with no warnings; image 226 KB in a
+  10 MB slot; the generated `sdkconfig` has `ESP32P4_REV_MIN_FULL=1`.
+- Verified, on the dev unit: erased the flash, flashed, reset, read the UART
+  log. The bootloader lists the eight 2.x partitions at the D1 offsets and
+  finds 32 MB of PSRAM; the app prints `p3a 2.0.0-dev` and
+  `chip rev v1.0, 2 cores`. No errors in the log.
+- `AGENTS.md` rewritten for the new tree; `legacy/README.md` added;
+  `host/intro-anim-lab/build.ps1` repointed at `legacy/` (not rebuilt).
+- Facts for later milestones:
+  - The shipped 1.x configuration set `P3A_RENDER_TASK_PRIORITY` and
+    `P3A_TOUCH_TASK_PRIORITY` to 5, not the Kconfig defaults of 8 and 6 that
+    the review quotes. M1.1 takes the task classes' priorities from what
+    shipped.
+  - `HTTPD_WS_SUPPORT` was only for PICO-8 and is not carried.
+  - The repository is reachable through two paths on this workstation, and
+    a build directory configured through one refuses the other. The old
+    `build/` had been configured through the non-Dropbox path and was
+    deleted.
+  - `host/jitter-lab/build.ps1` now builds the 2.0 app and its guards will
+    fail; `host/p3a-lab/` replaces it at M0.4 and the lab is adapted at M2.1.
 
 ### 2026-11-17: foundations
 

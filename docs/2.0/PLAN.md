@@ -77,9 +77,8 @@ Everything the build needs before the first line of 2.0 firmware matters.
   of finding 23, the three forwarding services (finding 13). Record the
   deletion list in the ledger.
 - New root project: `main/` with `app_main` only, an empty `components/`,
-  version `2.0.0-dev`, the D1 partition table, an `sdkconfig` reduced to what
-  an empty app on this board needs with the silicon-revision guard intact
-  (O11).
+  version `2.0.0-dev`, the D1 partition table, a `sdkconfig.defaults` seeded from the 1.x configuration with
+  the silicon-revision guard intact (D21).
 - Erase the dev unit and flash the empty app. The 1.x flash backup already
   exists (see the ledger).
 - Rewrite the architecture half of `AGENTS.md` on `v2` for the new tree.

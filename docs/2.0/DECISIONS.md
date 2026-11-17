@@ -47,6 +47,7 @@ Set before the architecture review and taken as given by everything since.
 | D18 | 2026-11-17 | Working | Version string is `2.0.0-dev` until the release commit. One version number; `WEBUI_VERSION` and `P3A_API_VERSION` are not carried over | Change A removes the reason for the other two |
 | D19 | 2026-11-17 | Working | Test tooling: Unity with CMake and CTest for host tests, pytest for device tests, `node --test` for web UI logic, GitHub Actions for CI. Details in [TESTING.md](TESTING.md) | All are already installed or dependency-free |
 | D20 | 2026-11-17 | Working | A fresh unit is provisioned for tests over UART by a console that exists only in test builds. Credentials are never compiled into a binary | Build output sits inside the Dropbox-synced repo folder (D7) |
+| D21 | 2026-11-17 | Working | The build configuration is `sdkconfig.defaults`; `sdkconfig` is generated and untracked. Options for components not yet in the tree are parked in that file, commented, under their milestone. Closes O11 | A tracked full `sdkconfig` would silently drop the esp_hosted and BSP settings while those components are absent, and bring them back as defaults later |
 
 ## 1.x decisions that stay in force
 
@@ -117,7 +118,6 @@ are not missed.
 | O8 | What the event bus is for, written as a rule | M1.1 | Working decision allowed; the review proposes fan-out only |
 | O9 | The internal-RAM measures from `docs/known-issues.md`: packet mode, refresh concurrency, the Option E items, load shedding thresholds | M4.1 | Needs measurements on the 2.0 build, then a soak |
 | O10 | A wall-clock budget for slow software JPEG decodes, and what a timed-out image becomes | M2.4 | The `NOT_PLAYABLE` error gives it a clean home |
-| O11 | Tracked full `sdkconfig` as in 1.x, or `sdkconfig.defaults` with a generated file | M0.1 | Working decision allowed. The silicon-revision and esp_hosted traps argue for keeping the tracked file at first |
 | O12 | OTA hardening from audit item M23: post-boot self-test before marking an image valid, anti-rollback, minimum-version gate | M5.2 | |
 | O13 | How `v2` becomes `main` at release: merge, or replace | M6.4 | |
 | O14 | A second unit for the end-to-end field test (web flasher on a fresh board) | M6.3 | Needs hardware from Fab |

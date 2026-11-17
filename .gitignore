@@ -30,3 +30,8 @@ __pycache__/
 
 # Release-config build output (see AGENTS.md build notes)
 build-rel/
+
+# p3a 2.0: sdkconfig is generated from sdkconfig.defaults
+/sdkconfig
+/sdkconfig.old
+/build-*/

@@ -12,10 +12,9 @@ keep it accurate and keep it short.
 stands, what comes next, and the rules of the work stream. Record progress
 there as part of every step.
 
-Until milestone M0.1 resets the tree, the code on this branch is still the
-1.x code, and the architecture, storage, versioning and release sections
-below describe it. From M0.1 on, this file is updated in the same commit as
-the tree it describes.
+This file describes the tree as it is on `v2` today and changes in the same
+commit as the tree. For 1.x (its architecture, release process and web UI
+versioning) read `AGENTS.md` on `main`.
 
 ## Project overview
 
@@ -29,10 +28,8 @@ Target hardware is the Waveshare ESP32-P4-WIFI6-Touch-LCD-4B: 720x720 IPS
 display (24-bit, MIPI-DSI), GT911 capacitive touch, 32 MB PSRAM, 32 MB flash,
 and an ESP32-C6 Wi-Fi 6 co-processor reached through esp_hosted over SDIO.
 
-The firmware is public (Apache 2.0) and runs on real users' devices, which
-receive updates over the air from GitHub Releases once their owner approves
-the install in the web UI (nothing installs unattended). Treat `main` as
-production.
+The firmware is public (Apache 2.0). 1.x runs on real users' devices from
+`main`; 2.0 has not shipped and runs only on the dev unit.
 
 ## Ground rules
 
@@ -44,31 +41,55 @@ production.
   you flash. Every other unit gets firmware through GitHub Releases, and the
   user cuts those.
 - **Say what was tested.** A change that has not run on the device is
-  unverified. Report how far each change got (built only, flashed and
-  exercised, soaked) and what was left untested. Do not describe untested work
-  as done, working, or verified.
+  unverified. Report how far each change got and name the tier
+  (`docs/2.0/TESTING.md`): host tests, CI build, device tests, soak, manual.
+  Do not describe untested work as done, working, or verified.
 - **Clarifying questions are always welcome.** Ask when different readings of a
   request would lead to materially different work.
 
 ## Branches
 
 - `main` is the 1.x line and is production. It takes critical fixes only. One
-  more release is planned, 1.2.5: what is already on `main` plus the lock-order
-  fix from the 2.0 review (finding 25). No new 1.x features.
+  more release is planned, 1.2.5. 2.0 work never touches `main`.
 - `v2` is p3a 2.0, a clean break with no OTA path from 1.x (2.0 is installed
-  over USB). All 2.0 work happens on that branch, and its work-stream
-  documents live there in `docs/2.0/`; start with `docs/2.0/README.md`. A fix
-  made on `main` reaches 2.0 only if it is ported by hand.
+  over USB). A fix made on `main` reaches 2.0 only if it is ported by hand;
+  the ledger keeps the list.
+
+## The tree
+
+| Path | What |
+|------|------|
+| `CMakeLists.txt`, `main/`, `components/` | The 2.0 firmware. `main/` holds `app_main` and the boot sequence only. `components/` appears with the first 2.0 component (M0.4 or M1.1). |
+| `partitions.csv` | The 2.x partition table, fixed for the life of 2.x (`docs/2.0/DECISIONS.md` D1). |
+| `sdkconfig.defaults` | The build configuration and its source of truth. `sdkconfig` is generated and not tracked. |
+| `legacy/` | The 1.x sources, kept as the quarry 2.0 is built from. Never compiled, never included, never linked. See `legacy/README.md`. |
+| `docs/2.0/` | The work stream: protocol, plan, ledger, decisions, testing, parity. |
+| `docs/2.0-architecture-review/` | The design of 2.0. |
+| `host/` | Host tooling. `intro-anim-lab` builds from `legacy/` until M3.3. `jitter-lab` targets 1.x endpoints and the 1.x build; it is adapted at M2.1. |
+| `docs/` (the rest), `README.md` | Still describe 1.x. They are rewritten in one pass at M5.4; do not patch them piecemeal. |
+
+### Layers
+
+2.0 components belong to layers, and a component may depend only on layers
+below its own. Bottom to top: `util`, `board`, `storage`, `sources`,
+`library`, `player`, `ui`, `net`, `main`. Every dependency is a `REQUIRES`.
+`WHOLE_ARCHIVE`, `__attribute__((weak))`, and including a header from `main/`
+or anything from `legacy/` are forbidden. What each layer holds is in
+`docs/2.0/PLAN.md`.
+
+### Moving code out of `legacy/`
+
+Code leaves `legacy/` only inside a milestone: `git mv` it into the new tree,
+strip its upward includes, check `docs/known-issues.md` for that file and
+fix or re-record what it lists, and land it with tests at the tier the
+milestone names. Deleting a legacy file without moving it goes in the
+ledger's deletion log with the reason.
 
 ## Toolchain and environment
 
 - ESP-IDF v5.5.4, target `esp32p4`, developed on Windows with PowerShell.
   Setting up a new machine: `docs/reference/esp-idf-5.5.4-setup.md`.
-- The ESP32-C6 image `network_adapter.bin` is a prebuilt binary in
-  `components/slave_ota/firmware/`; `slave_ota` flashes it into the P4's
-  `slave_fw` partition. It is not built by this project.
-- Activate the IDF environment once per shell session and reuse that session.
-  Re-sourcing the profile for every command leaves stray shells behind.
+- Activate the IDF environment in the same command as the build:
 
   ```powershell
   $env:PYTHONUTF8 = "1"          # IDF's Python tooling raises Unicode errors on Windows without it
@@ -80,174 +101,70 @@ production.
   exports the full version, but official IDF 5.5.x activation exports
   major.minor, and `esp_wifi_remote`'s Kconfig keys its version fragments on
   that convention. With the wrong value the fragment silently loads nothing,
-  `sdkconfig` regenerates with esp_hosted on SPI and an "invalid" slave target,
-  and the build dies with `#error "Unknown Slave Target"` deep inside
-  esp_hosted. Recovery: `git checkout -- sdkconfig dependencies.lock`, delete
-  `build/`, set the variable, rebuild.
+  `sdkconfig` is generated with esp_hosted on SPI and an "invalid" slave
+  target, and the build dies with `#error "Unknown Slave Target"` deep inside
+  esp_hosted. This bites from the milestone that brings esp_hosted back
+  (M1.2). Recovery: delete `sdkconfig` and `build/`, set the variable,
+  rebuild.
 - **Silicon revision guard.** The board's ESP32-P4 is silicon rev v1.0.
-  `CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y` and `CONFIG_ESP32P4_REV_MIN_1=y` must
-  survive every `sdkconfig` regeneration: from IDF 5.5.2 the default is rev
-  3.01 only, and the bootloader rejects such images on this board. If a
-  regeneration diff touches `ESP32P4_REV_MIN_FULL`, stop and restore it.
+  `CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y` and `CONFIG_ESP32P4_REV_MIN_1=y` in
+  `sdkconfig.defaults` must never be removed, and the generated `sdkconfig`
+  must show `CONFIG_ESP32P4_REV_MIN_FULL=1`: from IDF 5.5.2 the default is
+  rev 3.01 only, and the bootloader rejects such images on this board.
+- **`sdkconfig.defaults` is edited, `sdkconfig` is not.** Defaults apply only
+  when `sdkconfig` is created, so delete `sdkconfig` after editing the
+  defaults file. A setting changed through `menuconfig` is lost unless it is
+  copied into `sdkconfig.defaults`. Options for components that 2.0 has not
+  brought in yet are parked, commented, at the bottom of the file under the
+  milestone that enables them.
 - **Run `idf.py` from the repository root**, with the directory change in the
   same command. `idf.py` treats the current directory as the project; run from
   inside a component it configures that component as a standalone project and
   leaves a stray `build/` directory there.
-- Serial ports differ by machine and by unit. Ask rather than assume. The
-  jitter lab's `host/jitter-lab/find_port.ps1` probes for the board, and its
-  `serial_logger.py` captures logs without resetting it.
+- The repository is also reachable through a second path on this workstation
+  (`C:\Users\fab\F\...`). A build directory configured through one path
+  refuses the other; always use the Dropbox path.
+- The dev unit, its serial port, the secrets file and the 1.x flash backup
+  are described in `docs/2.0/README.md` under "Environment".
 
 ## Build commands
 
 ```powershell
 Set-Location <repo root>               # in the same command as idf.py, every time
-idf.py set-target esp32p4              # first time only
 idf.py build
-idf.py flash monitor                   # slave_ota appends --force to flash_args so esptool v5 accepts network_adapter.bin
-idf.py menuconfig
+idf.py -p COM5 flash
+idf.py -p COM5 erase-flash
 idf.py fullclean
-idf.py build -DP3A_BUILD_FLASHER=ON    # release build: also produces p3a-flasher.exe (Windows host only)
 ```
 
-- Build output goes to `build/`. Every successful build also populates
-  `release/v{PROJECT_VER}/` (git-ignored) with the binaries, `.sha256`
-  checksums, `flash_args`, `flash_command.txt`, `manifest.json`, and a README.
-  Building while `PROJECT_VER` still equals a shipped release overwrites that
-  release's local folder.
-- `P3A_BUILD_FLASHER` persists in the CMake cache. After a release build, pass
-  `-DP3A_BUILD_FLASHER=OFF` once (or run `fullclean`) to get fast dev builds
-  back.
-- `sdkconfig.diag.defaults` and `sdkconfig.trace.defaults` are alternate
-  configurations for diagnostic builds from the jitter work stream. Do not fold
-  their options into the release `sdkconfig`. See `docs/jitter/README.md`.
-
-## Architecture
-
-### Entry point and core flow
-
-- `main/p3a_main.c`: boot sequence. NVS init, LittleFS mount, LCD/touch/USB/Wi-Fi
-  init, HTTP server, Makapix connection.
-- `main/display_renderer.c`: frame buffer management with triple buffering and
-  VSYNC.
-- `main/animation_player.c`, `animation_player_render.c`,
-  `animation_player_loader.c`: animation decode/render pipeline.
-- `main/playback_controller.c`: switches between animation, PICO-8, and UI
-  render sources.
-
-System diagram, boot sequence, and the service layer (`main/*_service.c`) are
-described in `docs/infrastructure/architecture.md`.
-
-### Key components (in `components/`)
-
-| Component | Purpose |
-|-----------|---------|
-| `p3a_core` | Unified state machine and lifecycle management; also `sd_path`, `sd_health` (failure latch), `fs_atomic` (tmp+rename writes) and `sd_repair` (self-healing of card-inflicted FAT damage: quarantines overwritten directories to `lost/`, restores FAT1 from FAT2 at boot) |
-| `play_scheduler` | Playback engine that executes playsets to select artwork |
-| `channel_manager` | Playlist/channel handling, vault storage (hash-sharded `/sdcard/p3a/vault/`) |
-| `giphy` | Giphy API integration: trending GIFs, on-demand download, SD card caching (`/sdcard/p3a/giphy/`) |
-| `klipy` | Klipy API integration: GIF/sticker trending, search, and category channels; BYOK API key (partner.klipy.com), on-demand download, SD card caching (`/sdcard/p3a/klipy/{gif\|sticker}/`) |
-| `art_institution` | Museum channels via IIIF (plus Cleveland's and Minneapolis's non-IIIF fixed-rendition CDNs). Nine museums today (`artic`, `rijks`, `vam`, `wellcome`, `smk`, `ham`, `si`, `cma`, `mia`); per-museum dispatch (refresh, image URL build, optional resolver such as the Rijks Linked-Art walk), shared rate-limit cooldown synchronized with the browser via `/api/museum/rate-limits*`, vault at `/sdcard/p3a/museum/{museum_id}/`. NVS settings: `ai_refresh_sec`, `ai_cache_size`, plus per-museum BYOK keys where required (`ham_api_key`, `si_api_key`). AIC is currently marked unavailable (`unavailable_reason` in the dispatch table): its image host blocks non-browser clients via Cloudflare since 2026-08; cached AIC art still plays. See `docs/art-institutions/finalized-design.md`. |
-| `animation_decoder` | WebP/PNG/APNG/JPEG/BMP decoders with transparency support. APNG decode relies on `components/espressif__libpng`, a **local fork** of the managed libpng 1.6.52 component carrying the official APNG patch (read-only). On any libpng bump the matching patch must be re-applied; see that component's README.md |
-| `animated_gif_decoder` | GIF decoder (C++ wrapper) |
-| `wifi_manager` | Wi-Fi provisioning, captive portal, mDNS (`p3a.local`) |
-| `http_api` | REST API and WebSocket server |
-| `config_store` | NVS-backed persistent configuration |
-| `makapix` | MQTT over TLS for Makapix Club integration |
-| `ota_manager` | Wireless firmware updates from GitHub Releases |
-| `slave_ota` | ESP32-C6 co-processor auto-flash |
-| `p3a_board_ep44b` | Hardware abstraction layer |
-
-Supporting components:
-
-| Component | Purpose |
-|-----------|---------|
-| `content_cache` | Download state and channel cache management |
-| `loader_service` | Animation file loader |
-| `playback_queue` | Current/next/prev/peek swap requests |
-| `pin_lists` | Pinned-artwork vault: multiple named lists, each a first-class channel, under `/sdcard/p3a/pinned/` |
-| `show_url` | Download an artwork from a URL and play it |
-| `storage_eviction` | Age-based cleanup of cache debris (artwork, `.404` markers, orphaned `.tmp` files) and emptied directories |
-| `http_fetch` | Shared HTTP fetch/download helper and TLS concurrency gate. Every HTTPS request goes through it except the firmware image download (`esp_https_ota`) and the MQTT link |
-| `event_bus` | Typed events with categories, subscribe/emit |
-| `sdio_bus` | Coordinates the SDMMC controller shared between Wi-Fi (SDIO slot 1 via esp_hosted) and the SD card (slot 0) |
-| `sd_idle_wait` | Yielding replacement for IDF's `sdmmc_wait_for_idle()` (jitter fix 8) |
-| `pico8` | PICO-8 game streaming from a browser-hosted emulator over WebSocket, including audio to the on-board speaker |
-| `ugfx` | uGFX, on-screen text and font rendering |
-| `libwebp_decoder` | Exposes upstream libwebp to ESP-IDF |
-| `mem_stats` | Shared memory-usage snapshot helpers |
-| `frame_trace` | Presentation-lateness trace; compiles to nothing unless `CONFIG_P3A_FRAME_TRACE` is set |
-| `debug_http_log` | Performance instrumentation behind `CONFIG_P3A_PERF_DEBUG`; no-ops when off |
-
-Per-component detail: `docs/infrastructure/components.md` and each component's
-header overview comment.
-
-### Storage layout
-
-- **LittleFS** `/webui` (4 MB): web UI assets.
-- **SD card** `/sdcard`: all artwork storage. `/sdcard/p3a` is the default root
-  only; the real root is a runtime setting, and code resolves paths through
-  `sd_path` instead of hard-coding it.
-  - `/sdcard/p3a/animations/`: local files
-  - `/sdcard/p3a/vault/`: cached Makapix artwork
-  - `/sdcard/p3a/pinned/`: pinned-artwork lists
-  - `/sdcard/p3a/giphy/`: cached Giphy artwork
-  - `/sdcard/p3a/klipy/`: cached Klipy artwork
-  - `/sdcard/p3a/museum/{museum_id}/`: cached art-institution artwork
-  - `/sdcard/p3a/lost/`: directories the card corrupted, quarantined by `sd_repair` (see `docs/HOW-TO-USE.md`)
-- **NVS** (64 KB): Wi-Fi credentials, settings, state.
-
-Partition sizes and offsets are in `partitions.csv`.
+- Build output goes to `build/`. Overlay builds (test, trace, diag) go to
+  `build-<name>/` and never touch the default configuration.
+- `idf.py monitor` and .NET `SerialPort` reset the board when they open the
+  port. To read the log without a reset, open the port with DTR and RTS held
+  low (pyserial: set `dtr = False` and `rts = False` before `open()`); a short
+  RTS pulse then resets the board on purpose.
 
 ## Configuration and versioning
 
-Three independent version numbers live at the top of the root `CMakeLists.txt`:
-
-| Variable | Format | Meaning |
-|----------|--------|---------|
-| `PROJECT_VER` | `MAJOR.MINOR.PATCH[-suffix]` | Firmware version, embedded in the binary and compared by OTA |
-| `WEBUI_VERSION` | `X.Y` | Web UI version, updated independently of the firmware |
-| `P3A_API_VERSION` | integer | HTTP API version. Bump only for breaking endpoint changes; new firmware must keep working with older web UIs at the same value |
-
-- Bump the web UI by editing `WEBUI_VERSION` only. CMake regenerates
-  `webui/metadata.json`, `webui/version.txt`, and `webui/static/compat.js`
-  (from `compat.js.in`) at configure time. Never hand-edit those three, even
-  though `metadata.json` and `compat.js` are tracked in git; they are build
-  outputs and the next configure overwrites them.
-- Devices decide whether to install a new web UI by comparing versions, so a
-  `webui/` change that ships without a `WEBUI_VERSION` bump never reaches
-  devices already on that version.
-- Kconfig: `main/Kconfig.projbuild` holds the main options
-  (`P3A_AUTO_SWAP_INTERVAL_SECONDS`, `P3A_USB_MSC_ENABLE`, task priorities, PPA
-  upscaling, animations directory). Component-specific options live in each
-  component's `Kconfig`, for example `P3A_PICO8_ENABLE` in `components/pico8`
-  and `OTA_FIRMWARE_ASSET_NAME` in `components/ota_manager`.
-- Runtime settings (Wi-Fi credentials, API keys, refresh intervals, museum
-  settings such as `ai_refresh_sec` and `ai_cache_size`) live in NVS through
-  `config_store`, not in Kconfig. Overview of both:
-  `docs/infrastructure/configuration-and-development.md`.
+- One version number, `PROJECT_VER` at the top of the root `CMakeLists.txt`.
+  It is `2.0.0-dev` until the release commit. There is no separate web UI or
+  API version in 2.0.
+- Kconfig is for the shape of the build only. User-changeable settings will
+  live in the settings schema (M1.4); compile-time constants in one limits
+  header (M1.1). The written rule lands with M1.4.
 
 ## Documentation map
-
-Most non-trivial decisions in this project are written down. Read the relevant
-page before exploring the code for a subsystem, and check the parked
-issues and deferred ideas before re-opening a problem.
 
 | Where | What |
 |-------|------|
 | `docs/2.0/` | The 2.0 work stream: `README.md` (session protocol and rules), `PROGRESS.md` (the ledger), `PLAN.md` (milestones), `DECISIONS.md`, `TESTING.md`, `PARITY.md`. |
-| `docs/infrastructure/README.md` | Developer index: architecture, directory structure, build system, components, hardware, network and API, display pipeline, configuration. |
-| `docs/QUICK-START.md`, `docs/HOW-TO-USE.md` | User-facing behavior, from first boot to the REST API. The source of truth for what the product does from the user's side. |
-| `docs/flash-p3a.md`, `docs/web-flasher/` | Flashing methods, and the browser flasher served from GitHub Pages (`firmware/{tag}/` is filled by CI on each release). |
-| `docs/BOARD-CAPABILITIES.md` | Hardware reference for the board. |
+| `docs/2.0-architecture-review/` | The design: `README.md` holds the thesis and the 25-row verdict table; one page per area; `target-architecture.md` is the 2.0 skeleton; `ideas.md` is the running list of 2.0 ideas, append new ones there. |
+| `docs/known-issues.md` | Open 1.x problems with root causes. Check it for every file that leaves `legacy/`. |
+| `docs/deferred/` | Parked ideas, one page each. |
+| `docs/art-institutions/finalized-design.md` | Source of truth for the museum channels. |
+| `docs/jitter/` | The playback-jitter work: the fixes that must survive the move, the pass bar, the lab tooling. |
 | `docs/reference/` | Makapix MQTT protocol and player API, ESP-IDF 5.5.4 setup. |
-| `docs/art-institutions/finalized-design.md` | Source of truth for the museum channels; per-museum quirks and status live there. |
-| `docs/known-issues.md` | Open problems with their root cause and the decision still pending (SDIO RX internal-RAM exhaustion, slow software JPEG decodes, open code-audit findings). Check it before re-opening a problem. |
-| `docs/deferred/` | Parked ideas, one page each, with what would unblock them (exFAT, ESP-IDF 6, Gallica, Library of Congress, aspect-ratio filter, long Wellcome labels). |
-| `docs/makapix-cert-renewal/` | In-flight work stream (device certificate renewal, 1.2.4): `PLAN.md` is the design, `PROGRESS.md` the status. |
-| `docs/jitter/` | Finished playback-jitter work stream: `REPORT.md` is the summary; `README.md` holds the diagnostic builds, the lab tooling, and the follow-up for esp-idf #19034. |
-| `docs/2.0-architecture-review/` | Fresh-eyes architecture review ahead of 2.0 (2026-11): `README.md` holds the thesis and a 25-row verdict table with migration costs; one page per area; `target-architecture.md` is the proposed 2.0 skeleton; `ideas.md` is the running list of 2.0 ideas, append new ones there. This is the design; `docs/2.0/` tracks the build. |
-| `docs/intro-animations/`, `docs/klipy/`, `docs/title-view/`, `docs/brand-identity/` | Reference for shipped features: how to add a boot animation, Klipy API notes, per-source artwork-info endpoints, the web UI theme system. |
-| `README.md` | Public front page. Its feature list, component table, and storage layout must match reality. |
+| `docs/infrastructure/`, `docs/HOW-TO-USE.md`, `docs/QUICK-START.md`, `README.md` | 1.x as shipped. Useful for understanding `legacy/`; rewritten at M5.4. |
 
 Outreach, talks, and retired research corpora live in the private
 `fabkury/p3a-private` repository, not here.
@@ -255,34 +172,16 @@ Outreach, talks, and retired research corpora live in the private
 ### Keeping documentation honest
 
 - **When you fix a stale fact, sweep for it.** A wrong claim rarely lives in
-  one place. Check `docs/`, `README.md`, header overview comments, web UI copy
-  in `webui/`, on-device hint strings, and dead declarations that exist only
-  because of the old behavior. Fix them all together, with a commit message
-  that states the current behavior.
-- Behavior changes carry their documentation with them: update the affected
-  `docs/` page and `README.md` section, and bump `WEBUI_VERSION` when web UI
-  copy changes.
+  one place. Fix every copy together, with a commit message that states the
+  current behavior.
+- The ledger is updated in the same commit as the work it describes.
 - Agent guidance belongs in this file. `CLAUDE.md` stays a thin import plus
   Claude-specific notes.
 
 ## Releases
 
-The user cuts releases. This section exists so that preparation work (version
-bumps, notes, asset checks) is done correctly.
-
-- Releases are GitHub Releases on `fabkury/p3a`, tagged `v{PROJECT_VER}` on the
-  commit that bumps `PROJECT_VER`. `PROJECT_VER` stays at the released value
-  afterwards; there is no `-dev` suffix between releases.
-- **The asset set is an OTA contract.** Devices poll the latest releases for
-  `p3a.bin` and `p3a.bin.sha256` (asset name from `OTA_FIRMWARE_ASSET_NAME`);
-  web UI OTA reads `manifest.json` and `storage.bin` from the same release.
-  Renaming or omitting any of these breaks updates for every deployed unit.
-  Ship everything in `release/v{PROJECT_VER}/`, built with
-  `-DP3A_BUILD_FLASHER=ON` so `p3a-flasher.exe` is included.
-- Publish with `gh release create v{PROJECT_VER} --notes-file <notes> release/v{PROJECT_VER}/*`.
-  The `publish-firmware-to-pages` workflow then copies the flash assets into
-  `docs/web-flasher/firmware/{tag}/` on `main` for the browser flasher.
-- Release notes are short: bullets only, headline features only, no internal
-  fixes, no changelog link, no em dashes.
-- A release is done when the user has verified the field OTA from the previous
-  release on a real device.
+The user cuts releases. 2.x has no release process yet; it is defined at
+M5.3. Two facts are already fixed: 2.x firmware ships under a new asset name
+so that 1.x units never see it (`docs/2.0/DECISIONS.md` D12), and nothing
+installs on a device without its owner's approval. The 1.x release process is
+in `AGENTS.md` on `main`.

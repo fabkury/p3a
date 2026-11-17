@@ -1,0 +1,13 @@
+## The link to the ESP32-C6 Wi-Fi co-processor, pinned to the versions p3a 1.x
+## shipped with (legacy/dependencies.lock).
+##
+## esp_hosted stays on the 2.9 line on purpose: 2.10 and later preallocate
+## about 48 KB of the internal DMA pool for the SDIO receive path, which this
+## firmware cannot spare (docs/known-issues.md). Do not bump it without
+## settling that issue first.
+dependencies:
+  espressif/esp_hosted: "2.9.7"
+  espressif/esp_wifi_remote: "1.2.2"
+  espressif/eppp_link: "1.1.5"
+  espressif/wifi_remote_over_eppp: "0.3.2"
+  espressif/esp_serial_slave_link: "1.1.2"

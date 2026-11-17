@@ -10,5 +10,5 @@ idf_component_register(
     SRCS ${srcs}
     INCLUDE_DIRS "include"
     PRIV_REQUIRES esp_driver_uart esp_app_format esp_lcd espressif__esp_lcd_touch esp_timer fatfs nvs_flash sdmmc
-                  p3a_board p3a_util sd_idle_wait sdio_bus
+                  bootloader_support esp_partition p3a_board p3a_util sd_idle_wait sdio_bus slave_ota
 )

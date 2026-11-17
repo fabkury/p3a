@@ -142,8 +142,9 @@ ledger's deletion log with the reason.
   that convention. With the wrong value the fragment silently loads nothing,
   `sdkconfig` is generated with esp_hosted on SPI and an "invalid" slave
   target, and the build dies with `#error "Unknown Slave Target"` deep inside
-  esp_hosted. This bites from the milestone that brings esp_hosted back
-  (M1.2). Recovery: delete `sdkconfig` and `build/`, set the variable,
+  esp_hosted. The lab and CI set it; raw `idf.py` needs it set by hand.
+  `tools/compare_sdkconfig.py` catches the result as dozens of unexpected
+  differences. Recovery: delete `sdkconfig` and `build/`, set the variable,
   rebuild.
 - **Silicon revision guard.** The board's ESP32-P4 is silicon rev v1.0.
   `CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y` and `CONFIG_ESP32P4_REV_MIN_1=y` in

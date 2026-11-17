@@ -212,7 +212,7 @@ Same pages and look, new internals (D11).
 | [ ] | No update check until 12 h after boot | decide | M5.2 | Q3 |
 | [ ] | Pre-release channel in developer builds | keep | M5.2 | |
 | [ ] | Web UI updated over the air on its own | drop | | Change A |
-| [ ] | Co-processor firmware flashed at boot when stale; version lock detected and reported | keep | M1.2 | |
+| [ ] | Co-processor firmware flashed at boot when stale; version lock detected and reported | keep | M1.2 | Link, versions and lock detection verified on the dev unit; the update transfer waits for manual check M1.2-e on another board |
 | [ ] | Core dump to flash; one-shot heap report on the first failed allocation | keep | M1.1 | Q6 on reading the dump |
 | [ ] | Persisted reboot counters for Wi-Fi, touch and SDIO, cleared by a validated update | keep | M1.4 | In the schema |
 | [ ] | Brightness set from the UI and over MQTT | keep | M2.4 | Q1 on persistence |

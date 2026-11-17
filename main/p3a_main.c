@@ -13,6 +13,7 @@
 #include "p3a_job.h"
 #include "p3a_mem.h"
 #include "sdio_bus.h"
+#include "slave_ota.h"
 #include "sdkconfig.h"
 
 #if CONFIG_P3A_TEST_HOOKS
@@ -55,6 +56,13 @@ void app_main(void)
     // Health checks, self-repair and the p3a folder tree arrive with the
     // storage layer (M1.3). Without a card the device still boots.
     boot_step("SD card", p3a_board_sd_mount());
+
+    // The Wi-Fi co-processor: bring its link up and update its firmware if the
+    // image in the slave_fw partition is newer. An update takes over the
+    // screen (once the UI exists) and ends in a restart. Nothing to update is
+    // the normal case; a missing image is not an error.
+    esp_err_t c6 = slave_ota_check_and_update();
+    boot_step("co-processor", c6 == ESP_ERR_NOT_FOUND ? ESP_OK : c6);
 
 #if CONFIG_P3A_TEST_HOOKS
     ESP_LOGW(TAG, "TEST BUILD: test hooks are compiled in. Not for release.");

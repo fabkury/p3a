@@ -150,6 +150,10 @@ over HTTP.
   version read and flashed when stale.
 - Manual: panel looks right, touch responds to a finger.
 - Exit: device tests pass; boot reaches a test pattern.
+- As built: four components (`p3a_board`, `sdio_bus`, `sd_idle_wait`,
+  `slave_ota`) plus `frame_trace`, which moved early into `util` because
+  `sd_idle_wait` records marks through it. The touch-failure recovery and
+  the co-processor update screen wait for settings and the UI.
 
 ### M1.3 storage
 

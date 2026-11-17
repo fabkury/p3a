@@ -17,8 +17,7 @@
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "p3a_state.h"
-#include "p3a_render.h"
+#include "psram_alloc.h"
 
 static const char *TAG = "slave_ota";
 
@@ -98,25 +97,34 @@ bool slave_ota_is_version_locked(void)
 
 // --------- UI helpers ---------
 //
-// Slave OTA does not touch ugfx_ui directly. It calls into p3a_render, which
-// forwards through weak symbols to ugfx_ui. This keeps the component
-// dependency direction clean (slave_ota -> p3a_core, never -> main).
+// The update owns the screen while it runs, but this component sits in the
+// board layer and knows nothing of the UI. Whoever draws registers three
+// callbacks with slave_ota_set_ui(); without them the update runs unseen and
+// only logs.
+
+static slave_ota_ui_t s_ui;
+
+void slave_ota_set_ui(const slave_ota_ui_t *ui)
+{
+    s_ui = ui ? *ui : (slave_ota_ui_t){0};
+}
 
 static void ui_enter_slave_ota(const char *version_from, const char *version_to)
 {
-    p3a_state_enter_ota();
-    p3a_state_set_ota_substate(P3A_OTA_SLAVE_FLASHING);
-    p3a_render_show_slave_ota(version_from, version_to);
+    if (s_ui.begin) {
+        s_ui.begin(version_from, version_to, s_ui.ctx);
+    }
 }
 
 static void ui_update_slave_ota(int percent, const char *status)
 {
-    p3a_render_update_slave_ota(percent, status);
+    if (s_ui.progress) {
+        s_ui.progress(percent, status, s_ui.ctx);
+    }
 }
 
 static void ui_finish_success_and_reboot(void)
 {
-    p3a_state_set_ota_substate(P3A_OTA_PENDING_REBOOT);
     for (int i = 5; i >= 1; i--) {
         char buf[32];
         snprintf(buf, sizeof(buf), "Rebooting in %d...", i);
@@ -133,8 +141,9 @@ static void ui_finish_failure_and_continue(esp_err_t err)
     snprintf(buf, sizeof(buf), "OTA failed: %s", esp_err_to_name(err));
     ui_update_slave_ota(0, buf);
     vTaskDelay(pdMS_TO_TICKS(3000));
-    p3a_render_hide_slave_ota();
-    p3a_state_exit_to_playback();
+    if (s_ui.end) {
+        s_ui.end(s_ui.ctx);
+    }
     s_slave_ota_in_progress = false;
 }
 
@@ -181,10 +190,19 @@ esp_err_t slave_ota_run_mock(void)
 esp_err_t slave_ota_check_and_update(void)
 {
     ESP_LOGI(TAG, "Checking ESP32-C6 co-processor firmware...");
-    
+
+    // Bring the SDIO link to the C6 up. In 1.x the Wi-Fi driver had done this
+    // by the time this function ran; here it may be the first to need the link.
+    // Calling it again later (from the Wi-Fi driver) is harmless.
+    esp_err_t err = esp_hosted_connect_to_slave();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "No link to the co-processor: %s", esp_err_to_name(err));
+        return err;
+    }
+
     // Get current co-processor version
     esp_hosted_coprocessor_fwver_t current_ver = {0};
-    esp_err_t err = esp_hosted_get_coprocessor_fwversion(&current_ver);
+    err = esp_hosted_get_coprocessor_fwversion(&current_ver);
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "Could not get co-processor version: %s", esp_err_to_name(err));
         // Continue anyway - might be old firmware without version support
@@ -193,7 +211,7 @@ esp_err_t slave_ota_check_and_update(void)
         current_ver.patch1 = 0;
     }
     
-    // Snapshot the reported version for status consumers (/api/status).
+    // Snapshot the reported version for status consumers.
     // 0.0.0 means "query failed or ancient firmware" — not a real version.
     s_running_ver_major = current_ver.major1;
     s_running_ver_minor = current_ver.minor1;
@@ -356,6 +374,14 @@ esp_err_t slave_ota_check_and_update(void)
         fw_size += 32;
     }
 
+    // A damaged header must not send us reading past the partition.
+    if (fw_size > slave_partition->size) {
+        ESP_LOGE(TAG, "Slave image claims %zu bytes, more than its %lu-byte partition", fw_size,
+                 (unsigned long)slave_partition->size);
+        s_slave_ota_in_progress = false;
+        return ESP_ERR_INVALID_SIZE;
+    }
+
     ESP_LOGI(TAG, "Starting co-processor OTA update (%zu bytes)...", fw_size);
 
     // Now claim the screen.
@@ -371,7 +397,7 @@ esp_err_t slave_ota_check_and_update(void)
     }
 
     // Allocate transfer buffer
-    uint8_t *buffer = malloc(OTA_CHUNK_SIZE);
+    uint8_t *buffer = psram_malloc(OTA_CHUNK_SIZE);
     if (!buffer) {
         ESP_LOGE(TAG, "Failed to allocate transfer buffer");
         esp_hosted_slave_ota_end();

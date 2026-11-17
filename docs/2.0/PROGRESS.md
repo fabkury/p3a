@@ -9,8 +9,8 @@ times.
 | | |
 |---|---|
 | Phase | 1, platform (Phase 0 complete) |
-| Current milestone | M1.2 board |
-| Next action | Finish M1.2 with the co-processor step: bring in esp_hosted and esp_wifi_remote (declare them in a component's `idf_component.yml`, pinned to the 1.x lock: esp_hosted 2.9.7, esp_wifi_remote 1.2.2; un-park the three `ESP_HOSTED` lines in `sdkconfig.defaults`; mind `ESP_IDF_VERSION=5.5`), then move `legacy/components/slave_ota` without its dependency on `p3a_core` (it owns the screen during an update: give it a callback instead). Remove the three Wi-Fi-stack entries from `EXPECTED` in `tools/compare_sdkconfig.py` when they stop differing; the tool will say so |
+| Current milestone | M1.3 storage |
+| Next action | Start M1.3: from `legacy/components/p3a_core` take `sd_path`, `fs_atomic`, `sd_health` and `sd_repair` (and nothing else of `p3a_core`) into a `storage`-layer component; read `docs/known-issues.md` and the storage page of the review first. Then the framed container (finding 5) with host tests, the FAT assumptions stated once, and a cached free-space figure. Boot order becomes: mount (board), FAT mirror check and remount (sd_repair), health probe, `sd_path` init. Decide when to wipe the 1.x folders still on the card (`/p3a2`, `/p3a`) |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -19,8 +19,8 @@ times.
 
 | | |
 |---|---|
-| Running | `2.0.0-dev`, test configuration (`build-test`), flashed 2026-11-17 by the device tests. Left showing colour bars |
-| Flash state | Bootloader, 2.x partition table, app in `ota_0`. NVS empty. `slave_fw` empty (the C6 keeps its own firmware, 2.7.0 as last reported by 1.x) |
+| Running | `2.0.0-dev`, test configuration (`build-test`), flashed 2026-11-17 by the device tests |
+| Flash state | Bootloader, 2.x partition table, app in `ota_0`, the 2.9.3 co-processor image in `slave_fw`. NVS holds only a test counter. The C6 itself runs esp_hosted 2.7.0 and cannot be updated (see M1.2-e) |
 | SD card | 32 GB, healthy (D8). Still holds 1.x content under `/p3a2`; to be wiped at M0.4 or M1.3 |
 | 1.x flash backup | `%USERPROFILE%\.p3a-lab\backups\p3a-fab_v1.2.4_full-flash_2026-11-17.bin` (see the session log for size and hash) |
 | Secrets file | Complete: four API keys read from the unit, Wi-Fi password filled in by Fab |
@@ -37,8 +37,8 @@ reopened (why).
 | M0.3 Continuous integration | done 2026-11-17. Tiers: CI green on GitHub for tree checks, host tests and the firmware build; each linter rule proven to fail by its self-test (29 cases). No deliberately broken commit was pushed |
 | M0.4 Device lab | done 2026-11-17. Tiers: device tests (6 cases, run four times), lab unit tests (4 cases), both builds checked. Provisioning waits for M1.4 and M1.5 |
 | M1.1 util | done 2026-11-17. Tiers: host tests (6 programs, under ASan and UBSan too), device tests (21 cases, run twice), both builds checked, CI. `p3a_limits.h` is not created yet: it arrives with its first constant |
-| M1.2 board | in progress: display, backlight, button, touch controller and SD card done 2026-11-17 (43 device tests, release, test and trace builds). The co-processor remains |
-| M1.3 storage | not started |
+| M1.2 board | done 2026-11-17. Tiers: device tests (47 cases, twice), release, test and trace builds, the configuration guard, CI. Awaiting manual checks M1.2-a to d. The co-processor update itself cannot run on the dev unit (its C6 is on the unupdatable 2.7.0); see M1.2-e |
+| M1.3 storage | next |
 | M1.4 settings | not started |
 | M1.5 net base | not started |
 | M2.1 Display pipeline and decoders | not started |
@@ -94,6 +94,13 @@ Open:
   `"points": 1` with `x` and `y` near where the finger is (0,0 is the
   top-left corner, 719,719 the bottom-right). Without a finger it prints
   `"points": 0`.
+- **M1.2-e, a co-processor update on a unit that can take one.** Needs a
+  board whose ESP32-C6 does not run esp_hosted 2.7.0 (a factory-fresh board
+  reports 0.0.0), so it waits for the second board (O14). Flash 2.0 on it
+  and watch the UART log at first boot: it should say "Co-processor
+  firmware update required", count progress to 100 percent, restart, and
+  on the next boot report 2.9.3 and "up to date". The screen part of this
+  check comes later, with the UI.
 
 Cleared:
 
@@ -185,6 +192,53 @@ M1.1, 2026-11-17:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-17: M1.2 complete, the co-processor link
+
+- CI on the SD commit: see `gh run list --branch v2`; the run for this
+  commit covers both.
+- `components/slave_ota` moved (layer `board`). It declares esp_hosted
+  2.9.7 and esp_wifi_remote 1.2.2 with their dependencies, pinned to what
+  1.x shipped. The three `ESP_HOSTED` lines in `sdkconfig.defaults` are
+  live.
+- The configuration guard did its job on the first build with esp_hosted:
+  2,368 settings are now defined by both configurations and every one
+  agrees, so the SDIO transport, the C6 target, streaming receive mode and
+  the pins are exactly what 1.x shipped. It also failed the build until the
+  three Wi-Fi-stack entries were removed from its expected list. Three
+  expected differences remain, none about hardware.
+- `slave_ota` no longer includes `p3a_state.h` or `p3a_render.h`, which cut
+  the `p3a_core`, board, `slave_ota` cycle the review lists. An update shows
+  itself through three callbacks (`slave_ota_set_ui`) that the UI will
+  register in Phase 3; without them it runs unseen and logs.
+- `slave_ota_check_and_update()` now brings the SDIO link up itself
+  (`esp_hosted_connect_to_slave`). In 1.x the Wi-Fi driver had done that
+  first; in 2.0 the check runs before Wi-Fi exists.
+- Cleanups on the way: the transfer buffer comes from PSRAM, an image whose
+  header claims more than the partition holds is refused (a low-severity
+  audit item), and a missing `network_adapter.bin` fails the build instead
+  of warning.
+- `app_main` runs the check at boot. A failure is logged and boot carries
+  on.
+- Test hook `c6`.
+- What the dev unit can and cannot show: its C6 runs esp_hosted 2.7.0, the
+  one version that cannot be updated (esp-hosted-mcu issue 143). So the
+  link, the version exchange, the lock detection and the image in
+  `slave_fw` are verified here, and the update transfer is not. That is
+  manual check M1.2-e, on another board.
+- Numbers: the link is up 1.8 s after `app_main` starts. Internal DMA pool
+  with the link up: 427 KB total, 327 KB free (esp_hosted took about
+  48 KB), largest block 254 KB. Release image 709 KB.
+- Verified, device tests: 47 pass after a flash and again without one.
+  Verified, builds: release and test pass the build checks and the
+  configuration guard.
+- Closed by M1.2 as a whole: audit H5 and M28, and the low-severity items
+  about `sdio_bus_is_locked()` and the unclamped slave image size. The
+  `p3a_core` to board to `slave_ota` cycle is gone.
+- Left in `legacy/` for later milestones: the rest of `p3a_core`, the
+  gesture code in `main/app_touch.c` (M3.4), `main/app_lcd_p4.c` (display
+  glue around the renderer, M2.1), `main/app_usb.c` (M3.6),
+  `main/sd_format.c` (M3.3).
 
 ### 2026-11-17: M1.2 third step, SD card and its fixes
 

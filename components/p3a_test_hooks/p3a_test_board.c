@@ -12,9 +12,12 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "esp_app_desc.h"
+#include "esp_image_format.h"
 #include "esp_lcd_panel_ops.h"
 #include "esp_lcd_touch.h"
 #include "esp_memory_utils.h"
+#include "esp_partition.h"
 #include "esp_rom_crc.h"
 #include "esp_timer.h"
 #include "ff.h"
@@ -27,6 +30,7 @@
 #include "sd_idle_wait.h"
 #include "sdio_bus.h"
 #include "sdmmc_cmd.h"
+#include "slave_ota.h"
 
 static int s_shown = -1;  // the framebuffer last presented by these commands
 static atomic_int s_button_presses;
@@ -349,7 +353,40 @@ static void cmd_sd(const char *args)
     p3a_test_reply_err("usage: !sd <info|rw bytes>");
 }
 
+// !c6   the Wi-Fi co-processor: what it runs, what this firmware carries for it
+static void cmd_c6(const char *args)
+{
+    (void)args;
+    uint32_t run[3] = {0}, emb[3] = {0};
+    const bool running_known = slave_ota_get_running_version(&run[0], &run[1], &run[2]) == ESP_OK;
+    slave_ota_get_embedded_version(&emb[0], &emb[1], &emb[2]);
+
+    // The image that an update would send: is it there, and is it an app image?
+    bool image_ok = false;
+    char image_project[32] = "";
+    const esp_partition_t *part = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, 0x40, "slave_fw");
+    if (part) {
+        esp_app_desc_t desc;
+        if (esp_partition_read(part, sizeof(esp_image_header_t) + sizeof(esp_image_segment_header_t), &desc,
+                               sizeof(desc)) == ESP_OK &&
+            desc.magic_word == ESP_APP_DESC_MAGIC_WORD) {
+            image_ok = true;
+            snprintf(image_project, sizeof(image_project), "%.31s", desc.project_name);
+        }
+    }
+    char json[256];
+    snprintf(json, sizeof(json),
+             "{\"running_known\":%s,\"running\":\"%u.%u.%u\",\"embedded\":\"%u.%u.%u\",\"locked\":%s,"
+             "\"updating\":%s,\"partition\":%s,\"image_ok\":%s,\"image_project\":\"%s\"}",
+             running_known ? "true" : "false", (unsigned)run[0], (unsigned)run[1], (unsigned)run[2], (unsigned)emb[0],
+             (unsigned)emb[1], (unsigned)emb[2], slave_ota_is_version_locked() ? "true" : "false",
+             slave_ota_is_in_progress() ? "true" : "false", part ? "true" : "false", image_ok ? "true" : "false",
+             image_project);
+    p3a_test_reply_ok(json);
+}
+
 const p3a_test_command_t p3a_test_board_commands[] = {
+    {"c6", cmd_c6},
     {"lcd", cmd_lcd},
     {"button", cmd_button},
     {"touch", cmd_touch},

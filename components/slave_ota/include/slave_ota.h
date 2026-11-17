@@ -89,6 +89,27 @@ bool slave_ota_is_version_locked(void);
 bool slave_ota_is_in_progress(void);
 
 /**
+ * @brief How the update shows itself.
+ *
+ * The update owns the screen while it runs. This component does not draw: the
+ * UI registers these callbacks, and without them the update runs unseen.
+ * All three are called on the task that runs slave_ota_check_and_update().
+ */
+typedef struct {
+    /** The update is about to start: take the screen and show the two versions. */
+    void (*begin)(const char *version_from, const char *version_to, void *ctx);
+    /** Progress, 0 to 100, with a short status line. */
+    void (*progress)(int percent, const char *status, void *ctx);
+    /** The update failed and the device carries on: give the screen back.
+     *  Not called after a success, which ends in a restart. */
+    void (*end)(void *ctx);
+    void *ctx;
+} slave_ota_ui_t;
+
+/** Registers the callbacks (copied). NULL removes them. */
+void slave_ota_set_ui(const slave_ota_ui_t *ui);
+
+/**
  * @brief Callback type for the USB-busy gate
  *
  * Should return true when a USB-HS cable is plugged in and USB-MSC is

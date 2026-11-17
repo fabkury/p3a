@@ -72,11 +72,13 @@ CONFIG_BSP_LCD_COLOR_FORMAT_RGB888=y
 CONFIG_BSP_LCD_DPI_BUFFER_NUMS=3
 CONFIG_LV_BUILD_EXAMPLES=n
 
+# Co-processor link (esp_hosted to the ESP32-C6 over SDIO). The transport is
+# not restarted by esp_hosted on failure: p3a's own recovery decides.
+CONFIG_ESP_HOSTED_SDIO_TX_Q_SIZE=40
+CONFIG_ESP_HOSTED_SDIO_RX_Q_SIZE=40
+CONFIG_ESP_HOSTED_TRANSPORT_RESTART_ON_FAILURE=n
+
 # --- Parked until their component arrives -----------------------------------
-# M1.2 board, co-processor step (esp_hosted link to the ESP32-C6):
-# CONFIG_ESP_HOSTED_SDIO_TX_Q_SIZE=40
-# CONFIG_ESP_HOSTED_SDIO_RX_Q_SIZE=40
-# CONFIG_ESP_HOSTED_TRANSPORT_RESTART_ON_FAILURE=n
 # M3.6 USB mass storage (esp_tinyusb):
 # CONFIG_TINYUSB_MSC_ENABLED=y
 # CONFIG_TINYUSB_CDC_ENABLED=y

@@ -33,11 +33,6 @@ EXPECTED = {
     "CONFIG_IDF_INIT_VERSION": "informational: the IDF version that first generated the file",
     "CONFIG_HTTPD_WS_SUPPORT": "WebSocket support was only for PICO-8, which 2.0 drops",
     "CONFIG_BSP_SPIFFS_MOUNT_POINT": "1.x pointed the BSP's SPIFFS mount at /webui; 2.0 has no such partition",
-    # These three are switched on by esp_wifi_remote / esp_hosted. They must
-    # leave this list at the co-processor step of M1.2, when that link returns.
-    "CONFIG_MBEDTLS_CMAC_C": "selected by the Wi-Fi stack, which 2.0 has not brought in yet",
-    "CONFIG_PM_SLEEP_FUNC_IN_IRAM": "selected by the Wi-Fi stack, which 2.0 has not brought in yet",
-    "CONFIG_PM_SLP_IRAM_OPT": "selected by the Wi-Fi stack, which 2.0 has not brought in yet",
 }
 
 

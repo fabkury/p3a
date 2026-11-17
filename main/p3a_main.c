@@ -12,6 +12,7 @@
 #include "p3a_event.h"
 #include "p3a_job.h"
 #include "p3a_mem.h"
+#include "sdio_bus.h"
 #include "sdkconfig.h"
 
 #if CONFIG_P3A_TEST_HOOKS
@@ -49,6 +50,11 @@ void app_main(void)
     // without touch. The 1.x recovery (one reboot, then carry on) returns with
     // the settings store and the UI.
     boot_step("touch", p3a_board_touch_init(3000));
+
+    boot_step("SDIO bus coordinator", sdio_bus_init());
+    // Health checks, self-repair and the p3a folder tree arrive with the
+    // storage layer (M1.3). Without a card the device still boots.
+    boot_step("SD card", p3a_board_sd_mount());
 
 #if CONFIG_P3A_TEST_HOOKS
     ESP_LOGW(TAG, "TEST BUILD: test hooks are compiled in. Not for release.");

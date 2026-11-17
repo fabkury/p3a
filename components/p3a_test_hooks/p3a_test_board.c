@@ -10,15 +10,23 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "esp_lcd_panel_ops.h"
 #include "esp_lcd_touch.h"
+#include "esp_memory_utils.h"
 #include "esp_rom_crc.h"
+#include "esp_timer.h"
+#include "ff.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "p3a_board.h"
 #include "p3a_err.h"
 #include "p3a_test_internal.h"
+#include "psram_alloc.h"
+#include "sd_idle_wait.h"
+#include "sdio_bus.h"
+#include "sdmmc_cmd.h"
 
 static int s_shown = -1;  // the framebuffer last presented by these commands
 static atomic_int s_button_presses;
@@ -259,9 +267,92 @@ static void cmd_touch(const char *args)
     p3a_test_reply_ok(json);
 }
 
+// !sd info          the card, and which SD fixes this build carries
+// !sd rw <bytes>    writes a pattern to a scratch file, reads it back, deletes it
+static void cmd_sd(const char *args)
+{
+    char verb[8] = {0};
+    int bytes = 0;
+    const int n = sscanf(args, "%7s %d", verb, &bytes);
+
+    if (n >= 1 && strcmp(verb, "info") == 0) {
+        sdmmc_card_t *card = p3a_board_sd_card();
+        // FatFS must get its buffers from the aligned allocator, or every SD
+        // transfer bounces through a 4 KB internal-RAM buffer.
+        void *probe = ff_memalloc(4096);
+        const bool aligned = probe && ((uintptr_t)probe % 64) == 0;
+        const bool in_psram = probe && esp_ptr_external_ram(probe);
+        ff_memfree(probe);
+        char json[256];
+        snprintf(json, sizeof(json),
+                 "{\"mounted\":%s,\"capacity_mb\":%u,\"name\":\"%.5s\",\"ff_aligned\":%s,\"ff_psram\":%s,"
+                 "\"idle_wait_wrap\":%s,\"idf_patched\":%s,\"bus_locked\":%s}",
+                 card ? "true" : "false",
+                 card ? (unsigned)(((uint64_t)card->csd.capacity * card->csd.sector_size) / (1024 * 1024)) : 0u,
+                 card ? card->cid.name : "", aligned ? "true" : "false", in_psram ? "true" : "false",
+                 sd_idle_wait_wrap_enabled() ? "true" : "false", sd_idle_wait_idf_patched() ? "true" : "false",
+                 sdio_bus_is_locked() ? "true" : "false");
+        p3a_test_reply_ok(json);
+        return;
+    }
+    if (n == 2 && strcmp(verb, "rw") == 0 && bytes > 0 && bytes <= 4 * 1024 * 1024) {
+        if (!p3a_board_sd_is_mounted()) {
+            p3a_test_reply_err("no card mounted");
+            return;
+        }
+        static const char *path = P3A_SD_MOUNT_POINT "/p3a_test.bin";
+        uint8_t *out = psram_malloc((size_t)bytes);
+        uint8_t *in = psram_malloc((size_t)bytes);
+        const char *failure = NULL;
+        int64_t t0 = 0, t1 = 0, t2 = 0;
+        if (!out || !in) {
+            failure = "no memory";
+        } else {
+            for (int i = 0; i < bytes; i++) {
+                out[i] = (uint8_t)((i * 31) ^ (i >> 8));
+            }
+            t0 = esp_timer_get_time();
+            FILE *f = fopen(path, "wb");
+            if (!f || fwrite(out, 1, (size_t)bytes, f) != (size_t)bytes || fflush(f) != 0 || fsync(fileno(f)) != 0) {
+                failure = "write failed";
+            }
+            if (f) {
+                fclose(f);
+            }
+            t1 = esp_timer_get_time();
+            if (!failure) {
+                f = fopen(path, "rb");
+                if (!f || fread(in, 1, (size_t)bytes, f) != (size_t)bytes) {
+                    failure = "read failed";
+                } else if (memcmp(in, out, (size_t)bytes) != 0) {
+                    failure = "read back different bytes";
+                }
+                if (f) {
+                    fclose(f);
+                }
+            }
+            t2 = esp_timer_get_time();
+            unlink(path);
+        }
+        free(out);
+        free(in);
+        if (failure) {
+            p3a_test_reply_err(failure);
+            return;
+        }
+        char json[96];
+        snprintf(json, sizeof(json), "{\"bytes\":%d,\"write_ms\":%d,\"read_ms\":%d}", bytes, (int)((t1 - t0) / 1000),
+                 (int)((t2 - t1) / 1000));
+        p3a_test_reply_ok(json);
+        return;
+    }
+    p3a_test_reply_err("usage: !sd <info|rw bytes>");
+}
+
 const p3a_test_command_t p3a_test_board_commands[] = {
     {"lcd", cmd_lcd},
     {"button", cmd_button},
     {"touch", cmd_touch},
+    {"sd", cmd_sd},
 };
 const size_t p3a_test_board_command_count = sizeof(p3a_test_board_commands) / sizeof(p3a_test_board_commands[0]);

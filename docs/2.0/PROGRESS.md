@@ -10,7 +10,7 @@ times.
 |---|---|
 | Phase | 1, platform (Phase 0 complete) |
 | Current milestone | M1.2 board |
-| Next action | Continue M1.2. Done: panel, framebuffers, backlight, BOOT button, touch controller. Remaining, in order: (1) SD card: mount with the aligned FatFS glue (`legacy/main/ffsystem_aligned.c`), `sdio_bus`, `sd_idle_wait` (it requires `frame_trace` and uses a weak reference, which the linter forbids: decide how), with a `sd` console probe; the 1.x mount lives in `legacy/main/animation_player.c:126` and `legacy/main/sd_format.c`; (2) co-processor: esp_hosted (un-park its three sdkconfig lines, mind `ESP_IDF_VERSION=5.5`), `slave_ota` and its `slave_fw` flashing, without its dependency on `p3a_core` |
+| Next action | Finish M1.2 with the co-processor step: bring in esp_hosted and esp_wifi_remote (declare them in a component's `idf_component.yml`, pinned to the 1.x lock: esp_hosted 2.9.7, esp_wifi_remote 1.2.2; un-park the three `ESP_HOSTED` lines in `sdkconfig.defaults`; mind `ESP_IDF_VERSION=5.5`), then move `legacy/components/slave_ota` without its dependency on `p3a_core` (it owns the screen during an update: give it a callback instead). Remove the three Wi-Fi-stack entries from `EXPECTED` in `tools/compare_sdkconfig.py` when they stop differing; the tool will say so |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -37,7 +37,7 @@ reopened (why).
 | M0.3 Continuous integration | done 2026-11-17. Tiers: CI green on GitHub for tree checks, host tests and the firmware build; each linter rule proven to fail by its self-test (29 cases). No deliberately broken commit was pushed |
 | M0.4 Device lab | done 2026-11-17. Tiers: device tests (6 cases, run four times), lab unit tests (4 cases), both builds checked. Provisioning waits for M1.4 and M1.5 |
 | M1.1 util | done 2026-11-17. Tiers: host tests (6 programs, under ASan and UBSan too), device tests (21 cases, run twice), both builds checked, CI. `p3a_limits.h` is not created yet: it arrives with its first constant |
-| M1.2 board | in progress: display, backlight, button and touch controller done 2026-11-17 (33 device tests, both builds, CI). SD card and co-processor remain |
+| M1.2 board | in progress: display, backlight, button, touch controller and SD card done 2026-11-17 (43 device tests, release, test and trace builds). The co-processor remains |
 | M1.3 storage | not started |
 | M1.4 settings | not started |
 | M1.5 net base | not started |
@@ -185,6 +185,57 @@ M1.1, 2026-11-17:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-17: M1.2 third step, SD card and its fixes
+
+- Fab asked to keep going and to use the move as an opportunity to clean up
+  what 1.x left behind. Taken as standing guidance: a file that moves is
+  cleaned, not ported verbatim.
+- CI on the touch commit (`a7f69462`): all four jobs green.
+- `p3a_board_sd.c`: mount and unmount through the BSP, never formatting.
+  The health checks, the FAT mirror repair and the folder tree stay for the
+  storage layer (M1.3), which will call this.
+- `p3a_board_ff_alloc.c` (was `legacy/main/ffsystem_aligned.c`): FatFS
+  buffers come cache-line aligned from PSRAM, so the SD driver uses them
+  directly instead of bouncing every transfer through the internal DMA
+  pool. The linker wrap now lives with the board component, not in `main`.
+- `components/sd_idle_wait` moved (jitter fix 8, the yielding busy-wait).
+  Its detection of Espressif's own fix no longer uses a weak reference: the
+  component's CMake reads the IDF source at configure time and passes the
+  answer in as a definition (decision D23).
+- `components/sdio_bus` moved and rewritten shorter. `sdio_bus_is_locked()`
+  reads an atomic holder instead of taking and releasing the mutex (a
+  low-severity audit item).
+- `components/frame_trace` moved now, as a `util` component, because
+  `sd_idle_wait` records its marks through it. It still compiles to nothing
+  in release. Its reporter task is created through `p3a_task_create`. Its
+  HTTP endpoints remain in `legacy/components/http_api` for M2.1.
+- The overlays `sdkconfig.trace.defaults`, `sdkconfig.diag.defaults` and
+  `sdkconfig.nowrap.defaults` are back at the root; the lab knows the
+  `trace` and `diag` configurations.
+- New guard, `tools/compare_sdkconfig.py` (decision D24): every setting that
+  both the shipped 1.x `sdkconfig` and the generated 2.0 one define must
+  agree, except a short list of expected differences with reasons. First
+  result: 2,107 settings in common, 6 differ, all explained (PICO-8's
+  WebSocket support, the old web UI mount point, an informational version,
+  and three that the Wi-Fi stack switches on and that must leave the list
+  at the co-processor step). 436 settings exist only in 1.x: components not
+  brought in yet, or dropped. The lab runs it after every release build and
+  CI after its release build.
+- Test hook `sd` (info, and a write, read-back, delete of a scratch file).
+- Numbers from the device: card "SDABC", 29,820 MB. A 1 MB scratch file
+  writes in about 200 ms and reads back in about 450 ms. Internal DMA pool
+  with the card mounted: 432 KB total, 375 KB free, largest block 254 KB.
+- Verified, device tests: 43 pass after a flash and again without one. They
+  confirm the card mounts at boot, FatFS buffers are aligned and in PSRAM,
+  the yielding busy-wait is linked, the IDF is not patched, and files from
+  1 byte to 1 MB round-trip. Verified, builds: release (419 KB) and test
+  pass the build checks; the trace configuration compiles and links the
+  frame trace; the release map has no frame-trace symbol. Not verified: the
+  trace build was not flashed, and nothing here measures jitter (M2.1 and
+  M6.1).
+- Still on the card: the 1.x folders (`/p3a2`, `/p3a`). M1.3 decides when
+  to wipe them.
 
 ### 2026-11-17: M1.2 second step, touch controller
 

@@ -16,8 +16,8 @@
 // Forcing MALLOC_CAP_CACHE_ALIGNED removes the bounce path: aligned PSRAM
 // buffers go to DMA directly, no internal-RAM dependency per SD I/O.
 //
-// Wired in via `-Wl,--wrap=ff_memalloc -Wl,--wrap=ff_memfree` in main/CMakeLists.txt;
-// the linker rewrites cross-TU calls from ff.c / vfs_fat*.c to land here.
+// Wired in via `-Wl,--wrap=ff_memalloc -Wl,--wrap=ff_memfree` in this component's
+// CMakeLists.txt; the linker rewrites the calls from ff.c and vfs_fat*.c to land here.
 
 #include "esp_heap_caps.h"
 

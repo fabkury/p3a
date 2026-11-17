@@ -1,3 +1,5 @@
+# Layer: util. Presentation-lateness trace; compiles to nothing unless
+# CONFIG_P3A_FRAME_TRACE is set (sdkconfig.trace.defaults, sdkconfig.diag.defaults).
 set(srcs "")
 if(CONFIG_P3A_FRAME_TRACE)
     list(APPEND srcs "frame_trace.c" "frame_trace_wraps.c")
@@ -7,7 +9,7 @@ idf_component_register(
     SRCS ${srcs}
     INCLUDE_DIRS "include"
     REQUIRES esp_timer
-    PRIV_REQUIRES log sdmmc spi_flash
+    PRIV_REQUIRES log sdmmc spi_flash p3a_util
 )
 
 if(CONFIG_P3A_FRAME_TRACE)

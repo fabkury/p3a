@@ -20,9 +20,8 @@ What is here besides `components/`, `main/` and `webui/`:
 |---|---|
 | `CMakeLists.txt` | The 1.x root project, including the release packaging and flasher build that M5.3 will draw on |
 | `partitions.csv` | The 1.x partition table |
-| `sdkconfig` | The full 1.x configuration as shipped |
+| `sdkconfig` | The full 1.x configuration as shipped. `tools/compare_sdkconfig.py` checks every 2.0 release build against it |
 | `sdkconfig.defaults` | The same configuration reduced to its departures from the IDF defaults (`idf.py save-defconfig`). The 2.0 `sdkconfig.defaults` was seeded from it |
-| `sdkconfig.diag.defaults`, `sdkconfig.trace.defaults`, `sdkconfig.nowrap.defaults` | The jitter work's diagnostic overlays, to be brought back at M2.1 |
 | `dependencies.lock` | The component versions 1.x was built with |
 | `flasher/` | The Windows flasher, to be brought back at M5.3 |
 | `managed_components/` | Not tracked. The downloaded 1.x dependencies, kept locally for reference |

@@ -9,5 +9,8 @@
 #
 # component    layer
 p3a_util       util
+frame_trace    util
 p3a_board      board
+sdio_bus       board
+sd_idle_wait   board
 p3a_test_hooks net

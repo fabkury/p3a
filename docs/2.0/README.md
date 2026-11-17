@@ -100,7 +100,7 @@ in, what the dev unit is running.
 | Dev unit | Waveshare ESP32-P4-WIFI6-Touch-LCD-4B, chip rev v1.0, attached by USB. Two MACs identify it: `30:ED:A0:E2:09:37` is the ESP32-P4 base MAC that esptool prints, `CC:BA:97:F0:2C:88` is the Wi-Fi MAC that 1.x reports in `/status`. Owned by this work stream: flash, NVS and SD card may be erased |
 | UART | COM5 (CH343 bridge, 115200). It has enumerated as COM9 and COM11 on other days; list ports with `Get-CimInstance Win32_PnPEntity` rather than opening them. Opening the port with .NET `SerialPort` or plain `idf.py monitor` resets the board; `host/jitter-lab/serial_logger.py` does not |
 | Network name | `p3a-fab.local` when the device name is `fab`. A freshly erased unit comes up as plain `p3a.local`, which on this LAN is a different, second device; the lab sets the device name during provisioning and otherwise addresses the unit by the IP it prints on UART |
-| SD card | 32 GB, FAT32, confirmed healthy by Fab on 2026-11-17. SD errors are firmware bugs until proven otherwise |
+| SD card | 32 GB (reports itself as "SDABC", 29,820 MB), FAT32, confirmed healthy by Fab on 2026-11-17. SD errors are firmware bugs until proven otherwise |
 | Secrets | `%USERPROFILE%\.p3a-lab\secrets.json`: Wi-Fi SSID and password, the Giphy, Klipy, Harvard and Smithsonian keys |
 | 1.x flash backup | `%USERPROFILE%\.p3a-lab\backups\`: the unit's full 32 MB flash as it ran 1.2.4, taken before the first erase. It holds the unit's Makapix identity and Wi-Fi credentials |
 | Firmware toolchain | ESP-IDF v5.5.4 through EIM at `C:\Espressif`. Activation and the `ESP_IDF_VERSION=5.5` and silicon-revision traps are in `AGENTS.md` |

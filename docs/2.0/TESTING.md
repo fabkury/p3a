@@ -55,6 +55,9 @@ listing parser fed with recorded responses.
 - Forbidden in project code: `__attribute__((weak))`, `WHOLE_ARCHIVE`,
   includes from `main/`, anything from `legacy/`.
 - The generated `sdkconfig` shows `CONFIG_ESP32P4_REV_MIN_FULL=1`.
+- The release configuration agrees with the one 1.x shipped wherever both
+  define a setting (`tools/compare_sdkconfig.py`), apart from a listed set
+  of explained differences.
 - A release build contains no test-hook symbols.
 
 ### T3 Device tests
@@ -132,7 +135,7 @@ them.
 | Console: `version`, `reboot` | UART | Identify the unit and its firmware; restart it | M0.4 |
 | Console: `task`, `errname`, `job`, `jobinfo`, `event`, `mem` | UART | Exercise the util layer: task policy, error names, job runners, event fan-out and overflow, memory pressure (including taking and returning DMA-pool memory) | M1.1 |
 | Console: provision | UART | Set Wi-Fi credentials, device name and API keys on a fresh unit | M1.4, M1.5 |
-| Console: `lcd`, `button` | UART | Paint and present test patterns, read pixels and a CRC back, save a downscaled screenshot (`lab.py shot`), set the backlight, count BOOT presses, read the touch controller (`touch`). Card probes follow in M1.2 | M1.2 |
+| Console: `lcd`, `button` | UART | Paint and present test patterns, read pixels and a CRC back, save a downscaled screenshot (`lab.py shot`), set the backlight, count BOOT presses, read the touch controller (`touch`), inspect the card and round-trip a scratch file (`sd`) | M1.2 |
 | Screenshot | HTTP | The front buffer as an image. This is how the agent sees the screen | M1.5 |
 | Clock | HTTP | Set the wall clock, for eviction, the clock overlay and certificate logic | M1.5 |
 | File put and play by path | HTTP | Put a test asset on the card and play it without a playset | M2.1 |

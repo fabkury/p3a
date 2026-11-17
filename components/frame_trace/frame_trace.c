@@ -24,6 +24,7 @@
 #include "esp_log.h"
 #include "esp_cpu.h"
 #include "esp_timer.h"
+#include "p3a_task.h"
 
 static const char *TAG = "frame_trace";
 
@@ -568,7 +569,8 @@ void frame_trace_init(void)
     s_tasks = heap_caps_calloc(FT_MAX_TASKS, sizeof(ft_task_slot_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
 #endif
 
-    if (xTaskCreatePinnedToCore(ft_reporter_task, "jtr_report", 6144, NULL, 2, &s_reporter, 0) != pdPASS) {
+    p3a_task_config_t reporter = P3A_TASK_CONFIG("jtr_report", ft_reporter_task, NULL, 6144, P3A_TASK_BACKGROUND);
+    if (p3a_task_create(&reporter, &s_reporter) != ESP_OK) {
         ESP_LOGE(TAG, "reporter task create failed");
         s_reporter = NULL;
     }

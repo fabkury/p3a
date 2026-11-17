@@ -78,6 +78,9 @@ jobs:
         run: |
           . "$IDF_PATH/export.sh" >/dev/null
           python tools/check_tree.py --build ${{ matrix.dir }} ${{ matrix.check_args }}
+      - name: Configuration still matches what 1.x shipped
+        if: matrix.config == 'release'
+        run: python3 tools/compare_sdkconfig.py sdkconfig
       - name: Keep the binaries
         uses: actions/upload-artifact@v4
         with:

@@ -64,6 +64,8 @@ The firmware is public (Apache 2.0). 1.x runs on real users' devices from
 | `tests/host/` | Host unit tests (Unity, CMake, CTest). |
 | `tests/device/` | Device tests (pytest) that flash and drive the dev unit. |
 | `tools/check_tree.py` | The structural rules below as a script; CI and the lab run it. |
+| `tools/compare_sdkconfig.py` | Fails a release build whose configuration drifts from what 1.x shipped, apart from a listed set of explained differences. When a component returns and a listed difference disappears, remove it from the list. |
+| `sdkconfig.trace.defaults`, `sdkconfig.diag.defaults`, `sdkconfig.nowrap.defaults` | The jitter work's overlays (`lab.py build trace`, `build diag`). Never folded into the release configuration. |
 | `host/p3a-lab/` | Builds, flashes and talks to the dev unit. Use it instead of raw `idf.py` for anything that involves the device. |
 | `partitions.csv` | The 2.x partition table, fixed for the life of 2.x (`docs/2.0/DECISIONS.md` D1). |
 | `sdkconfig.defaults` | The build configuration and its source of truth. `sdkconfig` is generated and not tracked. |

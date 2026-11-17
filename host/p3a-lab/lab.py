@@ -59,6 +59,9 @@ class BuildConfig:
 CONFIGS = {
     "release": BuildConfig("release", "build", ()),
     "test": BuildConfig("test", "build-test", ("sdkconfig.test.defaults",)),
+    # The jitter work's overlays: release plus the frame trace, and the heavier diagnostic set.
+    "trace": BuildConfig("trace", "build-trace", ("sdkconfig.trace.defaults",)),
+    "diag": BuildConfig("diag", "build-diag", ("sdkconfig.diag.defaults",)),
 }
 
 # A line matching any of these means the firmware crashed or hung.
@@ -176,6 +179,12 @@ def build(config: str = "test") -> Path:
     proc = subprocess.run(check, capture_output=True, text=True)
     if proc.returncode != 0:
         raise LabError(f"tree checks failed for the {cfg.name} build:\n{proc.stdout}{proc.stderr}")
+    if cfg.name == "release":
+        # The release configuration must still say what 1.x shipped with.
+        proc = subprocess.run([sys.executable, str(REPO / "tools" / "compare_sdkconfig.py")],
+                              capture_output=True, text=True)
+        if proc.returncode != 0:
+            raise LabError(f"the release configuration drifted from 1.x:\n{proc.stdout}{proc.stderr}")
     return REPO / cfg.build_dir
 
 

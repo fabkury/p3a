@@ -109,8 +109,9 @@ Everything the build needs before the first line of 2.0 firmware matters.
 ### M0.4 Device lab
 
 - `host/p3a-lab/`: build (with the guards of `host/jitter-lab/build.ps1`),
-  flash, erase, serial capture without reset, provision from the secrets
-  file, wait for boot.
+  flash, erase, serial capture without reset, secrets loading and
+  redaction, wait for boot. The console provision command arrives with
+  M1.4 and M1.5, when there is somewhere to store what it sets.
 - `sdkconfig.test.defaults` with `CONFIG_P3A_TEST_HOOKS` and the UART test
   console (D20).
 - `tests/device/`: pytest fixtures (target guard, per-test serial capture,

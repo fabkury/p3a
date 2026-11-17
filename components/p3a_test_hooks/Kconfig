@@ -1,0 +1,15 @@
+menu "p3a test hooks"
+
+    config P3A_TEST_HOOKS
+        bool "Build the test hooks"
+        default n
+        help
+            Adds the hooks that automated device tests drive: a command
+            console on the UART, and later HTTP endpoints for screenshots,
+            touch injection and fault injection. See docs/2.0/TESTING.md.
+
+            Never enable this in a release build. It is set only by
+            sdkconfig.test.defaults, and tools/check_tree.py fails a release
+            build that contains it.
+
+endmenu

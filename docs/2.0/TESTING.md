@@ -129,7 +129,8 @@ them.
 
 | Hook | Transport | Purpose | From |
 |---|---|---|---|
-| Console: provision | UART | Set Wi-Fi credentials, device name and API keys on a fresh unit | M0.4 |
+| Console: `version`, `reboot` | UART | Identify the unit and its firmware; restart it | M0.4 |
+| Console: provision | UART | Set Wi-Fi credentials, device name and API keys on a fresh unit | M1.4, M1.5 |
 | Console: board probes | UART | Test pattern, touch presence, card info, before Wi-Fi exists | M1.2 |
 | Screenshot | HTTP | The front buffer as an image. This is how the agent sees the screen | M1.5 |
 | Clock | HTTP | Set the wall clock, for eviction, the clock overlay and certificate logic | M1.5 |

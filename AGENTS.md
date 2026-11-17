@@ -59,7 +59,12 @@ The firmware is public (Apache 2.0). 1.x runs on real users' devices from
 
 | Path | What |
 |------|------|
-| `CMakeLists.txt`, `main/`, `components/` | The 2.0 firmware. `main/` holds `app_main` and the boot sequence only. `components/` appears with the first 2.0 component (M0.4 or M1.1). |
+| `CMakeLists.txt`, `main/`, `components/` | The 2.0 firmware. `main/` holds `app_main` and the boot sequence only. Every component is listed with its layer in `components/LAYERS.txt`. |
+| `sdkconfig.test.defaults` | The test overlay: adds the test hooks (`components/p3a_test_hooks`). Test builds go to `build-test/`. |
+| `tests/host/` | Host unit tests (Unity, CMake, CTest). |
+| `tests/device/` | Device tests (pytest) that flash and drive the dev unit. |
+| `tools/check_tree.py` | The structural rules below as a script; CI and the lab run it. |
+| `host/p3a-lab/` | Builds, flashes and talks to the dev unit. Use it instead of raw `idf.py` for anything that involves the device. |
 | `partitions.csv` | The 2.x partition table, fixed for the life of 2.x (`docs/2.0/DECISIONS.md` D1). |
 | `sdkconfig.defaults` | The build configuration and its source of truth. `sdkconfig` is generated and not tracked. |
 | `legacy/` | The 1.x sources, kept as the quarry 2.0 is built from. Never compiled, never included, never linked. See `legacy/README.md`. |
@@ -130,15 +135,25 @@ ledger's deletion log with the reason.
 ## Build commands
 
 ```powershell
-Set-Location <repo root>               # in the same command as idf.py, every time
+python host/p3a-lab/lab.py build release   # or: build test. Builds and runs the build checks
+python host/p3a-lab/lab.py up              # test build, flash, wait for the console
+python -m pytest tests/device              # flash the test build, run the device tests
+cmake -S tests/host -B build-host -G Ninja; cmake --build build-host; ctest --test-dir build-host --output-on-failure
+python tools/check_tree.py                 # layer rule and forbidden patterns
+
+Set-Location <repo root>                   # raw idf.py: in the same command, every time
 idf.py build
 idf.py -p COM5 flash
-idf.py -p COM5 erase-flash
 idf.py fullclean
 ```
 
 - Build output goes to `build/`. Overlay builds (test, trace, diag) go to
   `build-<name>/` and never touch the default configuration.
+- `idf.py` refuses to run under an MSYS environment (Git Bash) and still
+  exits 0. Run it from PowerShell, or through the lab, which strips the
+  `MSYSTEM` variables.
+- Before a checkpoint: the tree checks, the host tests, both builds, and the
+  device tests. CI repeats all but the last on every push to `v2`.
 - `idf.py monitor` and .NET `SerialPort` reset the board when they open the
   port. To read the log without a reset, open the port with DTR and RTS held
   low (pyserial: set `dtr = False` and `rts = False` before `open()`); a short

@@ -8,9 +8,9 @@ times.
 
 | | |
 |---|---|
-| Phase | 0, tooling |
-| Current milestone | M0.3 Continuous integration |
-| Next action | Write the GitHub Actions workflow for `v2` (host tests, firmware build, lints, size check), push, and prove each check can go red |
+| Phase | 1, platform (Phase 0 complete) |
+| Current milestone | M1.1 util |
+| Next action | Start M1.1: move `psram_alloc.h` out of `legacy/components/channel_manager`, then the limits header, error base, task helper, job runners, event bus and DMA watermark, each with host tests where it is logic |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -19,7 +19,7 @@ times.
 
 | | |
 |---|---|
-| Running | `2.0.0-dev` empty app (M0.1), release configuration, flashed 2026-11-17 after a full erase |
+| Running | `2.0.0-dev`, test configuration (`build-test`), flashed 2026-11-17 by the device tests |
 | Flash state | Bootloader, 2.x partition table, app in `ota_0`. NVS empty. `slave_fw` empty (the C6 keeps its own firmware, 2.7.0 as last reported by 1.x) |
 | SD card | 32 GB, healthy (D8). Still holds 1.x content under `/p3a2`; to be wiped at M0.4 or M1.3 |
 | 1.x flash backup | `%USERPROFILE%\.p3a-lab\backups\p3a-fab_v1.2.4_full-flash_2026-11-17.bin` (see the session log for size and hash) |
@@ -34,9 +34,9 @@ reopened (why).
 |---|---|
 | M0.1 Tree reset and empty app | done 2026-11-17. Tiers: local release build; flashed, boot log read over UART. No CI yet (M0.3), no test configuration yet (M0.4) |
 | M0.2 Host test harness | done 2026-11-17. Tiers: host tests pass with MinGW gcc 16.1 and with gcc 13.3 under ASan and UBSan in WSL; firmware builds with the new component |
-| M0.3 Continuous integration | in progress |
-| M0.4 Device lab | not started |
-| M1.1 util | not started |
+| M0.3 Continuous integration | done 2026-11-17. Tiers: CI green on GitHub for tree checks, host tests and the firmware build; each linter rule proven to fail by its self-test (29 cases). No deliberately broken commit was pushed |
+| M0.4 Device lab | done 2026-11-17. Tiers: device tests (6 cases, run four times), lab unit tests (4 cases), both builds checked. Provisioning waits for M1.4 and M1.5 |
+| M1.1 util | next |
 | M1.2 board | not started |
 | M1.3 storage | not started |
 | M1.4 settings | not started |
@@ -147,6 +147,58 @@ they are simply not moved when their file is.
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-17: M0.3 and M0.4, CI and the device lab
+
+M0.3:
+
+- `tools/check_tree.py`: the structural rules as a script (layer rule from
+  `components/LAYERS.txt` and each `REQUIRES`, no cycles, nothing requires
+  `main`, no weak symbols, no `WHOLE_ARCHIVE`, no includes from `main/` or
+  `legacy/`, the guard lines in `sdkconfig.defaults`; with `--build`, the
+  generated revision setting, image at most 90 percent of the slot, test
+  hooks only in a test build). Same-layer requirements are allowed; cycles
+  are not.
+- `tools/test_check_tree.py`: 29 cases, one or more per rule, each building
+  a small tree that breaks the rule and expecting the failure. This is how
+  "each check can go red" was shown; no broken commit was pushed to `v2`.
+- `.github/workflows/v2.yml`: tree checks, lab unit tests, host tests under
+  ASan and UBSan, firmware builds for release and test in
+  `espressif/idf:v5.5.4`, binaries kept 14 days.
+- Verified, CI: the first run (`f917b4a6`, release build only) was green on
+  all three jobs. This checkpoint adds the test-configuration build and the
+  lab unit tests to CI; check `gh run list --branch v2` for that run.
+
+M0.4:
+
+- `components/p3a_test_hooks` (layer `net`, compiled only with
+  `CONFIG_P3A_TEST_HOOKS`): a UART console without echo. Protocol in its
+  header: `!command [args]` in, `TEST|ok|json`, `TEST|err|message` or
+  `TEST|ready|json` out. Commands: `version`, `reboot`.
+- `sdkconfig.test.defaults` and the `build-test/` directory.
+- `host/p3a-lab/lab.py`: build with checks, flash, erase, a UART class that
+  attaches without resetting, logs every line, redacts secrets, detects
+  crashes, and speaks the console protocol; `bring_up()` refuses a board
+  that is not the dev unit or runs another version. `README.md` beside it.
+- `tests/device/`: fixtures (session bring-up, per-test crash watch,
+  `--no-flash`, the `live` marker) and six smoke tests.
+- Changed from the plan: the `provision` console command is not here. There
+  is nowhere to store credentials until the settings store (M1.4) and Wi-Fi
+  (M1.5) exist. The lab half (secrets loading and redaction) is done.
+- Found by the tests: the first command after a reset was lost once, in the
+  first full run. Most likely a stray byte left in the device receive buffer
+  by the reset, glued to the front of the line. The lab now sends an empty
+  line after the ready message. Four clean runs since; the cause is not
+  proven.
+- Found while building the lab: `idf.py` refuses to run under an MSYS
+  environment (Git Bash) and still exits 0, so a wrapper sees a "successful"
+  build with no output. The lab strips the `MSYSTEM` variables.
+- Verified, device tests: 6 pass after a full test build and flash, and 3
+  more times with `--no-flash`. Verified, build check: the release map has
+  no `p3a_test_` symbol; the test map has 53.
+- Design point for M2.2, noted while writing the layer table: `sources` sits
+  below `library`, yet both need `record_t` and `source_ops_t`. Those types
+  need a home at or below `sources`; decide where when M2.2 defines them.
 
 ### 2026-11-17: M0.2 host test harness
 

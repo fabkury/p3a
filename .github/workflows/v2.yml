@@ -26,6 +26,10 @@ jobs:
         run: python3 tools/test_check_tree.py
       - name: Layer rule, forbidden patterns, configuration guard
         run: python3 tools/check_tree.py
+      - name: Lab unit tests
+        run: |
+          python3 -m pip install --quiet pyserial pytest
+          python3 -m pytest -q host/p3a-lab/test_lab.py
 
   host-tests:
     name: Host tests (ASan, UBSan)
@@ -42,9 +46,23 @@ jobs:
         run: ctest --test-dir build-host --output-on-failure
 
   firmware:
-    name: Firmware build (release)
+    name: Firmware build (${{ matrix.config }})
     runs-on: ubuntu-latest
     container: espressif/idf:v5.5.4
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - config: release
+            dir: build
+            idf_args: ""
+            check_args: ""
+          - config: test
+            dir: build-test
+            idf_args: >-
+              -B build-test -DSDKCONFIG=build-test/sdkconfig
+              -DSDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.test.defaults
+            check_args: "--test-build"
     steps:
       - uses: actions/checkout@v4
       - name: Build
@@ -54,20 +72,20 @@ jobs:
           . "$IDF_PATH/export.sh"
           # esp_wifi_remote keys its Kconfig fragments on major.minor (AGENTS.md).
           export ESP_IDF_VERSION=5.5
-          idf.py build
-      - name: Build checks (revision guard, image size, no test hooks)
+          idf.py ${{ matrix.idf_args }} build
+      - name: Build checks (revision guard, image size, test hooks only where meant)
         shell: bash
         run: |
           . "$IDF_PATH/export.sh" >/dev/null
-          python tools/check_tree.py --build build
+          python tools/check_tree.py --build ${{ matrix.dir }} ${{ matrix.check_args }}
       - name: Keep the binaries
         uses: actions/upload-artifact@v4
         with:
-          name: p3a-${{ github.sha }}
+          name: p3a-${{ matrix.config }}-${{ github.sha }}
           path: |
-            build/p3a.bin
-            build/bootloader/bootloader.bin
-            build/partition_table/partition-table.bin
-            build/ota_data_initial.bin
-            build/flash_args
+            ${{ matrix.dir }}/p3a.bin
+            ${{ matrix.dir }}/bootloader/bootloader.bin
+            ${{ matrix.dir }}/partition_table/partition-table.bin
+            ${{ matrix.dir }}/ota_data_initial.bin
+            ${{ matrix.dir }}/flash_args
           retention-days: 14

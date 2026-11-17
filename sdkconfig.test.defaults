@@ -1,0 +1,3 @@
+# Test build overlay: applied on top of sdkconfig.defaults by host/p3a-lab.
+# Adds the test hooks (docs/2.0/TESTING.md). Never part of a release build.
+CONFIG_P3A_TEST_HOOKS=y

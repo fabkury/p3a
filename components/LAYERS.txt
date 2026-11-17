@@ -9,3 +9,4 @@
 #
 # component    layer
 p3a_util       util
+p3a_test_hooks net

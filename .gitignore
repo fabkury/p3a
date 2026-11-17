@@ -35,3 +35,7 @@ build-rel/
 /sdkconfig
 /sdkconfig.old
 /build-*/
+
+# p3a-lab run logs
+host/p3a-lab/runs/
+.pytest_cache/

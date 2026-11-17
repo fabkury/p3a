@@ -63,3 +63,12 @@ p3a_host_test(test_err
 p3a_host_test(test_task_policy
     SOURCES util/test_task_policy.c ${UTIL}/p3a_task_policy.c
     INCLUDES ${UTIL}/include)
+p3a_host_test(test_job_table
+    SOURCES util/test_job_table.c ${UTIL}/p3a_job_table.c
+    INCLUDES ${UTIL}/include ${P3A_STUBS})
+p3a_host_test(test_event_table
+    SOURCES util/test_event_table.c ${UTIL}/p3a_event_table.c
+    INCLUDES ${UTIL}/include ${P3A_STUBS})
+p3a_host_test(test_mem_pressure
+    SOURCES util/test_mem_pressure.c ${UTIL}/p3a_mem_pressure.c
+    INCLUDES ${UTIL}/include)

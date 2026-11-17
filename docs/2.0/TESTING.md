@@ -130,6 +130,7 @@ them.
 | Hook | Transport | Purpose | From |
 |---|---|---|---|
 | Console: `version`, `reboot` | UART | Identify the unit and its firmware; restart it | M0.4 |
+| Console: `task`, `errname`, `job`, `jobinfo`, `event`, `mem` | UART | Exercise the util layer: task policy, error names, job runners, event fan-out and overflow, memory pressure (including taking and returning DMA-pool memory) | M1.1 |
 | Console: provision | UART | Set Wi-Fi credentials, device name and API keys on a fresh unit | M1.4, M1.5 |
 | Console: board probes | UART | Test pattern, touch presence, card info, before Wi-Fi exists | M1.2 |
 | Screenshot | HTTP | The front buffer as an image. This is how the agent sees the screen | M1.5 |

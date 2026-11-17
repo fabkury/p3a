@@ -82,6 +82,33 @@ below its own. Bottom to top: `util`, `board`, `storage`, `sources`,
 or anything from `legacy/` are forbidden. What each layer holds is in
 `docs/2.0/PLAN.md`.
 
+### Conventions for 2.0 code
+
+All in `components/p3a_util`; each header explains itself at the top.
+
+- **Tasks** are created only with `p3a_task_create()` and a class
+  (`RENDER`, `TOUCH`, `APP`, `NETWORK`, `BACKGROUND`). No literal
+  priorities, no hand-rolled PSRAM stacks. Tasks are long-lived.
+- **Run-once or slow work** is a job (`p3a_job_submit()`), never a task
+  made for one call and never done on a task that must stay responsive.
+- **Allocation** defaults to PSRAM through `psram_alloc.h`. Internal RAM is
+  asked for explicitly, with the reason in a comment. No plain `malloc` in
+  project code.
+- **Errors** that a caller must tell apart use `p3a_err.h`
+  (`P3A_ERR_NOT_PLAYABLE`, `CORRUPT`, `MISSING`, `RATE_LIMITED`, `AUTH`,
+  `NO_KEY`, `SD_FAILED`). Never classify a failure by matching a path or a
+  message.
+- **Events** (`p3a_event.h`) are for fan-out only. If the emitter knows who
+  should act, it calls that code. New event types go in
+  `p3a_event_types.h` with their meaning and payload.
+- **Optional work** (a download, a refresh, a new TLS session) checks
+  `p3a_mem_level()` before starting.
+- **Logic is split from hardware** so it can be host-tested: the pure part
+  in its own file with no IDF includes (`p3a_job_table.c`,
+  `p3a_mem_pressure.c`), the thin device part beside it.
+- **Test hooks** live only in `components/p3a_test_hooks`, one command file
+  per area, every symbol prefixed `p3a_test_`.
+
 ### Moving code out of `legacy/`
 
 Code leaves `legacy/` only inside a milestone: `git mv` it into the new tree,

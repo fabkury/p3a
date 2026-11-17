@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
-// UART test console. Protocol in p3a_test_hooks.h.
+// UART test console: line reader, dispatch, and the commands about the unit
+// itself. Protocol in p3a_test_hooks.h. Commands for each area of the
+// firmware live in p3a_test_<area>.c.
 
 #include "p3a_test_hooks.h"
 
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "driver/uart.h"
@@ -12,12 +13,11 @@
 #include "esp_chip_info.h"
 #include "esp_log.h"
 #include "esp_mac.h"
-#include "esp_memory_utils.h"
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "p3a_err.h"
 #include "p3a_task.h"
+#include "p3a_test_internal.h"
 
 #define CONSOLE_UART   ((uart_port_t)CONFIG_ESP_CONSOLE_UART_NUM)
 #define LINE_MAX_LEN   1024
@@ -25,14 +25,12 @@
 
 static const char *TAG = "p3a_test";
 
-typedef void (*p3a_test_command_fn)(const char *args);
-
-static void reply_ok(const char *json)
+void p3a_test_reply_ok(const char *json)
 {
     printf("TEST|ok|%s\n", json);
 }
 
-static void reply_err(const char *message)
+void p3a_test_reply_err(const char *message)
 {
     printf("TEST|err|%s\n", message);
 }
@@ -57,54 +55,33 @@ static void cmd_version(const char *args)
     (void)args;
     char json[192];
     format_identity(json, sizeof(json));
-    reply_ok(json);
+    p3a_test_reply_ok(json);
 }
 
 static void cmd_reboot(const char *args)
 {
     (void)args;
-    reply_ok("{}");
+    p3a_test_reply_ok("{}");
     fflush(stdout);
     vTaskDelay(pdMS_TO_TICKS(100));
     esp_restart();
 }
 
-// Reports how the calling task (the console itself, class BACKGROUND) was
-// created, so a device test can check that the task helper applies its policy.
-static void cmd_task(const char *args)
-{
-    (void)args;
-    char json[160];
-    snprintf(json, sizeof(json), "{\"name\":\"%s\",\"priority\":%u,\"core\":%d,\"psram_stack\":%s}",
-             pcTaskGetName(NULL), (unsigned)uxTaskPriorityGet(NULL), (int)xPortGetCoreID(),
-             esp_ptr_external_ram(pxTaskGetStackStart(NULL)) ? "true" : "false");
-    reply_ok(json);
-}
-
-// Maps an error code to its printable name: !errname 327682
-static void cmd_errname(const char *args)
-{
-    char *end = NULL;
-    long code = strtol(args, &end, 0);
-    if (end == args) {
-        reply_err("usage: !errname <code>");
-        return;
-    }
-    char json[96];
-    snprintf(json, sizeof(json), "{\"name\":\"%s\",\"p3a\":%s}", p3a_err_to_name((esp_err_t)code),
-             p3a_err_is_p3a((esp_err_t)code) ? "true" : "false");
-    reply_ok(json);
-}
-
-static const struct {
-    const char *name;
-    p3a_test_command_fn fn;
-} s_commands[] = {
+static const p3a_test_command_t s_core_commands[] = {
     {"version", cmd_version},
     {"reboot", cmd_reboot},
-    {"task", cmd_task},
-    {"errname", cmd_errname},
 };
+
+static bool run_from(const p3a_test_command_t *table, size_t count, const char *name, const char *args)
+{
+    for (size_t i = 0; i < count; i++) {
+        if (strcmp(name, table[i].name) == 0) {
+            table[i].fn(args);
+            return true;
+        }
+    }
+    return false;
+}
 
 static void dispatch(char *line)
 {
@@ -118,13 +95,11 @@ static void dispatch(char *line)
     } else {
         args = name + strlen(name);
     }
-    for (size_t i = 0; i < sizeof(s_commands) / sizeof(s_commands[0]); i++) {
-        if (strcmp(name, s_commands[i].name) == 0) {
-            s_commands[i].fn(args);
-            return;
-        }
+    if (run_from(s_core_commands, sizeof(s_core_commands) / sizeof(s_core_commands[0]), name, args) ||
+        run_from(p3a_test_util_commands, p3a_test_util_command_count, name, args)) {
+        return;
     }
-    reply_err("unknown command");
+    p3a_test_reply_err("unknown command");
 }
 
 static void console_task(void *arg)
@@ -157,7 +132,7 @@ static void console_task(void *arg)
         line[len] = '\0';
         if (overflow) {
             if (line[0] == '!') {
-                reply_err("line too long");
+                p3a_test_reply_err("line too long");
             }
         } else if (len > 0) {
             dispatch(line);
@@ -174,7 +149,7 @@ void p3a_test_console_start(void)
         ESP_LOGE(TAG, "uart_driver_install failed: %s", esp_err_to_name(err));
         return;
     }
-    p3a_task_config_t task = P3A_TASK_CONFIG("p3a_test_con", console_task, NULL, 4096, P3A_TASK_BACKGROUND);
+    p3a_task_config_t task = P3A_TASK_CONFIG("p3a_test_con", console_task, NULL, 6144, P3A_TASK_BACKGROUND);
     err = p3a_task_create(&task, NULL);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "could not start the test console task: %s", esp_err_to_name(err));

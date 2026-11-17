@@ -48,6 +48,7 @@ Set before the architecture review and taken as given by everything since.
 | D19 | 2026-11-17 | Working | Test tooling: Unity with CMake and CTest for host tests, pytest for device tests, `node --test` for web UI logic, GitHub Actions for CI. Details in [TESTING.md](TESTING.md) | All are already installed or dependency-free |
 | D20 | 2026-11-17 | Working | A fresh unit is provisioned for tests over UART by a console that exists only in test builds. Credentials are never compiled into a binary | Build output sits inside the Dropbox-synced repo folder (D7) |
 | D21 | 2026-11-17 | Working | The build configuration is `sdkconfig.defaults`; `sdkconfig` is generated and untracked. Options for components not yet in the tree are parked in that file, commented, under their milestone. Closes O11 | A tracked full `sdkconfig` would silently drop the esp_hosted and BSP settings while those components are absent, and bring them back as defaults later |
+| D22 | 2026-11-17 | Working | What the event bus is for: fan-out only, when several parts that know nothing of each other must hear that something happened. It is not a way to call one known function; that is a direct call downward or the hook table upward. Emitting never blocks, handlers run later on the bus task with no lock held, and a full queue drops and counts. Categories are gone, and the 1.x event types are not carried over: each is added by the milestone that brings its emitter. The rule is at the top of `p3a_event.h`. Closes O8 | The review found 14 of 21 subscriptions were a relay through `main` for calls the emitter could have made |
 
 ## 1.x decisions that stay in force
 
@@ -115,7 +116,6 @@ are not missed.
 | O5 | Clock overlay: 12 or 24 hour, seconds or not, visible during channel messages and the info screen or not | M3.5 | See idea 1 |
 | O6 | Branding overlay: minimum band height and clear space from the Giphy and Klipy terms; bottom band only, or side bands too | M3.5 | See idea 2 |
 | O7 | The screen model: `p3a_state` becomes the single owner, or it is deleted in favour of one UI model plus a small playback struct | M3.1 | Working decision allowed; the review offers both |
-| O8 | What the event bus is for, written as a rule | M1.1 | Working decision allowed; the review proposes fan-out only |
 | O9 | The internal-RAM measures from `docs/known-issues.md`: packet mode, refresh concurrency, the Option E items, load shedding thresholds | M4.1 | Needs measurements on the 2.0 build, then a soak |
 | O10 | A wall-clock budget for slow software JPEG decodes, and what a timed-out image becomes | M2.4 | The `NOT_PLAYABLE` error gives it a clean home |
 | O12 | OTA hardening from audit item M23: post-boot self-test before marking an image valid, anti-rollback, minimum-version gate | M5.2 | |

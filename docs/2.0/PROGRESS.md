@@ -9,8 +9,8 @@ times.
 | | |
 |---|---|
 | Phase | 1, platform (Phase 0 complete) |
-| Current milestone | M1.1 util |
-| Next action | Continue M1.1. Done: allocation helper, error base, task helper. Remaining, in order: job runners (a host-tested job table plus the two runner tasks), the event bus (move `legacy/components/event_bus`, write down its purpose as O8, call handlers outside the mutex), the DMA-pool watermark (host-tested hysteresis plus a sampler), the one-shot heap report on a failed allocation, and `p3a_limits.h` when its first constant arrives |
+| Current milestone | M1.2 board |
+| Next action | Start M1.2: read `legacy/components/p3a_board_ep44b`, `sdio_bus`, `sd_idle_wait`, `slave_ota` and the LCD and touch parts of `legacy/main`; decide the component split for the `board` layer; un-park the BSP and esp_hosted lines in `sdkconfig.defaults` (mind the `ESP_IDF_VERSION=5.5` trap); bring up the panel first, with a test-pattern console command |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -36,8 +36,8 @@ reopened (why).
 | M0.2 Host test harness | done 2026-11-17. Tiers: host tests pass with MinGW gcc 16.1 and with gcc 13.3 under ASan and UBSan in WSL; firmware builds with the new component |
 | M0.3 Continuous integration | done 2026-11-17. Tiers: CI green on GitHub for tree checks, host tests and the firmware build; each linter rule proven to fail by its self-test (29 cases). No deliberately broken commit was pushed |
 | M0.4 Device lab | done 2026-11-17. Tiers: device tests (6 cases, run four times), lab unit tests (4 cases), both builds checked. Provisioning waits for M1.4 and M1.5 |
-| M1.1 util | in progress: allocation helper, error base and task helper done 2026-11-17 (host tests, device tests, both builds). Job runners, event bus, memory watermark remain |
-| M1.2 board | not started |
+| M1.1 util | done 2026-11-17. Tiers: host tests (6 programs, under ASan and UBSan too), device tests (21 cases, run twice), both builds checked, CI. `p3a_limits.h` is not created yet: it arrives with its first constant |
+| M1.2 board | next |
 | M1.3 storage | not started |
 | M1.4 settings | not started |
 | M1.5 net base | not started |
@@ -98,7 +98,7 @@ and proposals are in [DECISIONS.md](DECISIONS.md) under "Open decisions".
 | O14 | A second board for the field test | M6.3 |
 | O13 | How `v2` becomes `main` | M6.4 |
 
-The remaining open decisions (O7 to O10) may be taken as working decisions
+The remaining open decisions (O7, O9, O10) may be taken as working decisions
 by the agent and are reported when taken.
 
 ## Ports from main
@@ -143,10 +143,68 @@ M0.1, 2026-11-17 (paths relative to the 1.x tree):
 Dead functions inside files that are otherwise live were not hunted down;
 they are simply not moved when their file is.
 
+M1.1, 2026-11-17:
+
+- `components/event_bus/` (342 lines). Rewritten as `p3a_event` in
+  `components/p3a_util` rather than moved: the 2.0 bus drops categories,
+  runs handlers outside its lock, counts dropped events, and takes its
+  event types from a new list that starts almost empty. The 18 event types
+  of 1.x are not carried over; each returns only if its emitter arrives and
+  it is a real fan-out (D22).
+
 ## Session log
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-17: M1.1 complete, jobs, events, memory pressure
+
+- CI on the first M1.1 commit (`8d00fe38`): all four jobs green, including
+  the repaired test-configuration build.
+- Jobs: `p3a_job_table` (pure: ids, states, replacement of the oldest
+  finished record) and `p3a_job` (two runner tasks, I/O and UI, class APP,
+  12 KB PSRAM stacks, eight queued jobs each). `p3a_job_set_progress()`
+  works from inside a job. This is what replaces the twelve one-shot tasks
+  of 1.x and what `/api/v2/jobs/{id}` will read at M1.5.
+- Events: `p3a_event` with the rule for what the bus is for written at the
+  top of its header (decision D22, closes O8). Handlers run with no lock
+  held (audit M9); a full queue drops, counts and logs. Subscriber table is
+  pure and host-tested.
+- Memory: `p3a_mem`. The level decision (OK, LOW, CRITICAL, with a recovery
+  margin against flapping) is pure and host-tested; the device half samples
+  the internal DMA pool on demand, at most every 250 ms, and announces a
+  change as an event. No task and no timer. Thresholds are provisional
+  (O9). The allocation-failure heap report moved in from
+  `legacy/main/p3a_main.c`, still one per boot.
+- `app_main` gained `boot_step()`: a failed step is logged and boot carries
+  on (audit H10's direction).
+- Test console split into a core and one command file per area
+  (`p3a_test_util.c`), with commands `task`, `errname`, `job`, `jobinfo`,
+  `event`, `mem`.
+- Found by the tests:
+  - Host: the recovery margin was computed in 64 bits and then truncated to
+    32. Unreachable with real thresholds, fixed anyway.
+  - Device: a flash write (NVS set and commit) from a job runner whose stack
+    is in PSRAM works on this chip. This was a real question; the runners
+    would otherwise have needed internal-RAM stacks.
+  - Device: with the near-empty 2.0 firmware the internal DMA pool is
+    447 KB with about 400 KB free and a largest block of 254 KB. Fully
+    loaded 1.x left about 272 KB. Watch this number shrink as components
+    arrive; it is the budget the known SDIO issue is about.
+  - Device: exhausting the pool with 2 KB chunks leaves 15 KB free with a
+    largest block of 1.4 KB. That is the fragmentation case the "largest
+    block" threshold exists for.
+  - Two failures were wrong assumptions in the tests themselves (pool size,
+    a hog limit in the test hook), not firmware faults.
+- Verified, host tests: 6 programs (version, err, task policy, job table,
+  event table, mem pressure) pass with MinGW and under ASan and UBSan.
+  Verified, device tests: 21 pass, twice in a row, including job ordering
+  across runners, a full job queue, event fan-out of 200 through a 32-slot
+  queue, a deliberate event flood with drops reported, pressure levels
+  following a hogged pool with one event per change, and exactly one heap
+  report per boot. Verified, build checks: release and test.
+- Not done: `p3a_limits.h`. It has nothing to hold yet; the milestone that
+  needs the first shared constant creates it.
 
 ### 2026-11-17: M1.1 first slice, allocation, errors, tasks
 

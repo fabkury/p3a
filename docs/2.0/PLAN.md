@@ -135,6 +135,8 @@ over HTTP.
 - Closes: findings 9, 12, 14, the signal half of 10; audit M9.
 - Tests: host tests for everything that is not a thin IDF wrapper.
 - Exit: host tests pass; the empty app creates its tasks through the helper.
+- As built: `p3a_limits.h` waits for its first constant; the event bus was
+  rewritten rather than moved (D22).
 
 ### M1.2 board
 

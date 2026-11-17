@@ -52,6 +52,7 @@ six-place edits, and gets a host test harness as a side effect.
 | [storage-and-data.md](storage-and-data.md) | SD layout, the nine formats, the 64-byte record and what 192 buys, NVS and settings, atomicity, eviction |
 | [web-ui-and-api.md](web-ui-and-api.md) | Routing, envelope, slow handlers, dual OTA and everything A deletes, embedding, the UI's structure |
 | [target-architecture.md](target-architecture.md) | The proposed 2.0 skeleton with A, B, C, D placed in it |
+| [ideas.md](ideas.md) | Running list of 2.0 ideas as they arrive, each placed in the skeleton with its dependencies |
 
 Each finding on the area pages has the same shape: what 1.x does with
 evidence, why it got there where that is fair to say, what a fresh design

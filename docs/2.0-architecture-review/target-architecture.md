@@ -124,7 +124,48 @@ surrogate, the health check, `compat.js`, `metadata.json`, `version.txt`,
 `WEBUI_VERSION`, `P3A_API_VERSION`, the `storage` partition, two release
 assets and the `webui` block of `manifest.json`. One version number remains.
 Measured size: about 150 KB after the PWA icons are shrunk, in an 8 MB slot
-whose current occupant is 2.46 MB. Decide separately what the freed 4 MB does.
+whose current occupant is 2.46 MB. The partition table below says what the
+freed space does.
+
+### Partition table
+
+Decided 2026-11-17. A 2.0 flash is a serial reflash anyway, so the table is
+reordered once; after release it is fixed for the life of 2.x.
+
+| Partition | Type | Offset | Size | Role |
+|---|---|---|---|---|
+| `nvs` | data | 0x9000 | 64 KB | settings blob, Wi-Fi and Makapix secrets |
+| `phy_init` | data | 0x19000 | 4 KB | radio calibration |
+| `otadata` | data | 0x1A000 | 8 KB | boot slot and rollback state |
+| `slave_fw` | data 0x40 | 0x20000 | 2 MB | ESP32-C6 image for `slave_ota` |
+| `coredump` | data | 0x220000 | 256 KB | crash dumps |
+| `ota_0` | app | 0x260000 | 10 MB | app slot A |
+| `ota_1` | app | 0xC60000 | 10 MB | app slot B |
+| `spare` | data | 0x1660000 | 9.6 MB (to end of flash) | reserved, unformatted, no code behind it |
+
+Changes from 1.x: the 4 MB LittleFS `storage` partition is gone; the
+fixed-size partitions move to the front so that the two most likely to be
+resized later (the app slots and the spare block) share one boundary; the
+app slots grow from 8 to 10 MB; the 9.6 MB that 1.x never allocated plus
+the former `storage` space become one contiguous `spare` data partition.
+The first three partitions keep their 1.x offsets so NVS survives a reflash
+on dev units.
+
+Reasoning. The embedded UI and every other asset on the 2.0 list (fonts,
+logos, intro animations, museum tables) fit in a few MB; 10 MB slots cover a
+4x growth of today's image. `spare` has no consumer; its value is that a
+data partition can be mounted later without a reflash while an app slot
+cannot be grown without one. Do not ship LittleFS or any filesystem code
+for it until something needs it. `slave_ota` locates its partition by
+subtype, and the web flasher reads offsets from `flash_args`, so the
+reorder needs no code change.
+
+Rules that go with it: a CMake check fails the build when `p3a.bin` exceeds
+90 percent of the slot, because `esp_https_ota` otherwise rejects the image
+only at install time on the device; every byte embedded in the binary is
+downloaded and flashed by every device on every update, so embed sparingly
+and gzip text assets; and any `partitions.csv` edit triggers an `sdkconfig`
+regeneration that must keep the silicon-revision guard intact.
 
 **B. 192-byte records.** Section 2. The size is right, the identifier limits
 that produced the CMA and Wellcome workarounds and the Library of Congress

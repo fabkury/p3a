@@ -61,7 +61,7 @@ jobs:
             dir: build-test
             idf_args: >-
               -B build-test -DSDKCONFIG=build-test/sdkconfig
-              -DSDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.test.defaults
+              '-DSDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.test.defaults'
             check_args: "--test-build"
     steps:
       - uses: actions/checkout@v4

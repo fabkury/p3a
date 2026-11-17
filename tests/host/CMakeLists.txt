@@ -49,7 +49,17 @@ function(p3a_host_test name)
     add_test(NAME ${name} COMMAND ${name})
 endfunction()
 
+# Stand-ins for the few IDF headers that host-testable code includes.
+set(P3A_STUBS "${CMAKE_CURRENT_SOURCE_DIR}/stubs")
+
 # --- util -------------------------------------------------------------------
+set(UTIL "${P3A_COMPONENTS}/p3a_util")
 p3a_host_test(test_version
-    SOURCES util/test_version.c ${P3A_COMPONENTS}/p3a_util/p3a_version.c
-    INCLUDES ${P3A_COMPONENTS}/p3a_util/include)
+    SOURCES util/test_version.c ${UTIL}/p3a_version.c
+    INCLUDES ${UTIL}/include)
+p3a_host_test(test_err
+    SOURCES util/test_err.c ${UTIL}/p3a_err.c
+    INCLUDES ${UTIL}/include ${P3A_STUBS})
+p3a_host_test(test_task_policy
+    SOURCES util/test_task_policy.c ${UTIL}/p3a_task_policy.c
+    INCLUDES ${UTIL}/include)

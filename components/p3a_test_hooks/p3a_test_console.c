@@ -4,6 +4,7 @@
 #include "p3a_test_hooks.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "driver/uart.h"
@@ -11,9 +12,12 @@
 #include "esp_chip_info.h"
 #include "esp_log.h"
 #include "esp_mac.h"
+#include "esp_memory_utils.h"
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "p3a_err.h"
+#include "p3a_task.h"
 
 #define CONSOLE_UART   ((uart_port_t)CONFIG_ESP_CONSOLE_UART_NUM)
 #define LINE_MAX_LEN   1024
@@ -65,12 +69,41 @@ static void cmd_reboot(const char *args)
     esp_restart();
 }
 
+// Reports how the calling task (the console itself, class BACKGROUND) was
+// created, so a device test can check that the task helper applies its policy.
+static void cmd_task(const char *args)
+{
+    (void)args;
+    char json[160];
+    snprintf(json, sizeof(json), "{\"name\":\"%s\",\"priority\":%u,\"core\":%d,\"psram_stack\":%s}",
+             pcTaskGetName(NULL), (unsigned)uxTaskPriorityGet(NULL), (int)xPortGetCoreID(),
+             esp_ptr_external_ram(pxTaskGetStackStart(NULL)) ? "true" : "false");
+    reply_ok(json);
+}
+
+// Maps an error code to its printable name: !errname 327682
+static void cmd_errname(const char *args)
+{
+    char *end = NULL;
+    long code = strtol(args, &end, 0);
+    if (end == args) {
+        reply_err("usage: !errname <code>");
+        return;
+    }
+    char json[96];
+    snprintf(json, sizeof(json), "{\"name\":\"%s\",\"p3a\":%s}", p3a_err_to_name((esp_err_t)code),
+             p3a_err_is_p3a((esp_err_t)code) ? "true" : "false");
+    reply_ok(json);
+}
+
 static const struct {
     const char *name;
     p3a_test_command_fn fn;
 } s_commands[] = {
     {"version", cmd_version},
     {"reboot", cmd_reboot},
+    {"task", cmd_task},
+    {"errname", cmd_errname},
 };
 
 static void dispatch(char *line)
@@ -141,8 +174,9 @@ void p3a_test_console_start(void)
         ESP_LOGE(TAG, "uart_driver_install failed: %s", esp_err_to_name(err));
         return;
     }
-    // TODO(M1.1): create through the util task helper once it exists.
-    if (xTaskCreate(console_task, "p3a_test_con", 4096, NULL, 2, NULL) != pdPASS) {
-        ESP_LOGE(TAG, "could not start the test console task");
+    p3a_task_config_t task = P3A_TASK_CONFIG("p3a_test_con", console_task, NULL, 4096, P3A_TASK_BACKGROUND);
+    err = p3a_task_create(&task, NULL);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "could not start the test console task: %s", esp_err_to_name(err));
     }
 }

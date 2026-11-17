@@ -9,5 +9,5 @@ endif()
 idf_component_register(
     SRCS ${srcs}
     INCLUDE_DIRS "include"
-    PRIV_REQUIRES esp_driver_uart esp_app_format
+    PRIV_REQUIRES esp_driver_uart esp_app_format p3a_util
 )

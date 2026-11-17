@@ -10,7 +10,7 @@ times.
 |---|---|
 | Phase | 1, platform (Phase 0 complete) |
 | Current milestone | M1.1 util |
-| Next action | Start M1.1: move `psram_alloc.h` out of `legacy/components/channel_manager`, then the limits header, error base, task helper, job runners, event bus and DMA watermark, each with host tests where it is logic |
+| Next action | Continue M1.1. Done: allocation helper, error base, task helper. Remaining, in order: job runners (a host-tested job table plus the two runner tasks), the event bus (move `legacy/components/event_bus`, write down its purpose as O8, call handlers outside the mutex), the DMA-pool watermark (host-tested hysteresis plus a sampler), the one-shot heap report on a failed allocation, and `p3a_limits.h` when its first constant arrives |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -36,7 +36,7 @@ reopened (why).
 | M0.2 Host test harness | done 2026-11-17. Tiers: host tests pass with MinGW gcc 16.1 and with gcc 13.3 under ASan and UBSan in WSL; firmware builds with the new component |
 | M0.3 Continuous integration | done 2026-11-17. Tiers: CI green on GitHub for tree checks, host tests and the firmware build; each linter rule proven to fail by its self-test (29 cases). No deliberately broken commit was pushed |
 | M0.4 Device lab | done 2026-11-17. Tiers: device tests (6 cases, run four times), lab unit tests (4 cases), both builds checked. Provisioning waits for M1.4 and M1.5 |
-| M1.1 util | next |
+| M1.1 util | in progress: allocation helper, error base and task helper done 2026-11-17 (host tests, device tests, both builds). Job runners, event bus, memory watermark remain |
 | M1.2 board | not started |
 | M1.3 storage | not started |
 | M1.4 settings | not started |
@@ -147,6 +147,38 @@ they are simply not moved when their file is.
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-17: M1.1 first slice, allocation, errors, tasks
+
+- CI on the M0.4 commit: tree checks, host tests and the release build
+  green; the new test-configuration job failed on an unquoted `;` in its
+  own arguments. Fixed in this commit.
+- `psram_alloc.h` moved unchanged from `legacy/components/channel_manager`
+  to `components/p3a_util`. It keeps its name and API so that code moving
+  out of `legacy/` later needs no edits for it. No host test: it is three
+  inline wrappers over `heap_caps_*`.
+- `p3a_err`: the error base at `0x50000` with `NOT_PLAYABLE`, `CORRUPT`,
+  `MISSING`, `RATE_LIMITED`, `AUTH`, `NO_KEY`, `SD_FAILED`, stable names,
+  and `p3a_err_to_name()` for any `esp_err_t`. A code added without a name
+  fails to compile. First host stub: `tests/host/stubs/esp_err.h`.
+- `p3a_task_policy` (pure) and `p3a_task` (FreeRTOS): five classes carrying
+  priority, core and stack memory; `p3a_task_create()` is the only way to
+  make a task. It uses the IDF's `xTaskCreatePinnedToCoreWithCaps` for
+  PSRAM stacks, with a fallback to internal RAM. Tasks made this way are
+  long-lived by rule; run-once work will go to the job runners.
+- Policy choices, taken from what 1.x shipped rather than from the review
+  text: render 5 on core 1 with internal stacks; touch 5, unpinned, PSRAM
+  stack (the review says internal, but 1.x deliberately put the touch stack
+  in PSRAM to spare the DMA pool); app 4, network 3, background 2, all on
+  core 0 with PSRAM stacks. A host test pins these values so that changing
+  one is a visible decision.
+- The test console now creates its task through the helper and gained two
+  commands, `task` and `errname`.
+- Verified, host tests: 3 executables (version, err, task policy) pass with
+  MinGW and under ASan and UBSan in WSL. Verified, device tests: 8 pass
+  after a test build and flash; the console task reports priority 2, core
+  0, stack in PSRAM, and error names resolve on the device. Verified, build
+  checks: release and test builds pass `check_tree.py --build`.
 
 ### 2026-11-17: M0.3 and M0.4, CI and the device lab
 

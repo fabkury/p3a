@@ -12,6 +12,7 @@
 #include <string.h>
 
 #include "esp_lcd_panel_ops.h"
+#include "esp_lcd_touch.h"
 #include "esp_rom_crc.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -233,8 +234,34 @@ static void cmd_button(const char *args)
     p3a_test_reply_ok(json);
 }
 
+// !touch   reads the touch controller once and reports the points it sees.
+static void cmd_touch(const char *args)
+{
+    (void)args;
+    esp_lcd_touch_handle_t touch = p3a_board_get_touch();
+    if (!touch) {
+        p3a_test_reply_ok("{\"ready\":false,\"points\":0}");
+        return;
+    }
+    esp_lcd_touch_point_data_t points[5] = {0};
+    uint8_t count = 0;
+    esp_err_t err = esp_lcd_touch_read_data(touch);
+    if (err == ESP_OK) {
+        err = esp_lcd_touch_get_data(touch, points, &count, 5);
+    }
+    if (err != ESP_OK) {
+        p3a_test_reply_err(p3a_err_to_name(err));
+        return;
+    }
+    char json[96];
+    snprintf(json, sizeof(json), "{\"ready\":true,\"points\":%u,\"x\":%u,\"y\":%u}", (unsigned)count,
+             count ? (unsigned)points[0].x : 0u, count ? (unsigned)points[0].y : 0u);
+    p3a_test_reply_ok(json);
+}
+
 const p3a_test_command_t p3a_test_board_commands[] = {
     {"lcd", cmd_lcd},
     {"button", cmd_button},
+    {"touch", cmd_touch},
 };
 const size_t p3a_test_board_command_count = sizeof(p3a_test_board_commands) / sizeof(p3a_test_board_commands[0]);

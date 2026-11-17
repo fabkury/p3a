@@ -2,9 +2,9 @@
 // Copyright 2025-2026 p3a Contributors
 //
 // The board: Waveshare ESP32-P4-WIFI6-Touch-LCD-4B. 720x720 IPS panel over
-// MIPI-DSI, GT911 touch, BOOT button, backlight. p3a 2.0 targets this one
-// board (docs/2.0/DECISIONS.md, C1), so this is a description of it rather
-// than an abstraction over several: there are no capability flags.
+// MIPI-DSI, GT911 capacitive touch, BOOT button, backlight. p3a 2.0 targets
+// this one board (docs/2.0/DECISIONS.md, C1), so this is a description of it
+// rather than an abstraction over several: there are no capability flags.
 //
 // Layer: board. Depends only on util.
 #pragma once
@@ -14,6 +14,7 @@
 
 #include "esp_err.h"
 #include "esp_lcd_panel_ops.h"
+#include "esp_lcd_touch.h"
 #include "sdkconfig.h"
 
 #ifdef __cplusplus
@@ -60,6 +61,20 @@ esp_err_t p3a_board_set_brightness(int percent);
 
 // The last value set, as given (not the eased one).
 int p3a_board_get_brightness(void);
+
+// --- touch ---------------------------------------------------------------------
+
+// Brings up the GT911 touch controller, waiting at most timeout_ms. The I2C
+// bus is first freed if a previous boot left the controller holding it.
+//
+// ESP_ERR_TIMEOUT means the controller did not answer and the bus is probably
+// wedged; touch stays unavailable for this boot. What to do about a failure
+// (retry by rebooting, carry on without touch) is the caller's decision.
+esp_err_t p3a_board_touch_init(uint32_t timeout_ms);
+
+// The controller, for esp_lcd_touch_read_data() and esp_lcd_touch_get_data().
+// NULL when touch is not available.
+esp_lcd_touch_handle_t p3a_board_get_touch(void);
 
 // --- BOOT button --------------------------------------------------------------
 

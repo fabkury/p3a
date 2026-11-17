@@ -45,6 +45,11 @@ void app_main(void)
     // the settings store once it exists (M1.4).
     boot_step("display", p3a_board_display_init(0, 0, 0));
 
+    // A touch controller that does not answer is not fatal: the device plays
+    // without touch. The 1.x recovery (one reboot, then carry on) returns with
+    // the settings store and the UI.
+    boot_step("touch", p3a_board_touch_init(3000));
+
 #if CONFIG_P3A_TEST_HOOKS
     ESP_LOGW(TAG, "TEST BUILD: test hooks are compiled in. Not for release.");
     p3a_test_console_start();

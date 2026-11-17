@@ -10,7 +10,7 @@ times.
 |---|---|
 | Phase | 1, platform (Phase 0 complete) |
 | Current milestone | M1.2 board |
-| Next action | Continue M1.2. Done: panel, framebuffers, backlight, BOOT button. Remaining, in order: (1) touch: move the I2C recovery and init parked in `legacy/components/p3a_board_ep44b/p3a_board_touch_init.c.part` and the driver half of `legacy/main/app_touch.c` (audit H5), with a `touch` console probe; (2) SD card: mount with the aligned FatFS glue (`legacy/main/ffsystem_aligned.c`), `sdio_bus`, `sd_idle_wait` (it requires `frame_trace` and uses a weak reference, which the linter forbids: decide how); (3) co-processor: esp_hosted (un-park its three sdkconfig lines, mind `ESP_IDF_VERSION=5.5`), `slave_ota` and its `slave_fw` flashing, without its dependency on `p3a_core` |
+| Next action | Continue M1.2. Done: panel, framebuffers, backlight, BOOT button, touch controller. Remaining, in order: (1) SD card: mount with the aligned FatFS glue (`legacy/main/ffsystem_aligned.c`), `sdio_bus`, `sd_idle_wait` (it requires `frame_trace` and uses a weak reference, which the linter forbids: decide how), with a `sd` console probe; the 1.x mount lives in `legacy/main/animation_player.c:126` and `legacy/main/sd_format.c`; (2) co-processor: esp_hosted (un-park its three sdkconfig lines, mind `ESP_IDF_VERSION=5.5`), `slave_ota` and its `slave_fw` flashing, without its dependency on `p3a_core` |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -37,7 +37,7 @@ reopened (why).
 | M0.3 Continuous integration | done 2026-11-17. Tiers: CI green on GitHub for tree checks, host tests and the firmware build; each linter rule proven to fail by its self-test (29 cases). No deliberately broken commit was pushed |
 | M0.4 Device lab | done 2026-11-17. Tiers: device tests (6 cases, run four times), lab unit tests (4 cases), both builds checked. Provisioning waits for M1.4 and M1.5 |
 | M1.1 util | done 2026-11-17. Tiers: host tests (6 programs, under ASan and UBSan too), device tests (21 cases, run twice), both builds checked, CI. `p3a_limits.h` is not created yet: it arrives with its first constant |
-| M1.2 board | in progress: display, backlight and button done 2026-11-17 (31 device tests, both builds). Touch, SD card and co-processor remain |
+| M1.2 board | in progress: display, backlight, button and touch controller done 2026-11-17 (33 device tests, both builds, CI). SD card and co-processor remain |
 | M1.3 storage | not started |
 | M1.4 settings | not started |
 | M1.5 net base | not started |
@@ -89,6 +89,11 @@ Open:
   `python host/p3a-lab/lab.py cmd button` (prints `"presses": 0` or the
   count so far), press BOOT (the top button) twice, run it again: the count
   is two higher.
+- **M1.2-d, the touch controller sees a finger.** Hold a finger on the
+  panel and run `python host/p3a-lab/lab.py cmd touch`: it should print
+  `"points": 1` with `x` and `y` near where the finger is (0,0 is the
+  top-left corner, 719,719 the bottom-right). Without a finger it prints
+  `"points": 0`.
 
 Cleared:
 
@@ -180,6 +185,35 @@ M1.1, 2026-11-17:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-17: M1.2 second step, touch controller
+
+- CI on the first board commit (`58ccd894`): all four jobs green. The BSP
+  and its dependencies resolve inside the CI container.
+- `components/p3a_board/p3a_board_touch.c`: the I2C bus recovery and the
+  controller init, moved from 1.x. `p3a_board_touch_init(timeout_ms)` runs
+  the blocking init on a task of its own and waits a bounded time. The
+  context shared with that task is reference-counted on the heap, which
+  fixes audit H5 (1.x kept it on the caller's stack and deleted its
+  semaphore while the task could still use it).
+- The init task is created with plain `xTaskCreate`, at priority 1, not
+  through `p3a_task_create` and not as a job. Both exceptions are deliberate
+  and explained at the call: the task ends (the helper is for tasks that do
+  not), and it may hang forever (a job would take its runner with it).
+- What 1.x did around a touch failure is not here yet: the persisted reboot
+  streak, the on-screen countdown, the single retry by reboot, and the
+  rescue task that forces a restart when the init starves the main task.
+  They need the settings store (M1.4) and the UI (Phase 3). For now a
+  failed or timed-out init is logged and the device carries on without
+  touch. [PARITY.md](PARITY.md) now assigns that row to M3.4.
+- The gesture code in `legacy/main/app_touch.c` stays in `legacy/` for
+  M3.4.
+- Test hook `touch`: one read of the controller.
+- Verified, device tests: 33 pass after a flash and again without one. The
+  controller is ready at boot with no failure or timeout message and
+  answers 20 reads in a row with no points. Verified, build checks: release
+  (321 KB) and test. Awaiting manual check M1.2-d: nothing can put a finger
+  on the glass.
 
 ### 2026-11-17: M1.2 first step, panel, backlight, button
 

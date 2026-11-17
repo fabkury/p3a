@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2025-2026 p3a Contributors
 
-// The panel, its framebuffers and the backlight. Touch joins this file's
-// neighbours in a later step of M1.2.
+// The panel, its framebuffers and the backlight.
 
 #include "p3a_board.h"
 #include "bsp/esp-bsp.h"

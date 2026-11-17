@@ -100,3 +100,20 @@ def test_bad_lcd_arguments(uart):
     for bad in ("lcd", "lcd pixel 720 0", "lcd pixel 0 -1", "lcd shot 7", "lcd fill 1 2", "lcd nonsense"):
         with pytest.raises(lab.LabError):
             uart.command(bad)
+
+
+def test_touch_controller_answers(uart):
+    # Nobody is touching the panel during an automated run.
+    assert uart.command("touch") == {"ready": True, "points": 0, "x": 0, "y": 0}
+    for _ in range(20):
+        assert uart.command("touch")["ready"] is True
+
+
+def test_touch_comes_up_at_boot_without_delay(uart):
+    start = uart.mark()
+    uart.command("reboot")
+    uart.wait_ready(since=start)
+    boot = uart.lines[start:]
+    assert not any("boot: touch failed" in line for line in boot)
+    assert not any("touch controller init" in line for line in boot), "no failure or timeout message"
+    assert uart.command("touch")["ready"] is True

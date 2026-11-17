@@ -102,7 +102,7 @@ describe what a client can do, not the 1.x URL.
 | [ ] | During registration, long press cancels and returns to playback | keep | M3.4 | |
 | [ ] | During a firmware update, gestures are ignored | keep | M3.4 | |
 | [ ] | BOOT button toggles pause; ignored during the co-processor update | keep | M1.2, M2.4 | |
-| [ ] | Touch failure at boot: countdown and one reboot, then carry on without touch | keep | M1.2 | |
+| [ ] | Touch failure at boot: countdown and one reboot, then carry on without touch | keep | M3.4 | The bounded init is in M1.2; the reboot streak needs settings (M1.4) and the countdown needs the UI |
 
 ## On-screen UI
 

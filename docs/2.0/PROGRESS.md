@@ -10,7 +10,7 @@ times.
 |---|---|
 | Phase | 1, platform (Phase 0 complete) |
 | Current milestone | M1.5 net base |
-| Next action | Start M1.5: read the network page of the review and PLAN.md M1.5. Bring in Wi-Fi over the co-processor (station, credentials in their own NVS namespace, provisioned over the UART console from `secrets.json`, never compiled in), the captive portal for setup, mDNS under the `device_name` setting, the HTTP server with the one router and `/api/v2`, and the settings endpoints on top of `p3a_settings` (GET masked, PATCH all-or-nothing, the schema itself for the web UI, factory reset). Decide Q2 and Q6 from PARITY.md. The lab then needs a fixture that re-provisions Wi-Fi after a test that factory-resets |
+| Next action | M1.5 part 2, the HTTP server: read `docs/2.0-architecture-review/web-ui-and-api.md` and `legacy/components/http_api` (the router and the envelope helpers first). Build in `components/p3a_net`: the pure route table and matcher and the JSON envelope (host-tested), the server started at `P3A_EVENT_NET_UP`, `GET /api/v2/status`, `GET` and `PATCH /api/v2/settings` on `p3a_settings` (plus the schema itself), `/api/v2/jobs/{id}`, reboot, factory reset. Decide Q2 (keys in clear) and Q6 (core dump download) with Fab. Then part 3 (setup portal: `legacy/components/wifi_manager/wifi_captive_portal.c` is the last file there, and the `setup` state is where it plugs in) and part 4 (HTTP test hooks: screenshot, clock, log capture) |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -19,8 +19,8 @@ times.
 
 | | |
 |---|---|
-| Running | `2.0.0-dev`, test configuration (`build-test`), flashed 2026-11-18 by the device tests |
-| Flash state | Bootloader, 2.x partition table, app in `ota_0`, the 2.9.3 co-processor image in `slave_fw`. NVS was factory-reset at the end of the settings tests: no settings, no credentials. The C6 itself runs esp_hosted 2.7.0 and cannot be updated (see M1.2-e) |
+| Running | `2.0.0-dev`, test configuration (`build-test`), flashed 2026-11-18 by the device tests. On the Wi-Fi as `p3a-fab.local` |
+| Flash state | Bootloader, 2.x partition table, app in `ota_0`, the 2.9.3 co-processor image in `slave_fw`. NVS holds the test rig's Wi-Fi credentials and the device name `fab`, put there by the lab (`lab.py provision`). The C6 itself runs esp_hosted 2.7.0 and cannot be updated (see M1.2-e) |
 | SD card | 32 GB, healthy (D8). Still holds 1.x folders; see the M1.3 entry in the session log |
 | 1.x flash backup | `%USERPROFILE%\.p3a-lab\backups\p3a-fab_v1.2.4_full-flash_2026-11-17.bin` (see the session log for size and hash) |
 | Secrets file | Complete: four API keys read from the unit, Wi-Fi password filled in by Fab |
@@ -40,7 +40,7 @@ reopened (why).
 | M1.2 board | done 2026-11-17. Tiers: device tests (47 cases, twice), release, test and trace builds, the configuration guard, CI. Awaiting manual checks M1.2-a to d. The co-processor update itself cannot run on the dev unit (its C6 is on the unupdatable 2.7.0); see M1.2-e |
 | M1.3 storage | done 2026-11-18. Tiers: host tests (8 programs, under ASan and UBSan too), device tests (62 cases), release and test builds, the configuration guard. The repair paths of `sd_repair` cannot be exercised on a healthy card and are carried over on trust |
 | M1.4 settings | done 2026-11-18. Tiers: host tests (9 programs, under ASan and UBSan too), generator self-test (15 cases), device tests (76 cases, 14 of them new), release and test builds, the configuration guard. The touch-recovery restart itself is not exercised (the controller works); its counters and rule are |
-| M1.5 net base | next |
+| M1.5 net base | in progress. Part 1 done 2026-11-18 (Wi-Fi station, credentials, recovery, mDNS, clock): host tests (10 programs), device tests (89 cases, 13 of them new, on the real Wi-Fi), both builds, the configuration guard. Parts 2 to 4 (HTTP server and API, setup portal, HTTP test hooks) not started |
 | M2.1 Display pipeline and decoders | not started |
 | M2.2 Library core | not started |
 | M2.3 Source interface, local source, scheduler | not started |
@@ -221,6 +221,82 @@ M1.1, 2026-11-17:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-18: M1.5 part 1, the device is on Wi-Fi
+
+- New component `components/p3a_net` (layer `net`). Moved out of
+  `legacy/components/wifi_manager` with `git mv`: `app_wifi.c`
+  (`net_wifi.c`), `wifi_recovery.c` (`net_wifi_recovery.c`),
+  `transport_recovery.c` (`net_link_recovery.c`), `sntp_sync.c`
+  (`net_time.c`), and the two headers. Only `wifi_captive_portal.c` is left
+  there, for part 3.
+- What changed on the way in:
+  - `p3a_net_start()` never waits. 1.x blocked boot for up to 30 s and then
+    fell into the portal; 2.0 reports through `P3A_EVENT_NET_UP` and
+    `P3A_EVENT_NET_DOWN` (emitted on the transitions only) and a state:
+    `setup`, `connecting`, `up`, `degraded`.
+  - The upward calls are gone: Makapix, the HTTP API, `p3a_state` and the
+    weak UI symbols. Whoever cares subscribes to the two events.
+  - Nothing aborts. The 1.x `ESP_ERROR_CHECK`s on the Wi-Fi driver calls are
+    returned errors.
+  - The two long-lived tasks come from `p3a_task_create()`; the restart
+    countdown is a task of class `APP` made only when needed.
+  - The three restart counters are `p3a_recovery` (WIFI: one restart; LINK:
+    three), cleared by the first address.
+  - The Wi-Fi build options of 1.x (`ESP_MAXIMUM_RETRY`, the WPA3 and
+    auth-mode choices, the AP name) are constants with the values 1.x
+    shipped: three initial tries, WPA2 floor, WPA3 with both key methods.
+  - The reconnect delay is a pure function (`net_backoff.h`), host-tested,
+    and can no longer overflow.
+  - Credentials keep the 1.x namespace and keys. They are validated before
+    being stored, the password buffer is wiped after use, and neither is
+    ever logged.
+  - The hostname comes from the `device_name` setting: `p3a` or
+    `p3a-<name>`.
+- `p3a_clock` (util): whether the clock holds real time, and ISO 8601
+  formatting with no dependence on the C library's time zone. It lives in
+  `util` because sources (below `net`) must ask before trusting a date;
+  `net_time.c` marks it set. 1.x kept this inside the Wi-Fi component and
+  nine source files reached up for it.
+- Preserved on purpose (and stated at the top of `net_link_recovery.c`):
+  the restart ladder never depends on the co-processor's firmware version;
+  no in-place re-initialisation of esp_hosted (it kills the SD card); a
+  second `CP_INIT` is logged, not acted on.
+- Test hooks `net` and `clock`. The lab gained `provision` (credentials
+  from the secrets file over the UART, never in a binary, redacted from
+  logs) and `wait_online`; the device-test session ends by leaving the unit
+  online.
+- The dev unit's name. The first run put the unit on the LAN as plain
+  `p3a`, the name of another of Fab's devices, for about ten minutes before
+  it was noticed. The lab now always names the dev unit `fab`
+  (`DEV_UNIT_NAME`), sets the name before the credentials, and no test
+  joins under the bare name.
+- One existing test changed: the allocation-failure test exhausts the
+  internal pool, and with the Wi-Fi station sharing that pool its snapshot
+  assertions became a race (seen once: `largest` exactly 2048). It now runs
+  with the station off and restores Wi-Fi afterwards. What exhaustion does
+  to a live network belongs to the soak work (M6.1).
+- Numbers from the device, Wi-Fi up and idle: internal DMA pool 417 KB
+  total, 297 KB free, lowest 286 KB (before Wi-Fi: 425 and 323). Boot to
+  address about 10.5 s, of which 4.7 s is the co-processor link coming up;
+  SNTP answers within 100 ms of the address. Signal at the bench -45 dBm.
+- Verified, host tests: the clock formatter against values from Python
+  (leap days, 2038, 2100, before 1970); the backoff schedule and its cap.
+  Verified, device tests on the real network: boot does not wait; joins and
+  reports address, signal and name; the password never printed; one up
+  event per connection; DNS resolves; the clock within 10 s of the
+  workstation's and no 1970 timestamps before; the unit reachable at its
+  address; rejoining after a forced drop with one down and one up event and
+  no re-initialisation; `device_name` becoming the hostname; mDNS
+  resolving from the workstation; bad credentials refused; nothing stored
+  ending in `setup`; a network that is not there ending in `setup`.
+- Not verified: the driver re-initialisation, the restart ladders and the
+  degraded state. They need a failing router or co-processor; the code
+  moved with its logic intact and its integration points replaced. They
+  are candidates for fault injection in the soak work (M6.1). The restart
+  countdown shows nothing on screen until the UI exists (M3).
+- Known gap until part 3: a device in `setup` stays there, logging that it
+  needs setting up. The portal plugs into that state.
 
 ### 2026-11-18: M1.4 settings complete
 

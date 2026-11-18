@@ -2,6 +2,8 @@
 """The event bus and the memory-pressure signal on the device."""
 import pytest
 
+import lab
+
 
 def test_fanout_reaches_every_subscriber_in_order(uart):
     r = uart.command("event fanout 20")
@@ -70,10 +72,15 @@ def test_bad_arguments(uart):
 
 
 def test_first_failed_allocation_prints_one_heap_report(uart):
+    # With the Wi-Fi station off: it allocates and frees in the same pool, so
+    # with it running neither "who failed first" nor "what is left" is fixed.
+    # (What exhaustion does to a live network is a soak question, M6.1.)
+    uart.command("net forget")
     # Fresh boot, because the report is printed once per boot.
     start = uart.mark()
     uart.command("reboot")
     uart.wait_ready(since=start)
+    assert uart.command("net status")["state"] == "setup"
     start = uart.mark()
     try:
         # Ask for more than the pool holds: the hog stops at the first failure.
@@ -92,3 +99,4 @@ def test_first_failed_allocation_prints_one_heap_report(uart):
         "the report names the request and the task that made it"
     assert any("INTERNAL+DMA" in line for line in log)
     assert after["level"] == "ok", "the device recovers once the memory is returned"
+    lab.provision(uart)

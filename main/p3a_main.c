@@ -13,6 +13,7 @@
 #include "p3a_job.h"
 #include "esp_system.h"
 #include "p3a_mem.h"
+#include "p3a_net.h"
 #include "p3a_recovery.h"
 #include "p3a_settings.h"
 #include "p3a_storage.h"
@@ -87,6 +88,9 @@ void app_main(void)
     // the normal case; a missing image is not an error.
     esp_err_t c6 = slave_ota_check_and_update();
     boot_step("co-processor", c6 == ESP_ERR_NOT_FOUND ? ESP_OK : c6);
+
+    // Starts joining Wi-Fi and returns; the rest is reported by events.
+    boot_step("network", p3a_net_start());
 
 #if CONFIG_P3A_TEST_HOOKS
     ESP_LOGW(TAG, "TEST BUILD: test hooks are compiled in. Not for release.");

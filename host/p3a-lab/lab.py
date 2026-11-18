@@ -6,6 +6,7 @@
     python host/p3a-lab/lab.py flash [release|test]      build, then flash
     python host/p3a-lab/lab.py erase                     erase the whole flash
     python host/p3a-lab/lab.py up                        test build, flash, wait for the console, print identity
+    python host/p3a-lab/lab.py provision                 put the unit on the test rig's Wi-Fi (from the secrets file)
     python host/p3a-lab/lab.py boot                      reset and print the boot log
     python host/p3a-lab/lab.py cmd <name> [json]         send one test-console command
     python host/p3a-lab/lab.py shot <file.png> [divisor] save what the test hooks last put on the panel
@@ -42,6 +43,10 @@ IDF_PROFILE = os.environ.get("P3A_IDF_PROFILE", r"C:\Espressif\tools\Microsoft.v
 
 # The dev unit (docs/2.0/README.md, "Environment"). Tests refuse any other board.
 DEV_UNIT_MAC = "30:ED:A0:E2:09:37"
+# The dev unit's name on the LAN: it answers at p3a-fab.local. The bare name
+# "p3a" belongs to another device on the same network, so the lab never
+# leaves the dev unit online without this name.
+DEV_UNIT_NAME = "fab"
 BAUD = 115200
 
 
@@ -403,6 +408,43 @@ def bring_up(config: str = "test", do_flash: bool = True) -> tuple[Uart, dict]:
 
 # --- command line -----------------------------------------------------------
 
+def wait_online(uart: Uart, timeout: float = 45.0) -> dict:
+    """Waits until the unit has joined Wi-Fi and returns its network status."""
+    deadline = time.monotonic() + timeout
+    status: dict = {}
+    while time.monotonic() < deadline:
+        status = uart.command("net status")
+        if status.get("up"):
+            return status
+        if status.get("state") in ("setup", "degraded", "off"):
+            break
+        time.sleep(1.0)
+    raise LabError(f"the unit did not get online: state {status.get('state')!r}")
+
+
+def provision(uart: Uart, timeout: float = 45.0) -> dict:
+    """Puts the unit on the test rig's Wi-Fi and returns its network status.
+
+    Sends the credentials from the secrets file over the UART, names the unit
+    DEV_UNIT_NAME, and restarts it, unless it already holds both. Credentials
+    are never built into a binary, and the lab redacts the password from
+    everything it logs.
+    """
+    wifi = load_secrets()["wifi"]
+    status = uart.command("net status")
+    named = status.get("hostname") == f"p3a-{DEV_UNIT_NAME}"
+    joined = status.get("has_credentials") and status.get("ssid") == wifi["ssid"]
+    if not (named and joined):
+        # The name first: the unit must never join under the bare name.
+        uart.command("settings set", {"device_name": DEV_UNIT_NAME})
+        if not joined:
+            uart.command("net join", {"ssid": wifi["ssid"], "password": wifi["password"]})
+        pos = uart.mark()
+        uart.command("reboot")
+        uart.wait_ready(since=pos, timeout=30)
+    return wait_online(uart, timeout)
+
+
 def main(argv: list[str]) -> int:
     if len(argv) < 2:
         print(__doc__)
@@ -423,6 +465,10 @@ def main(argv: list[str]) -> int:
             uart, ident = bring_up("test")
             uart.close()
             print(json.dumps(ident))
+        elif verb == "provision":
+            with Uart(log_name="cmd.log", redact=secret_values(load_secrets())) as uart:
+                status = provision(uart)
+                print(json.dumps({k: status[k] for k in ("state", "ip", "hostname", "rssi")}))
         elif verb == "boot":
             with Uart(log_name="boot.log") as uart:
                 pos = uart.reset()

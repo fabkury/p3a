@@ -30,8 +30,14 @@ typedef enum {
     // payload.i32: its p3a_setting_id_t. Read the value with p3a_settings_get().
     P3A_EVENT_SETTING_CHANGED,
 
-    // --- sources 0x0400, library 0x0500, player 0x0600, ui 0x0700,
-    //     net 0x0800: none yet ---
+    // --- sources 0x0400, library 0x0500, player 0x0600, ui 0x0700: none yet ---
+
+    // --- net (0x0800) ---
+    // The device has joined Wi-Fi and has an address. No payload.
+    P3A_EVENT_NET_UP = 0x0800,
+    // The device had an address and no longer has one. Not emitted for a
+    // failed attempt while it was already down. No payload.
+    P3A_EVENT_NET_DOWN,
 
     // --- test hooks (0xFF00): never emitted by release code ---
     P3A_EVENT_TEST_A = 0xFF00,

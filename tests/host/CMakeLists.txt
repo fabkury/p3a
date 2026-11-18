@@ -74,6 +74,9 @@ p3a_host_test(test_job_table
 p3a_host_test(test_event_table
     SOURCES util/test_event_table.c ${UTIL}/p3a_event_table.c
     INCLUDES ${UTIL}/include ${P3A_STUBS})
+p3a_host_test(test_clock
+    SOURCES util/test_clock.c ${UTIL}/p3a_clock.c
+    INCLUDES ${UTIL}/include ${P3A_COMPONENTS}/p3a_net/include ${P3A_STUBS})
 p3a_host_test(test_mem_pressure
     SOURCES util/test_mem_pressure.c ${UTIL}/p3a_mem_pressure.c
     INCLUDES ${UTIL}/include)

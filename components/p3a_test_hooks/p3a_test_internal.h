@@ -30,3 +30,9 @@ extern const size_t p3a_test_settings_command_count;
 // Starts counting setting-change events. Called when the console starts, so
 // that changes made before the first settings command are counted too.
 void p3a_test_settings_subscribe(void);
+
+extern const p3a_test_command_t p3a_test_net_commands[];
+extern const size_t p3a_test_net_command_count;
+
+// Starts counting network up and down events, from the start of the console.
+void p3a_test_net_subscribe(void);

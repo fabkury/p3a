@@ -33,6 +33,11 @@ def bring_up(request):
     """The dev unit, flashed with the test build of this tree, console ready."""
     uart, ident = lab.bring_up("test", do_flash=not request.config.getoption("--no-flash"))
     yield uart, ident
+    # Leave the unit as the next session expects it: named and on the Wi-Fi.
+    try:
+        lab.provision(uart)
+    except lab.LabError as exc:
+        print(f"the dev unit was not left online: {exc}")
     uart.close()
 
 

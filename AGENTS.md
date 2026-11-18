@@ -117,6 +117,10 @@ All in `components/p3a_util`; each header explains itself at the top.
   `p3a_mem_pressure.c`), the thin device part beside it.
 - **A restart used as a remedy** is counted through `p3a_recovery.h`, which
   bounds it. Never call `esp_restart()` on a failure without it.
+- **The network is never waited for.** `p3a_net_start()` returns at once;
+  code that needs the network subscribes to `P3A_EVENT_NET_UP` and
+  `P3A_EVENT_NET_DOWN` or asks `p3a_net_is_up()`, and copes with "no".
+  Anything that needs a real date asks `p3a_clock_is_set()` first.
 - **Test hooks** live only in `components/p3a_test_hooks`, one command file
   per area, every symbol prefixed `p3a_test_`.
 - **Managed components** are declared in the `idf_component.yml` of the
@@ -181,6 +185,7 @@ ledger's deletion log with the reason.
 ```powershell
 python host/p3a-lab/lab.py build release   # or: build test. Builds and runs the build checks
 python host/p3a-lab/lab.py up              # test build, flash, wait for the console
+python host/p3a-lab/lab.py provision       # name the dev unit and put it on the test rig's Wi-Fi
 python -m pytest tests/device              # flash the test build, run the device tests
 cmake -S tests/host -B build-host -G Ninja; cmake --build build-host; ctest --test-dir build-host --output-on-failure
 python tools/check_tree.py                 # layer rule and forbidden patterns

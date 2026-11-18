@@ -24,3 +24,9 @@ extern const p3a_test_command_t p3a_test_board_commands[];
 extern const size_t p3a_test_board_command_count;
 extern const p3a_test_command_t p3a_test_storage_commands[];
 extern const size_t p3a_test_storage_command_count;
+extern const p3a_test_command_t p3a_test_settings_commands[];
+extern const size_t p3a_test_settings_command_count;
+
+// Starts counting setting-change events. Called when the console starts, so
+// that changes made before the first settings command are counted too.
+void p3a_test_settings_subscribe(void);

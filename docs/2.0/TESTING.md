@@ -138,6 +138,7 @@ them.
 | Console: `version`, `reboot` | UART | Identify the unit and its firmware; restart it | M0.4 |
 | Console: `task`, `errname`, `job`, `jobinfo`, `event`, `mem` | UART | Exercise the util layer: task policy, error names, job runners, event fan-out and overflow, memory pressure (including taking and returning DMA-pool memory) | M1.1 |
 | Console: `storage` | UART | Report the root, health, repair counters and free space; atomic write and replace; container round trip and damage; shard paths; parent-folder creation; trip the health latch | M1.3 |
+| Console: `settings`, `recovery` | UART | Read every setting (secrets masked); change settings from JSON or one at a time; report how the store loaded and the change events seen; plant an arbitrary stored blob; factory reset; read the recovery counters and report an outcome as boot code would | M1.4 |
 | Console: provision | UART | Set Wi-Fi credentials, device name and API keys on a fresh unit | M1.4, M1.5 |
 | Console: `lcd`, `button` | UART | Paint and present test patterns, read pixels and a CRC back, save a downscaled screenshot (`lab.py shot`), set the backlight, count BOOT presses, read the touch controller (`touch`), inspect the card and round-trip a scratch file (`sd`), report the co-processor's versions and the image carried for it (`c6`) | M1.2 |
 | Screenshot | HTTP | The front buffer as an image. This is how the agent sees the screen | M1.5 |

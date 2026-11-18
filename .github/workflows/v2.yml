@@ -24,6 +24,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Linter self-test
         run: python3 tools/test_check_tree.py
+      - name: Settings generator self-test
+        run: python3 tools/test_gen_settings.py
       - name: Layer rule, forbidden patterns, configuration guard
         run: python3 tools/check_tree.py
       - name: Lab unit tests

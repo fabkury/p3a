@@ -11,7 +11,10 @@
 #include "p3a_err.h"
 #include "p3a_event.h"
 #include "p3a_job.h"
+#include "esp_system.h"
 #include "p3a_mem.h"
+#include "p3a_recovery.h"
+#include "p3a_settings.h"
 #include "p3a_storage.h"
 #include "sdio_bus.h"
 #include "slave_ota.h"
@@ -22,6 +25,12 @@
 #endif
 
 static const char *TAG = "p3a";
+
+// Restarts allowed in a row when the touch controller does not come up.
+#define TOUCH_RECOVERY_REBOOTS 1
+
+// The settings as they were at boot. Too large for the main task's stack.
+static p3a_settings_t s_settings;
 
 // Runs one boot step and reports a failure without stopping the boot.
 static void boot_step(const char *what, esp_err_t err)
@@ -44,20 +53,33 @@ void app_main(void)
     boot_step("event bus", p3a_event_bus_start());
     boot_step("job runners", p3a_jobs_start());
 
-    // The panel comes up painted black. The background colour will come from
-    // the settings store once it exists (M1.4).
-    boot_step("display", p3a_board_display_init(0, 0, 0));
+    // Settings first: the steps below read them. Also brings up NVS. If it
+    // fails the device runs on defaults.
+    boot_step("settings", p3a_settings_start());
+    p3a_settings_get(&s_settings);
 
-    // A touch controller that does not answer is not fatal: the device plays
-    // without touch. The 1.x recovery (one reboot, then carry on) returns with
-    // the settings store and the UI.
-    boot_step("touch", p3a_board_touch_init(3000));
+    // The panel comes up painted in the background colour, then the backlight
+    // goes to the stored brightness.
+    const uint32_t bg = s_settings.background_color;
+    boot_step("display", p3a_board_display_init((uint8_t)(bg >> 16), (uint8_t)(bg >> 8), (uint8_t)bg));
+    if (s_settings.brightness != 100) {
+        boot_step("brightness", p3a_board_set_brightness(s_settings.brightness));
+    }
+
+    // A touch controller that does not answer usually does after a restart,
+    // so restart once. If it still does not, play on without touch.
+    esp_err_t touch = p3a_board_touch_init(3000);
+    boot_step("touch", touch);
+    if (p3a_recovery_report(P3A_RECOVERY_TOUCH, touch == ESP_OK, TOUCH_RECOVERY_REBOOTS) == P3A_RECOVERY_REBOOT) {
+        ESP_LOGW(TAG, "restarting to retry the touch controller");
+        esp_restart();
+    }
 
     boot_step("SDIO bus coordinator", sdio_bus_init());
     // Mount, FAT self-repair, the root folder, the health probe. Without a
     // usable card the device still boots; storage is then latched as failed.
-    // The root folder will come from the settings store (M1.4).
-    boot_step("storage", p3a_storage_start(NULL));
+    // An sd_root setting that is no longer acceptable falls back to the default.
+    boot_step("storage", p3a_storage_start(s_settings.sd_root));
 
     // The Wi-Fi co-processor: bring its link up and update its firmware if the
     // image in the slave_fw partition is newer. An update takes over the

@@ -98,7 +98,8 @@ static void dispatch(char *line)
     if (run_from(s_core_commands, sizeof(s_core_commands) / sizeof(s_core_commands[0]), name, args) ||
         run_from(p3a_test_util_commands, p3a_test_util_command_count, name, args) ||
         run_from(p3a_test_board_commands, p3a_test_board_command_count, name, args) ||
-        run_from(p3a_test_storage_commands, p3a_test_storage_command_count, name, args)) {
+        run_from(p3a_test_storage_commands, p3a_test_storage_command_count, name, args) ||
+        run_from(p3a_test_settings_commands, p3a_test_settings_command_count, name, args)) {
         return;
     }
     p3a_test_reply_err("unknown command");
@@ -151,6 +152,7 @@ void p3a_test_console_start(void)
         ESP_LOGE(TAG, "uart_driver_install failed: %s", esp_err_to_name(err));
         return;
     }
+    p3a_test_settings_subscribe();
     p3a_task_config_t task = P3A_TASK_CONFIG("p3a_test_con", console_task, NULL, 6144, P3A_TASK_BACKGROUND);
     err = p3a_task_create(&task, NULL);
     if (err != ESP_OK) {

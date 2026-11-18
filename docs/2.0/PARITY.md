@@ -196,7 +196,7 @@ Same pages and look, new internals (D11).
 | [ ] | Five cache trees and a pinned tree on the card | change | M2.2 | One blob store |
 | [ ] | USB mass storage: card exposed to a computer; swaps, upload, show URL and updates blocked meanwhile; every session ends in a reboot | keep | M3.6 | |
 | [ ] | Build-time switches to start with fresh NVS, Wi-Fi or card | keep | M1.4 | |
-| [ ] | No user-facing factory reset | decide | M1.4 | Q5 |
+| [ ] | Factory reset (new in 2.0, D28) | new | M1.4, M1.5, M5.1 | Store side done and device-tested |
 
 ## Network and system
 
@@ -215,7 +215,7 @@ Same pages and look, new internals (D11).
 | [ ] | Co-processor firmware flashed at boot when stale; version lock detected and reported | keep | M1.2 | Link, versions and lock detection verified on the dev unit; the update transfer waits for manual check M1.2-e on another board |
 | [ ] | Core dump to flash; one-shot heap report on the first failed allocation | keep | M1.1 | Q6 on reading the dump |
 | [ ] | Persisted reboot counters for Wi-Fi, touch and SDIO, cleared by a validated update | keep | M1.4 | In the schema |
-| [ ] | Brightness set from the UI and over MQTT | keep | M2.4 | Q1 on persistence |
+| [ ] | Brightness set from the UI and over MQTT | keep | M2.4 | Remembered across reboots in 2.0 (D28); restore at boot is done |
 | [ ] | PICO-8 streaming | drop | | C5 |
 
 ## New in 2.0
@@ -240,13 +240,13 @@ also listed in the ledger.
 
 | Id | 1.x behaviour | Question | Before |
 |---|---|---|---|
-| Q1 | Brightness is saved by the web UI but never read at boot, so the device always starts at 100 | Persist brightness in 2.0? | M1.4 |
+| Q1 | Brightness is saved by the web UI but never read at boot, so the device always starts at 100 | Decided 2026-11-18 (D28): remembered and restored at boot | done |
 | Q2 | Reading settings returns the stored API keys in clear to anyone on the LAN. The browser-side museum browse reads the Harvard and Smithsonian keys this way | Keep, or return keys only through a narrower call? | M1.5 |
 | Q3 | The first update check happens 12 hours after boot, never at boot | Add a check shortly after boot? | M5.2 |
 | Q4 | Pinned Giphy, Klipy and museum art is upscaled nearest-neighbour, while the same art in its own channel is bilinear. The user guide documents this | In 2.0 the record knows its source, so bilinear would follow the art. Which is wanted? | M4.4 |
-| Q5 | There is no factory reset a user can reach; only "erase Wi-Fi" and "unregister" | Add one? | M1.4 |
+| Q5 | There is no factory reset a user can reach; only "erase Wi-Fi" and "unregister" | Decided 2026-11-18 (D28): added, API and web UI. The store side is done; the API call is M1.5 and the button M5.1 | done |
 | Q6 | Core dumps are written to flash but nothing can read them without a cable | Offer a download in the API? | M1.5 |
-| Q7 | Giphy rendition, format and prefer-downsized, the view-ack flag and the processing-indicator switch are settable only through the API | With a schema-driven settings page everything is visible unless marked hidden. Show, hide, or drop each? | M1.4 |
+| Q7 | Giphy rendition, format and prefer-downsized, the view-ack flag and the processing-indicator switch are settable only through the API | Decided 2026-11-18 (D29): kept as settings, hidden from the page | done |
 | Q8 | Raw SD debug endpoints and the frame-trace provocations exist behind build options | Carry them into 2.0's test hooks, or leave them in 1.x? | M1.3 |
 | Q9 | The Makapix `set_mirror` command answers "unsupported" | Leave as is? | M4.5 |
-| Q10 | The dwell limit differs between the settings blob (86,400 s) and the dedicated endpoint (100,000 s) | One limit from the schema; confirm 86,400 s | M1.4 |
+| Q10 | The dwell limit differs between the settings blob (86,400 s) and the dedicated endpoint (100,000 s) | Working decision (D30): one limit, 86,400 s, from the schema | done |

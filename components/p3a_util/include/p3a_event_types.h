@@ -26,6 +26,9 @@ typedef enum {
     // probe failed, or three writes in a row did. Nothing may write to it any
     // more. Emitted once. No payload.
     P3A_EVENT_SD_HEALTH_FAILED = 0x0300,
+    // A setting has a new value, already saved. One event per setting.
+    // payload.i32: its p3a_setting_id_t. Read the value with p3a_settings_get().
+    P3A_EVENT_SETTING_CHANGED,
 
     // --- sources 0x0400, library 0x0500, player 0x0600, ui 0x0700,
     //     net 0x0800: none yet ---

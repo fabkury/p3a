@@ -61,9 +61,10 @@ The firmware is public (Apache 2.0). 1.x runs on real users' devices from
 |------|------|
 | `CMakeLists.txt`, `main/`, `components/` | The 2.0 firmware. `main/` holds `app_main` and the boot sequence only. Every component is listed with its layer in `components/LAYERS.txt`. |
 | `sdkconfig.test.defaults` | The test overlay: adds the test hooks (`components/p3a_test_hooks`). Test builds go to `build-test/`. |
-| `tests/host/` | Host unit tests (Unity, CMake, CTest). |
+| `tests/host/` | Host unit tests (Unity, CMake, CTest). `third_party/` holds Unity and the IDF's cJSON release. |
 | `tests/device/` | Device tests (pytest) that flash and drive the dev unit. |
 | `tools/check_tree.py` | The structural rules below as a script; CI and the lab run it. |
+| `tools/gen_settings.py` | Generates the settings table and struct from `components/p3a_settings/settings.json` at configure time. `tools/test_gen_settings.py` is its self-test. |
 | `tools/compare_sdkconfig.py` | Fails a release build whose configuration drifts from what 1.x shipped, apart from a listed set of explained differences. When a component returns and a listed difference disappears, remove it from the list. |
 | `sdkconfig.trace.defaults`, `sdkconfig.diag.defaults`, `sdkconfig.nowrap.defaults` | The jitter work's overlays (`lab.py build trace`, `build diag`). Never folded into the release configuration. |
 | `host/p3a-lab/` | Builds, flashes and talks to the dev unit. Use it instead of raw `idf.py` for anything that involves the device. |
@@ -114,6 +115,8 @@ All in `components/p3a_util`; each header explains itself at the top.
 - **Logic is split from hardware** so it can be host-tested: the pure part
   in its own file with no IDF includes (`p3a_job_table.c`,
   `p3a_mem_pressure.c`), the thin device part beside it.
+- **A restart used as a remedy** is counted through `p3a_recovery.h`, which
+  bounds it. Never call `esp_restart()` on a failure without it.
 - **Test hooks** live only in `components/p3a_test_hooks`, one command file
   per area, every symbol prefixed `p3a_test_`.
 - **Managed components** are declared in the `idf_component.yml` of the
@@ -218,9 +221,19 @@ idf.py fullclean
 - One version number, `PROJECT_VER` at the top of the root `CMakeLists.txt`.
   It is `2.0.0-dev` until the release commit. There is no separate web UI or
   API version in 2.0.
-- Kconfig is for the shape of the build only. User-changeable settings will
-  live in the settings schema (M1.4); compile-time constants in one limits
-  header (M1.1). The written rule lands with M1.4.
+- Where a value lives (`docs/2.0/DECISIONS.md` D32):
+  - **Kconfig** holds the shape of the build only.
+  - **`components/p3a_settings/settings.json`** holds everything a user may
+    change. Adding a setting is one entry there; the build generates the C
+    table and the typed struct (`tools/gen_settings.py`), and the store
+    validates, saves and reports changes with no further code. Read settings
+    with `p3a_settings_get()`. Never add an NVS key or a Kconfig default for
+    something a user sets.
+  - **`p3a_limits.h`** holds constants nobody changes.
+  - **A component's own storage** holds device state (a registration, an
+    id, a counter). Wi-Fi and Makapix secrets keep their own NVS namespaces.
+  - An API key is never compiled into a binary, and a setting flagged
+    `secret` is never logged.
 
 ## Documentation map
 

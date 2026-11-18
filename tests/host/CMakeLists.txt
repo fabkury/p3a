@@ -26,20 +26,25 @@ else()
 endif()
 option(P3A_SANITIZE "Build tests with AddressSanitizer and UBSan" ${P3A_SANITIZE_DEFAULT})
 
+# cJSON, the same release the IDF ships (1.7.19), for code that reads and
+# writes JSON. Third-party code: built without the project's warning flags.
+add_library(cjson STATIC third_party/cJSON/cJSON.c)
+target_include_directories(cjson PUBLIC third_party/cJSON)
+
 add_library(unity STATIC third_party/unity/unity.c)
 target_include_directories(unity PUBLIC third_party/unity)
 
 enable_testing()
 
-# p3a_host_test(<name> SOURCES <files...> [INCLUDES <dirs...>])
+# p3a_host_test(<name> SOURCES <files...> [INCLUDES <dirs...>] [LIBS <libraries...>])
 # One executable and one CTest entry per test file. Paths in SOURCES are
 # relative to tests/host or absolute; component sources are given through
 # ${P3A_COMPONENTS}.
 function(p3a_host_test name)
-    cmake_parse_arguments(ARG "" "" "SOURCES;INCLUDES" ${ARGN})
+    cmake_parse_arguments(ARG "" "" "SOURCES;INCLUDES;LIBS" ${ARGN})
     add_executable(${name} ${ARG_SOURCES})
     target_include_directories(${name} PRIVATE ${ARG_INCLUDES})
-    target_link_libraries(${name} PRIVATE unity)
+    target_link_libraries(${name} PRIVATE unity ${ARG_LIBS})
     target_compile_options(${name} PRIVATE -Wall -Wextra -Werror -Wshadow -Wconversion -g)
     if(P3A_SANITIZE)
         target_compile_options(${name} PRIVATE
@@ -81,3 +86,23 @@ p3a_host_test(test_sd_path
 p3a_host_test(test_frame
     SOURCES storage/test_frame.c ${STORAGE}/p3a_frame.c ${UTIL}/p3a_crc32.c ${UTIL}/p3a_err.c
     INCLUDES ${STORAGE}/include ${UTIL}/include ${P3A_STUBS})
+
+# --- settings ---------------------------------------------------------------
+# The table and the typed struct are generated from the real schema, exactly
+# as the firmware build does it.
+set(SETTINGS "${P3A_COMPONENTS}/p3a_settings")
+set(SETTINGS_GEN "${CMAKE_BINARY_DIR}/gen")
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+execute_process(
+    COMMAND ${Python3_EXECUTABLE} "${P3A_ROOT}/tools/gen_settings.py" "${SETTINGS}/settings.json" "${SETTINGS_GEN}"
+    RESULT_VARIABLE settings_gen_result)
+if(NOT settings_gen_result EQUAL 0)
+    message(FATAL_ERROR "settings.json was rejected; see the message above")
+endif()
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    "${SETTINGS}/settings.json" "${P3A_ROOT}/tools/gen_settings.py")
+p3a_host_test(test_settings_model
+    SOURCES settings/test_settings_model.c ${SETTINGS}/p3a_settings_model.c ${SETTINGS_GEN}/p3a_settings_gen.c
+            ${STORAGE}/sd_path.c
+    INCLUDES ${SETTINGS}/include ${SETTINGS_GEN} ${STORAGE}/include ${P3A_STUBS}
+    LIBS cjson)

@@ -9,8 +9,8 @@ times.
 | | |
 |---|---|
 | Phase | 1, platform (Phase 0 complete) |
-| Current milestone | M1.4 settings |
-| Next action | Start M1.4: read the settings section of the review's storage page and `legacy/components/config_store` (26 keys actually read, 95 functions) to list every setting with its type, default and range; resolve Q1, Q5, Q7 and Q10 from PARITY.md with Fab or as working decisions; write the schema file and the generator (Python, run by CMake) that produces the C table and typed struct; then the store (one NVS blob, read once, mutex, unknown keys rejected), factory reset, the reboot counters, and `p3a_storage_start()` taking the SD root from it. Add the console `provision` command for device name and API keys |
+| Current milestone | M1.5 net base |
+| Next action | Start M1.5: read the network page of the review and PLAN.md M1.5. Bring in Wi-Fi over the co-processor (station, credentials in their own NVS namespace, provisioned over the UART console from `secrets.json`, never compiled in), the captive portal for setup, mDNS under the `device_name` setting, the HTTP server with the one router and `/api/v2`, and the settings endpoints on top of `p3a_settings` (GET masked, PATCH all-or-nothing, the schema itself for the web UI, factory reset). Decide Q2 and Q6 from PARITY.md. The lab then needs a fixture that re-provisions Wi-Fi after a test that factory-resets |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -20,7 +20,7 @@ times.
 | | |
 |---|---|
 | Running | `2.0.0-dev`, test configuration (`build-test`), flashed 2026-11-18 by the device tests |
-| Flash state | Bootloader, 2.x partition table, app in `ota_0`, the 2.9.3 co-processor image in `slave_fw`. NVS holds only a test counter. The C6 itself runs esp_hosted 2.7.0 and cannot be updated (see M1.2-e) |
+| Flash state | Bootloader, 2.x partition table, app in `ota_0`, the 2.9.3 co-processor image in `slave_fw`. NVS was factory-reset at the end of the settings tests: no settings, no credentials. The C6 itself runs esp_hosted 2.7.0 and cannot be updated (see M1.2-e) |
 | SD card | 32 GB, healthy (D8). Still holds 1.x folders; see the M1.3 entry in the session log |
 | 1.x flash backup | `%USERPROFILE%\.p3a-lab\backups\p3a-fab_v1.2.4_full-flash_2026-11-17.bin` (see the session log for size and hash) |
 | Secrets file | Complete: four API keys read from the unit, Wi-Fi password filled in by Fab |
@@ -39,8 +39,8 @@ reopened (why).
 | M1.1 util | done 2026-11-17. Tiers: host tests (6 programs, under ASan and UBSan too), device tests (21 cases, run twice), both builds checked, CI. `p3a_limits.h` is not created yet: it arrives with its first constant |
 | M1.2 board | done 2026-11-17. Tiers: device tests (47 cases, twice), release, test and trace builds, the configuration guard, CI. Awaiting manual checks M1.2-a to d. The co-processor update itself cannot run on the dev unit (its C6 is on the unupdatable 2.7.0); see M1.2-e |
 | M1.3 storage | done 2026-11-18. Tiers: host tests (8 programs, under ASan and UBSan too), device tests (62 cases), release and test builds, the configuration guard. The repair paths of `sd_repair` cannot be exercised on a healthy card and are carried over on trust |
-| M1.4 settings | next |
-| M1.5 net base | not started |
+| M1.4 settings | done 2026-11-18. Tiers: host tests (9 programs, under ASan and UBSan too), generator self-test (15 cases), device tests (76 cases, 14 of them new), release and test builds, the configuration guard. The touch-recovery restart itself is not exercised (the controller works); its counters and rule are |
+| M1.5 net base | next |
 | M2.1 Display pipeline and decoders | not started |
 | M2.2 Library core | not started |
 | M2.3 Source interface, local source, scheduler | not started |
@@ -101,6 +101,13 @@ Open:
   firmware update required", count progress to 100 percent, restart, and
   on the next boot report 2.9.3 and "up to date". The screen part of this
   check comes later, with the UI.
+- **M1.4-a, stored brightness and background colour are applied at boot.**
+  Run
+  `python host/p3a-lab/lab.py cmd "settings set {\"brightness\":15,\"background_color\":\"#003060\"}"`
+  and then `python host/p3a-lab/lab.py cmd reboot`. The panel should come
+  up dark blue and clearly dim. Put it back with
+  `python host/p3a-lab/lab.py cmd "settings factory-reset"` and another
+  reboot: black and bright again.
 
 Cleared:
 
@@ -170,6 +177,19 @@ M0.1, 2026-11-17 (paths relative to the 1.x tree):
 Dead functions inside files that are otherwise live were not hunted down;
 they are simply not moved when their file is.
 
+M1.4, 2026-11-18 (not carried over from `config_store`; the files stay in
+`legacy/` until their last readers move):
+
+- `randomize_playlist`: stored and read back by nothing else in 1.x.
+- `giphy_random_id`: device state, not a setting. It returns with the Giphy
+  source (M4.2) in that source's own storage.
+- `refresh_allow_override`: never persisted in 1.x; run-time state of the
+  refresh scheduler (M4.1).
+- The build-time default API keys (`CONFIG_GIPHY_API_KEY_DEFAULT`,
+  `CONFIG_KLIPY_API_KEY_DEFAULT`): a key is never compiled into a binary.
+- The per-key caches, generation counters and 95 accessor functions: the
+  typed struct replaces them.
+
 M1.3, 2026-11-18:
 
 - From `sd_path`: the per-store path getters of the 1.x layout (`vault`,
@@ -201,6 +221,69 @@ M1.1, 2026-11-17:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-18: M1.4 settings complete
+
+- Fab decided four questions first (D27 to D30): brightness is remembered,
+  a factory reset exists in the API and the web UI, the five API-only
+  settings stay settings but hidden from the page, and the keys are renamed
+  to one convention.
+- `components/p3a_settings/settings.json` is the source of truth: 34
+  settings, each with type, default, limits, group, label and the flags
+  `reboot`, `advanced`, `secret`. `tools/gen_settings.py` checks it and
+  generates the C table and the typed struct `p3a_settings_t` (512 bytes) at
+  configure time, for the firmware and for the host tests alike. A bad entry
+  stops the build with a message that names it.
+- New component `p3a_settings` (layer `storage`):
+  - `p3a_settings_model.c`, pure: defaults, validation, JSON in and out. A
+    request is applied all or nothing; an unknown key is refused by name;
+    secrets read back masked, and the mask written back keeps the secret.
+  - `p3a_settings.c`: the store. NVS is read once at boot; reads are a
+    struct copy under a mutex; a change writes the non-default values as one
+    JSON blob (`{}` on a fresh device) and emits one
+    `P3A_EVENT_SETTING_CHANGED` per changed setting, never logging a value.
+    Stored entries this firmware does not accept are skipped at load; a blob
+    that does not parse is kept aside under another key and the defaults are
+    used (D31).
+  - Factory reset erases the NVS partition (D28).
+  - `p3a_recovery`: the counted restart-and-retry rule that 1.x had three
+    copies of (Wi-Fi, touch, co-processor link), as one helper with a streak
+    and a total per kind. A failure whose restart cannot be counted is
+    answered with "carry on", never with an unbounded loop.
+- Boot now reads the settings first: the panel comes up in the stored
+  background colour and brightness, the SD root comes from `sd_root`, and a
+  touch controller that fails restarts the device once before carrying on
+  without touch (the 1.x recovery, deferred from M1.2).
+- Nothing was moved out of `legacy/config_store`: the store is new code, and
+  the 1.x one (2,266 lines, 95 functions, one cached getter and setter per
+  key) stays in the quarry until its last readers have moved. See the
+  deletion log entry for what was deliberately not carried over.
+- cJSON 1.7.19 (the release the IDF ships) is vendored under
+  `tests/host/third_party/` so that JSON code is host-testable.
+- CI runs the generator self-test.
+- Checked against 1.x: every default and limit in the schema was compared
+  with `legacy/components/config_store` and the 1.x Kconfig defaults. One
+  first-draft value was wrong (Makapix refresh minimum) and was corrected
+  before the checkpoint.
+- Numbers from the device: internal DMA pool 425 KB total, 323 KB free
+  (was 427 and 326 before the store); release image 757 KB (was 721).
+- Verified, host tests: the model test runs against the real schema and
+  covers every type's limits, the three named checks, masking, all-or-nothing,
+  a hostile key, and a store-and-reload round trip of all 34 settings moved
+  off their defaults. Verified, device tests: defaults on a fresh device;
+  eight settings across a reboot; brightness applied at boot; refused
+  requests changing nothing; one event per changed setting; the typed
+  setters; the reboot flag; a secret never shown or printed; `sd_root`
+  moving the root at the next boot; skipped entries; an unparseable blob
+  kept aside; factory reset; recovery counters across reboots.
+- Not verified: the touch-recovery restart end to end, which needs a
+  controller that fails. NVS wear from frequent writes is not measured; a
+  caller fed by a slider must settle before it writes (stated in the header,
+  to be honoured by the API at M1.5 and the UI at M5.1).
+- Left for later, on purpose: nothing subscribes to the change event yet, so
+  a brightness or rotation change made at run time is saved but takes effect
+  at the next boot until the screen owner exists (M3.1). The web UI reads
+  the schema file at M5.1.
 
 ### 2026-11-18: CI repaired, M1.3 storage complete
 

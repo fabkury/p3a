@@ -182,6 +182,10 @@ over HTTP.
 - Tests: host tests for the generator, validation, defaults and the blob
   round trip; device test that a setting survives a reboot.
 - Exit: host and device tests pass.
+- As built: the schema is `components/p3a_settings/settings.json` and the
+  generator `tools/gen_settings.py`. The blob is JSON of the non-default
+  values (D31). The component also holds `p3a_recovery`, the counted
+  restart rule. The 1.x `config_store` was not moved; it is replaced.
 
 ### M1.5 net base
 

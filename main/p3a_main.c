@@ -5,6 +5,7 @@
 // the device carries on with what it has.
 
 #include "animation_decoder.h"
+#include "display_renderer.h"
 #include "esp_app_desc.h"
 #include "esp_chip_info.h"
 #include "esp_log.h"
@@ -70,6 +71,9 @@ void app_main(void)
     if (s_settings.brightness != 100) {
         boot_step("brightness", p3a_board_set_brightness(s_settings.brightness));
     }
+    // From here on the pipeline owns the framebuffers. It shows black until
+    // something registers to draw.
+    boot_step("display pipeline", display_renderer_start());
 
     // A touch controller that does not answer usually does after a restart,
     // so restart once. If it still does not, play on without touch.

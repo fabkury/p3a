@@ -8,14 +8,11 @@
 
 #include "display_renderer_priv.h"
 #include "frame_trace.h"
-#include "config_store.h"
 
 // FPS tracking state
 static int64_t s_fps_last_time_us = 0;
 static uint32_t s_fps_frame_count = 0;
 static uint32_t s_fps_current = 0;
-static bool s_fps_show_cached = true;
-static int64_t s_fps_config_check_time = 0;
 
 // Simple 5x7 bitmap font for digits 0-9 and space
 // Each digit is 5 pixels wide, 7 pixels tall, stored as 7 bytes (1 byte per row)
@@ -59,7 +56,7 @@ typedef struct {
 // render pipeline has already rotated; applying the same rotation here keeps the
 // counter at the user's top-right corner, correctly oriented. This matches the
 // convention used by the pin/reaction overlays (see display_pin_overlay.c). The
-// panel is square (EXAMPLE_LCD_H_RES == EXAMPLE_LCD_V_RES), so a single
+// panel is square (P3A_DISPLAY_WIDTH == P3A_DISPLAY_HEIGHT), so a single
 // dimension n suffices.
 static fps_rot_xform_t fps_rot_xform(display_rotation_t rotation, int n)
 {
@@ -77,22 +74,17 @@ static fps_rot_xform_t fps_rot_xform(display_rotation_t rotation, int n)
 static inline void fps_draw_pixel(uint8_t *buffer, const fps_rot_xform_t *t,
                                   int lx, int ly, uint8_t r, uint8_t g, uint8_t b)
 {
-    const int N = EXAMPLE_LCD_H_RES;
+    const int N = P3A_DISPLAY_WIDTH;
     if (lx < 0 || lx >= N || ly < 0 || ly >= N) return;
 
     int x = t->base_px + t->cx_lx * lx + t->cx_ly * ly;
     int y = t->base_py + t->cy_lx * lx + t->cy_ly * ly;
 
-#if CONFIG_LCD_PIXEL_FORMAT_RGB565
-    uint16_t *row = (uint16_t *)(buffer + (size_t)y * g_display_row_stride);
-    row[x] = rgb565(r, g, b);
-#else
     uint8_t *row = buffer + (size_t)y * g_display_row_stride;
     size_t idx = (size_t)x * 3U;
     row[idx + 0] = b;
     row[idx + 1] = g;
     row[idx + 2] = r;
-#endif
 }
 
 // Draw a character at logical position (x, y) with given colors, scale factor
@@ -136,11 +128,11 @@ static void fps_draw_overlay(uint8_t *buffer, uint32_t fps)
 
     // Precompute the logical->physical rotation transform once for the whole
     // overlay; all positions below are in logical (user-oriented) space.
-    const fps_rot_xform_t xform = fps_rot_xform(g_screen_rotation, EXAMPLE_LCD_H_RES);
+    const fps_rot_xform_t xform = fps_rot_xform(display_renderer_get_rotation(), P3A_DISPLAY_WIDTH);
 
     // Position at the user's top-right
     int total_width = len * char_w - scale;  // Remove trailing space
-    int x = EXAMPLE_LCD_H_RES - total_width - padding;
+    int x = P3A_DISPLAY_WIDTH - total_width - padding;
     int y = padding;
 
     // Draw background rectangle (semi-transparent effect via darker bg)
@@ -149,8 +141,8 @@ static void fps_draw_overlay(uint8_t *buffer, uint32_t fps)
     int bg_w = total_width + 8;
     int bg_h = char_h + 4;
 
-    for (int by = bg_y; by < bg_y + bg_h && by < EXAMPLE_LCD_V_RES; by++) {
-        for (int bx = bg_x; bx < bg_x + bg_w && bx < EXAMPLE_LCD_H_RES; bx++) {
+    for (int by = bg_y; by < bg_y + bg_h && by < P3A_DISPLAY_HEIGHT; by++) {
+        for (int bx = bg_x; bx < bg_x + bg_w && bx < P3A_DISPLAY_WIDTH; bx++) {
             if (bx >= 0 && by >= 0) {
                 fps_draw_pixel(buffer, &xform, bx, by, 0, 0, 0);
             }
@@ -185,9 +177,9 @@ static void ft_draw_overlay(uint8_t *buffer)
     const int char_w = 5 * scale + scale;
     const int char_h = 7 * scale;
     const int padding = 6;
-    const fps_rot_xform_t xform = fps_rot_xform(g_screen_rotation, EXAMPLE_LCD_H_RES);
+    const fps_rot_xform_t xform = fps_rot_xform(display_renderer_get_rotation(), P3A_DISPLAY_WIDTH);
     const int total_width = len * char_w - scale;
-    const int x = EXAMPLE_LCD_H_RES - total_width - padding;
+    const int x = P3A_DISPLAY_WIDTH - total_width - padding;
     const int y = padding + char_h + 8;
 
     for (int by = y - 2; by < y + char_h + 2; by++) {
@@ -211,16 +203,12 @@ static void ft_draw_overlay(uint8_t *buffer)
 #endif
 
 // Update FPS counter and optionally draw overlay
-void fps_update_and_draw(uint8_t *buffer)
+static void fps_update_and_draw(uint8_t *buffer, void *ctx)
 {
+    (void)ctx;
     int64_t now_us = esp_timer_get_time();
-    
-    // Check config every second to avoid frequent NVS reads
-    if (now_us - s_fps_config_check_time > 1000000) {
-        s_fps_show_cached = config_store_get_show_fps();
-        s_fps_config_check_time = now_us;
-    }
-    
+    const bool s_fps_show_cached = atomic_load(&g_display_show_fps);
+
     // Always track FPS (for debugging/logging)
     s_fps_frame_count++;
     
@@ -248,3 +236,8 @@ void fps_update_and_draw(uint8_t *buffer)
 #endif
 }
 
+void display_fps_overlay_register(void)
+{
+    // Over the UI source too: the counter measures the pipeline, whatever draws.
+    display_renderer_add_overlay(fps_update_and_draw, NULL, true);
+}

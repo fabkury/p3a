@@ -2,9 +2,10 @@
 // Test console commands for the board layer: the panel's framebuffers, the
 // backlight and the BOOT button.
 //
-// These write to and read from the framebuffers. They prove that the buffers
-// are where the board says they are and that presenting one does not crash;
-// they cannot prove what the glass shows. That is a manual check.
+// The pattern commands draw through the display pipeline (as its test
+// source) and read the framebuffer it reports as displayed. They prove that
+// what was drawn is what the panel is given; they cannot prove what the
+// glass shows. That is a manual check.
 
 #include <stdatomic.h>
 #include <stdio.h>
@@ -12,6 +13,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "display_renderer.h"
 #include "esp_app_desc.h"
 #include "esp_image_format.h"
 #include "esp_lcd_panel_ops.h"
@@ -49,15 +51,25 @@ static void put_pixel(uint8_t *row, int x, uint8_t r, uint8_t g, uint8_t b)
     row[x * 3 + 2] = r;
 }
 
-// Picks the next framebuffer, lets `paint` fill it, presents it.
-static esp_err_t paint_and_present(void (*paint)(int x, int y, uint8_t *r, uint8_t *g, uint8_t *b))
+// The patterns reach the panel the way everything does: through the display
+// pipeline. These commands are a frame source in the pipeline's test slot.
+typedef void (*painter_t)(int x, int y, uint8_t *r, uint8_t *g, uint8_t *b);
+
+static painter_t s_painter;
+static atomic_bool s_paint_wanted;
+static _Atomic(uint8_t *) s_painted_into;  // the framebuffer the pattern was last drawn into
+
+static int test_pattern_source(uint8_t *buffer, bool must_redraw, void *ctx)
 {
-    const uint8_t count = p3a_board_get_buffer_count();
-    if (count == 0 || !p3a_board_get_panel()) {
-        return ESP_ERR_INVALID_STATE;
+    (void)ctx;
+    painter_t paint = s_painter;
+    if (paint == NULL) {
+        memset(buffer, 0, p3a_board_get_buffer_bytes());
+        return 100;
     }
-    const int index = (s_shown + 1) % count;
-    uint8_t *buffer = p3a_board_get_buffer(index);
+    if (!atomic_exchange(&s_paint_wanted, false) && !must_redraw) {
+        return DISPLAY_FRAME_UNCHANGED;
+    }
     const size_t stride = p3a_board_get_row_stride();
     for (int y = 0; y < P3A_DISPLAY_HEIGHT; y++) {
         uint8_t *row = buffer + (size_t)y * stride;
@@ -67,12 +79,42 @@ static esp_err_t paint_and_present(void (*paint)(int x, int y, uint8_t *r, uint8
             put_pixel(row, x, r, g, b);
         }
     }
-    esp_err_t err =
-        esp_lcd_panel_draw_bitmap(p3a_board_get_panel(), 0, 0, P3A_DISPLAY_WIDTH, P3A_DISPLAY_HEIGHT, buffer);
-    if (err == ESP_OK) {
-        s_shown = index;
+    atomic_store(&s_painted_into, buffer);
+    return 100;
+}
+
+// Has the pipeline draw `paint` and waits until that frame is the one the
+// panel is scanning out.
+static esp_err_t paint_and_present(painter_t paint)
+{
+    if (!p3a_board_get_panel()) {
+        return ESP_ERR_INVALID_STATE;
     }
-    return err;
+    static bool registered;
+    if (!registered) {
+        display_renderer_set_source(DISPLAY_SOURCE_TEST, test_pattern_source, NULL);
+        registered = true;
+    }
+    s_painter = paint;
+    atomic_store(&s_painted_into, NULL);
+    atomic_store(&s_paint_wanted, true);
+    esp_err_t err = display_renderer_select_source(DISPLAY_SOURCE_TEST);
+    if (err != ESP_OK) {
+        return err;
+    }
+    for (int waited_ms = 0; waited_ms < 2000; waited_ms += 5) {
+        uint8_t *drawn = atomic_load(&s_painted_into);
+        if (drawn != NULL && display_renderer_displayed_buffer() == drawn) {
+            for (int i = 0; i < p3a_board_get_buffer_count(); i++) {
+                if (p3a_board_get_buffer(i) == drawn) {
+                    s_shown = i;
+                }
+            }
+            return ESP_OK;
+        }
+        vTaskDelay(pdMS_TO_TICKS(5));
+    }
+    return ESP_ERR_TIMEOUT;
 }
 
 static uint8_t s_fill[3];
@@ -114,14 +156,16 @@ static void paint_gradient(int x, int y, uint8_t *r, uint8_t *g, uint8_t *b)
     }
 }
 
+// What the pattern commands last put on the panel.
 static const uint8_t *shown_buffer(void)
 {
     return s_shown < 0 ? NULL : p3a_board_get_buffer(s_shown);
 }
 
+// What the panel is showing now, whoever drew it.
 const uint8_t *p3a_test_shown_buffer(void)
 {
-    return shown_buffer();
+    return display_renderer_displayed_buffer();
 }
 
 static void reply_shown(esp_err_t err)

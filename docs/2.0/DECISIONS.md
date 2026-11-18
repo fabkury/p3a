@@ -67,6 +67,7 @@ Set before the architecture review and taken as given by everything since.
 | D38 | 2026-11-18 | Working | JPEGs that go to the hardware decoder are converted from YCbCr to RGB in software, with the full-range JFIF formula and libjpeg's constants. The hardware's own RGB output is not used | Its conversion is for video range and gives every picture too much contrast and clipped ends; the driver has no option for it |
 | D39 | 2026-11-18 | Working | One size limit for every image format, 4096 pixels a side, checked before any size is computed. Files that claim more are refused (a JPEG is first offered to the software path, which scales as it decodes) | Audit H1, and the same gap in PNG and GIF. Nothing p3a shows is larger: the panel is 720 pixels |
 | D40 | 2026-11-18 | Working | Decoders are tested against an independent decoder on a generated corpus kept in the repository, by comparing pixels, and p3a's own parsers also run on the workstation under the sanitizers on mutated files | It found two visible bugs in shipped code on its first run |
+| D41 | 2026-11-18 | Working | The display pipeline knows nothing of what draws. Whole frames come from a registered source (artwork, UI, test patterns; one active), additions from registered overlays. Its timing code is the 1.x code unchanged and is not edited without a jitter re-measurement | Layering (the UI sits above the player layer), and the O7 question about the screen model stays open for M3.1 without blocking the pipeline |
 
 ## 1.x decisions that stay in force
 

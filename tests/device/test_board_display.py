@@ -41,10 +41,13 @@ def test_solid_fill_reads_back_everywhere(uart):
     assert uart.command("lcd crc")["crc"] == expected
 
 
-def test_presenting_cycles_through_all_three_framebuffers(uart):
-    seen = [uart.command("lcd fill 1 2 3")["buffer"] for _ in range(6)]
-    assert sorted(set(seen)) == [0, 1, 2]
-    assert seen[3:] == seen[:3], "round robin"
+def test_a_new_frame_is_never_drawn_into_the_one_on_screen(uart):
+    # The pipeline hands the source a free framebuffer; the one being scanned
+    # out is not free. So consecutive frames land in different buffers.
+    seen = [uart.command("lcd fill 1 2 3")["buffer"] for _ in range(8)]
+    assert all(0 <= index <= 2 for index in seen)
+    assert all(a != b for a, b in zip(seen, seen[1:])), seen
+    assert len(set(seen)) >= 2
 
 
 def test_colour_bars_have_the_right_colours_in_the_right_places(uart):

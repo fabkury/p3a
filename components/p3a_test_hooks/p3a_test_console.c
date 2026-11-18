@@ -170,6 +170,7 @@ void p3a_test_console_start(void)
     p3a_test_net_subscribe();
     p3a_test_http_start();
     p3a_test_decode_start();
+    p3a_test_render_start();
     p3a_task_config_t task = P3A_TASK_CONFIG("p3a_test_con", console_task, NULL, 6144, P3A_TASK_BACKGROUND);
     err = p3a_task_create(&task, NULL);
     if (err != ESP_OK) {

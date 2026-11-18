@@ -135,6 +135,11 @@ All in `components/p3a_util`; each header explains itself at the top.
   refuses what is malformed with an error, and is tested on the corpus in
   `tests/assets/` against an independent implementation. p3a's own parsers
   also get a host test under the sanitizers on mutated input.
+- **What reaches the panel goes through `display_renderer`**: a frame
+  source for whole frames, an overlay for additions. Nothing else presents a
+  framebuffer. Its timing code (from "Vsync setup" to the end of the
+  consumer in `display_renderer.c`) is the result of the jitter work and is
+  not edited without re-measuring against `docs/jitter/REPORT.md`.
 - **HTTP endpoints** are rows in a route table (`p3a_http.h`). A handler
   answers once through `p3a_http_ok`, `p3a_http_accepted` or
   `p3a_http_fail` and never writes an envelope, a status line or a header

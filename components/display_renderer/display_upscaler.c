@@ -10,11 +10,6 @@
  */
 
 #include "display_renderer_priv.h"
-#include "config_store.h"
-
-// Diagnostic: Use only top worker to process ALL rows (glitch-free configuration)
-// Set to 0 to enable two-worker parallel mode (for testing cache coherency fixes)
-#define DISPLAY_UPSCALE_SINGLE_WORKER 0
 
 // ============================================================================
 // Row-based RGB blit implementation
@@ -40,12 +35,6 @@ static void blit_upscaled_rows_rgb(const uint8_t *src_rgb, int src_w, int src_h,
         return;
     }
 
-#if CONFIG_P3A_PERF_DEBUG
-    static uint32_t s_upscale_call_count = 0;
-    static uint32_t s_rows_rendered = 0;
-    static uint32_t s_rows_copied = 0;
-    s_upscale_call_count++;
-#endif
 
     const uint16_t *run_lookup = (rotation == DISPLAY_ROTATION_90 || rotation == DISPLAY_ROTATION_270)
                                   ? lookup_x : lookup_y;
@@ -66,23 +55,13 @@ static void blit_upscaled_rows_rgb(const uint8_t *src_rgb, int src_w, int src_h,
         const uint16_t run_key = run_lookup[local_y];
         if (run_key == prev_run_key && last_rendered_row != NULL) {
             memcpy(dst_row_bytes, last_rendered_row, g_display_row_stride);
-#if CONFIG_P3A_PERF_DEBUG
-            s_rows_copied++;
-#endif
             continue;
         }
         prev_run_key = run_key;
         last_rendered_row = dst_row_bytes;
       
-#if CONFIG_P3A_PERF_DEBUG
-        s_rows_rendered++;
-#endif
 
-#if CONFIG_LCD_PIXEL_FORMAT_RGB565
-        uint16_t *dst_row = (uint16_t *)dst_row_bytes;
-#else
         uint8_t *dst_row = dst_row_bytes;
-#endif
 
         switch (rotation) {
             case DISPLAY_ROTATION_0: {
@@ -101,14 +80,10 @@ static void blit_upscaled_rows_rgb(const uint8_t *src_rgb, int src_w, int src_h,
                         cached_b = p[2];
                         prev_src_x = src_x;
                     }
-#if CONFIG_LCD_PIXEL_FORMAT_RGB565
-                    dst_row[dst_x] = rgb565(cached_r, cached_g, cached_b);
-#else
                     const size_t idx = (size_t)dst_x * 3U;
                     dst_row[idx + 0] = cached_b;
                     dst_row[idx + 1] = cached_g;
                     dst_row[idx + 2] = cached_r;
-#endif
                 }
                 break;
             }
@@ -123,14 +98,10 @@ static void blit_upscaled_rows_rgb(const uint8_t *src_rgb, int src_w, int src_h,
                     const uint8_t r = p[0];
                     const uint8_t g = p[1];
                     const uint8_t b = p[2];
-#if CONFIG_LCD_PIXEL_FORMAT_RGB565
-                    dst_row[dst_x] = rgb565(r, g, b);
-#else
                     const size_t idx = (size_t)dst_x * 3U;
                     dst_row[idx + 0] = b;
                     dst_row[idx + 1] = g;
                     dst_row[idx + 2] = r;
-#endif
                 }
                 break;
             }
@@ -153,14 +124,10 @@ static void blit_upscaled_rows_rgb(const uint8_t *src_rgb, int src_w, int src_h,
                         cached_b = p[2];
                         prev_raw_src_x = raw_src_x;
                     }
-#if CONFIG_LCD_PIXEL_FORMAT_RGB565
-                    dst_row[dst_x] = rgb565(cached_r, cached_g, cached_b);
-#else
                     const size_t idx = (size_t)dst_x * 3U;
                     dst_row[idx + 0] = cached_b;
                     dst_row[idx + 1] = cached_g;
                     dst_row[idx + 2] = cached_r;
-#endif
                 }
                 break;
             }
@@ -175,14 +142,10 @@ static void blit_upscaled_rows_rgb(const uint8_t *src_rgb, int src_w, int src_h,
                     const uint8_t r = p[0];
                     const uint8_t g = p[1];
                     const uint8_t b = p[2];
-#if CONFIG_LCD_PIXEL_FORMAT_RGB565
-                    dst_row[dst_x] = rgb565(r, g, b);
-#else
                     const size_t idx = (size_t)dst_x * 3U;
                     dst_row[idx + 0] = b;
                     dst_row[idx + 1] = g;
                     dst_row[idx + 2] = r;
-#endif
                 }
                 break;
             }
@@ -203,39 +166,22 @@ static void blit_upscaled_rows_rgb(const uint8_t *src_rgb, int src_w, int src_h,
                         cached_b = p[2];
                         prev_src_x = src_x;
                     }
-#if CONFIG_LCD_PIXEL_FORMAT_RGB565
-                    dst_row[dst_x] = rgb565(cached_r, cached_g, cached_b);
-#else
                     const size_t idx = (size_t)dst_x * 3U;
                     dst_row[idx + 0] = cached_b;
                     dst_row[idx + 1] = cached_g;
                     dst_row[idx + 2] = cached_r;
-#endif
                 }
                 break;
             }
         }
     }
 
-#if CONFIG_P3A_PERF_DEBUG
-    // Log row stats every 1000 upscale calls
-    if (s_upscale_call_count % 1000 == 0) {
-        ESP_LOGI(DISPLAY_TAG, "UPSCALE_ROWS: src=%dx%d rendered=%lu copied=%lu (calls=%lu)",
-                 src_w, src_h,
-                 (unsigned long)s_rows_rendered,
-                 (unsigned long)s_rows_copied,
-                 (unsigned long)s_upscale_call_count);
-        s_rows_rendered = 0;
-        s_rows_copied = 0;
-    }
-#endif
 }
 
 // ============================================================================
 // Border fill (second pass after upscale)
 // ============================================================================
 
-#if CONFIG_LCD_PIXEL_FORMAT_RGB888
 static inline void fill_rgb888_pixels(uint8_t *row, int x_start, int x_end, uint8_t b, uint8_t g, uint8_t r)
 {
     if (!row || x_start >= x_end) return;
@@ -255,7 +201,6 @@ static inline void fill_rgb888_pixels(uint8_t *row, int x_start, int x_end, uint
         p += 3;
     }
 }
-#endif
 
 static void fill_borders_rows(uint8_t *dst_buffer, int dst_w, int dst_h,
                               int row_start, int row_end,
@@ -273,54 +218,16 @@ static void fill_borders_rows(uint8_t *dst_buffer, int dst_w, int dst_h,
     const int img_y1 = offset_y + scaled_h;
 
     for (int dst_y = row_start; dst_y < row_end; ++dst_y) {
-#if CONFIG_LCD_PIXEL_FORMAT_RGB565
-        uint16_t *dst_row = (uint16_t *)(dst_buffer + (size_t)dst_y * g_display_row_stride);
-#else
         uint8_t *dst_row = dst_buffer + (size_t)dst_y * g_display_row_stride;
-#endif
 
         if (dst_y < img_y0 || dst_y >= img_y1) {
-#if CONFIG_LCD_PIXEL_FORMAT_RGB565
-            const uint16_t bg = g_upscale_bg_rgb565;
-            uintptr_t addr = (uintptr_t)dst_row;
-            int x = 0;
-            if ((addr & 0x3U) && dst_w > 0) {
-                dst_row[0] = bg;
-                x = 1;
-            }
-            const uint32_t bg32 = ((uint32_t)bg << 16) | (uint32_t)bg;
-            uint32_t *p32 = (uint32_t *)(dst_row + x);
-            const int pairs = (dst_w - x) / 2;
-            for (int i = 0; i < pairs; ++i) {
-                p32[i] = bg32;
-            }
-            const int filled = x + pairs * 2;
-            if (filled < dst_w) {
-                dst_row[filled] = bg;
-            }
-#else
             fill_rgb888_pixels(dst_row, 0, dst_w, g_upscale_bg_b, g_upscale_bg_g, g_upscale_bg_r);
-#endif
         } else {
             if (img_x0 > 0) {
-#if CONFIG_LCD_PIXEL_FORMAT_RGB565
-                const uint16_t bg = g_upscale_bg_rgb565;
-                for (int x = 0; x < img_x0; ++x) {
-                    dst_row[x] = bg;
-                }
-#else
                 fill_rgb888_pixels(dst_row, 0, img_x0, g_upscale_bg_b, g_upscale_bg_g, g_upscale_bg_r);
-#endif
             }
             if (img_x1 < dst_w) {
-#if CONFIG_LCD_PIXEL_FORMAT_RGB565
-                const uint16_t bg = g_upscale_bg_rgb565;
-                for (int x = img_x1; x < dst_w; ++x) {
-                    dst_row[x] = bg;
-                }
-#else
                 fill_rgb888_pixels(dst_row, img_x1, dst_w, g_upscale_bg_b, g_upscale_bg_g, g_upscale_bg_r);
-#endif
             }
         }
     }
@@ -344,6 +251,9 @@ static void fill_borders_rows(uint8_t *dst_buffer, int dst_w, int dst_h,
 // wrote it, so DMA coherence is unchanged.
 #define UPSCALE_BAND_ROWS 24
 
+// How long the producer waits for both workers before giving the frame up.
+#define UPSCALE_DEADLINE_MS 2000
+
 static volatile int s_band_next_row = 0;   // next unclaimed destination row
 static int s_band_dst_h = 0;                // rows in this frame
 
@@ -364,7 +274,7 @@ static void upscale_worker_run_bands(void)
         blit_upscaled_rows_rgb(g_upscale_src_buffer,
                                g_upscale_src_w, g_upscale_src_h,
                                g_upscale_dst_buffer,
-                               EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES,
+                               P3A_DISPLAY_WIDTH, P3A_DISPLAY_HEIGHT,
                                r0, r1,
                                g_upscale_offset_x, g_upscale_offset_y,
                                g_upscale_scaled_w, g_upscale_scaled_h,
@@ -372,13 +282,13 @@ static void upscale_worker_run_bands(void)
                                g_upscale_rotation);
         if (g_upscale_has_borders) {
             fill_borders_rows(g_upscale_dst_buffer,
-                              EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES,
+                              P3A_DISPLAY_WIDTH, P3A_DISPLAY_HEIGHT,
                               r0, r1,
                               g_upscale_offset_x, g_upscale_offset_y,
                               g_upscale_scaled_w, g_upscale_scaled_h);
         }
         // Flush this core's cache for the band we wrote so DMA sees it.
-#if DISPLAY_HAVE_CACHE_MSYNC && defined(CONFIG_P3A_LCD_ENABLE_CACHE_FLUSH)
+#if DISPLAY_HAVE_CACHE_MSYNC
         esp_cache_msync(g_upscale_dst_buffer + (size_t)r0 * g_display_row_stride,
                         (size_t)(r1 - r0) * g_display_row_stride,
                         ESP_CACHE_MSYNC_FLAG_DIR_C2M);
@@ -437,8 +347,8 @@ void display_renderer_parallel_upscale_rgb(const uint8_t *src_rgb, int src_w, in
                                           bool has_borders,
                                           display_rotation_t rotation)
 {
-    const int dst_h = EXAMPLE_LCD_V_RES;
-    const int dst_w = EXAMPLE_LCD_H_RES;
+    const int dst_h = P3A_DISPLAY_HEIGHT;
+    const int dst_w = P3A_DISPLAY_WIDTH;
 
     if (!src_rgb || !dst_buffer || !lookup_x || !lookup_y) {
         ESP_LOGE(DISPLAY_TAG, "Upscale RGB: NULL pointer (src=%p dst=%p lx=%p ly=%p)",
@@ -472,8 +382,7 @@ void display_renderer_parallel_upscale_rgb(const uint8_t *src_rgb, int src_w, in
     g_upscale_scaled_w = scaled_w;
     g_upscale_scaled_h = scaled_h;
     g_upscale_has_borders = has_borders;
-    config_store_get_background_color(&g_upscale_bg_r, &g_upscale_bg_g, &g_upscale_bg_b);
-    g_upscale_bg_rgb565 = rgb565(g_upscale_bg_r, g_upscale_bg_g, g_upscale_bg_b);
+    display_renderer_get_background(&g_upscale_bg_r, &g_upscale_bg_g, &g_upscale_bg_b);
     g_upscale_main_task = xTaskGetCurrentTaskHandle();
 
     g_upscale_worker_top_done = false;
@@ -485,33 +394,27 @@ void display_renderer_parallel_upscale_rgb(const uint8_t *src_rgb, int src_w, in
 
     DISPLAY_MEMORY_BARRIER();
 
-#if DISPLAY_UPSCALE_SINGLE_WORKER
-    // Debug mode: only the core-0 worker runs; the bottom worker is not notified.
-    g_upscale_worker_bottom_done = true;
-    if (g_upscale_worker_top) {
-        xTaskNotify(g_upscale_worker_top, 1, eSetBits);
-    }
-    const uint32_t all_bits = (1UL << 0);
-#else
-    if (g_upscale_worker_top && g_upscale_worker_bottom) {
-        xTaskNotify(g_upscale_worker_top, 1, eSetBits);
-        xTaskNotify(g_upscale_worker_bottom, 1, eSetBits);
-    }
+    xTaskNotify(g_upscale_worker_top, 1, eSetBits);
+    xTaskNotify(g_upscale_worker_bottom, 1, eSetBits);
     const uint32_t all_bits = (1UL << 0) | (1UL << 1);
-#endif
     uint32_t notification_value = 0;
 
+    // Both workers normally answer within a frame. The wait has an overall
+    // deadline (audit M10: it had none, so a worker that never answered hung
+    // the producer, and with it the screen, for good). Past the deadline the
+    // frame goes out as far as it got, and the next one tries again.
+    const TickType_t started = xTaskGetTickCount();
     while ((notification_value & all_bits) != all_bits) {
         uint32_t received_bits = 0;
         if (xTaskNotifyWait(0, UINT32_MAX, &received_bits, pdMS_TO_TICKS(50)) == pdTRUE) {
             notification_value |= received_bits;
+        } else if (xTaskGetTickCount() - started > pdMS_TO_TICKS(UPSCALE_DEADLINE_MS)) {
+            ESP_LOGE(DISPLAY_TAG, "upscale workers did not finish in %d ms (answered: 0x%x)", UPSCALE_DEADLINE_MS,
+                     (unsigned)notification_value);
+            break;
         } else {
             taskYIELD();
         }
-    }
-
-    if (!g_upscale_worker_top_done || !g_upscale_worker_bottom_done) {
-        ESP_LOGW(DISPLAY_TAG, "Upscale workers may not have completed properly");
     }
 
     DISPLAY_MEMORY_BARRIER();

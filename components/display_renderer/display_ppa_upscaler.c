@@ -12,10 +12,8 @@
 
 #include "sdkconfig.h"
 
-#if CONFIG_P3A_PPA_UPSCALE_ENABLE
 
 #include "display_ppa_upscaler.h"
-#include "config_store.h"
 #include "driver/ppa.h"
 #include "esp_log.h"
 #include "esp_heap_caps.h"
@@ -181,7 +179,7 @@ esp_err_t display_ppa_upscale_rgb(
     if (offset_x > 0 || offset_y > 0) {
         // Get background color (stored as R,G,B)
         uint8_t bg_r, bg_g, bg_b;
-        config_store_get_background_color(&bg_r, &bg_g, &bg_b);
+        display_renderer_get_background(&bg_r, &bg_g, &bg_b);
 
         // Top strip (full width)
         if (offset_y > 0) {
@@ -287,4 +285,3 @@ void display_ppa_upscale_deinit(void)
     ESP_LOGI(TAG, "PPA upscaler deinitialized");
 }
 
-#endif // CONFIG_P3A_PPA_UPSCALE_ENABLE

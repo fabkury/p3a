@@ -1,36 +1,33 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2025-2026 p3a Contributors
-
-/**
- * @file display_renderer.c
- * @brief Display renderer core - initialization, mode switching, rotation, render task
- */
+// The display pipeline's core: framebuffer ownership, the producer and the
+// consumer, vsync. See display_renderer.h.
+//
+// From "Vsync setup" down to the end of the consumer, this file is the 1.x
+// code as the jitter work left it (docs/jitter/REPORT.md). Do not change the
+// timing there without re-measuring against the pass bar.
 
 #include "display_renderer_priv.h"
-#include "ugfx_ui.h"
-#include "config_store.h"
+
+#include <stdatomic.h>
 #include <string.h>
+
+#include "p3a_event.h"
+#include "p3a_settings.h"
+#include "p3a_task.h"
 
 // LCD panel state
 esp_lcd_panel_handle_t g_display_panel = NULL;
-uint8_t **g_display_buffers = NULL;
+static uint8_t *s_buffers[P3A_MAX_DISPLAY_BUFFERS];
+uint8_t **g_display_buffers = s_buffers;
 uint8_t g_display_buffer_count = 0;
 size_t g_display_buffer_bytes = 0;
 size_t g_display_row_stride = 0;
 
 // Synchronization
 SemaphoreHandle_t g_display_vsync_sem = NULL;
-SemaphoreHandle_t g_display_mutex = NULL;
 TaskHandle_t g_display_producer_task = NULL;
 TaskHandle_t g_display_consumer_task = NULL;
-
-// Render mode
-volatile display_render_mode_t g_display_mode_request = DISPLAY_RENDER_MODE_ANIMATION;
-volatile display_render_mode_t g_display_mode_active = DISPLAY_RENDER_MODE_ANIMATION;
-
-// Frame callback
-display_frame_callback_t g_display_frame_callback = NULL;
-void *g_display_frame_callback_ctx = NULL;
 
 // Upscale worker tasks
 TaskHandle_t g_upscale_worker_top = NULL;
@@ -53,7 +50,6 @@ volatile bool g_upscale_has_borders = false;
 uint8_t g_upscale_bg_r = 0;
 uint8_t g_upscale_bg_g = 0;
 uint8_t g_upscale_bg_b = 0;
-uint16_t g_upscale_bg_rgb565 = 0;
 volatile bool g_upscale_worker_top_done = false;
 volatile bool g_upscale_worker_bottom_done = false;
 
@@ -70,7 +66,7 @@ SemaphoreHandle_t g_buffer_free_sem = NULL;
 // Producer -> consumer ready-frame hand-off queue (see ready_frame_t).
 QueueHandle_t g_ready_queue = NULL;
 
-// Content generation: bumped on any discontinuity (mode switch, pause/brightness
+// Content generation: bumped on any discontinuity (source switch, blank
 // transition, artwork swap) so the consumer can drop frames the producer rendered
 // for a now-superseded epoch. See display_renderer_note_content_discontinuity().
 static volatile uint32_t g_render_generation = 0;
@@ -82,9 +78,9 @@ int64_t g_last_frame_present_us = 0;
 // distinguish "fresh" vsync signals from cached ones in the binary semaphore.
 volatile int64_t g_last_vsync_us = 0;
 
-// Panel vsync period. The current panel is configured at 60 Hz
-// (ST7703_720_720_PANEL_60HZ_DPI_CONFIG, see managed_components/.../esp32_p4_wifi6_touch_lcd_4b.c)
-// so one refresh = 1e6 / 60 ≈ 16667 us. If the panel config changes, update this.
+// Panel vsync period. The panel is configured at 60 Hz
+// (ST7703_720_720_PANEL_60HZ_DPI_CONFIG in the board support package), so one
+// refresh = 1e6 / 60 = 16667 us. If the panel config changes, update this.
 #define VSYNC_PERIOD_US 16667
 
 // Virtual-playhead accumulator (see Frame timing block in display_consumer_task).
@@ -98,251 +94,225 @@ static int64_t s_target_present_us = 0;
 // fast-forward a long animation when we resume.
 #define FRAME_TIMING_RESYNC_US 250000
 
-// Screen rotation
-display_rotation_t g_screen_rotation = DISPLAY_ROTATION_0;
-volatile bool g_rotation_in_progress = false;
+// --- what the settings say, cached: nothing here reads a setting per frame ---
+static atomic_int s_rotation = DISPLAY_ROTATION_0;
+static atomic_bool s_max_speed;
+static atomic_uint s_background;  // 0xRRGGBB
+atomic_bool g_display_show_fps;
 
-// Processing notification state
-volatile proc_notif_state_t g_proc_notif_state = PROC_NOTIF_STATE_IDLE;
-volatile int64_t g_proc_notif_start_time_us = 0;
-volatile int64_t g_proc_notif_fail_time_us = 0;
+// --- sources and overlays ---
+typedef struct {
+    display_frame_source_fn fn;
+    void *ctx;
+} source_t;
 
-// Reaction overlay state
-volatile reaction_overlay_state_t g_reaction_overlay_state = REACTION_OVERLAY_IDLE;
-volatile int64_t g_reaction_overlay_start_us = 0;
+typedef struct {
+    display_overlay_fn fn;
+    void *ctx;
+    bool over_ui;
+} overlay_t;
 
-// Pin overlay state (independent from reaction overlay)
-volatile pin_overlay_state_t g_pin_overlay_state = PIN_OVERLAY_IDLE;
-volatile int64_t g_pin_overlay_start_us = 0;
+#define MAX_OVERLAYS 6
+
+static SemaphoreHandle_t s_registry_lock;  // guards the two tables below
+static source_t s_sources[DISPLAY_SOURCE_COUNT_];
+static overlay_t s_overlays[MAX_OVERLAYS];
+static int s_overlay_count;
+static volatile display_source_t s_source_request = DISPLAY_SOURCE_ARTWORK;
+static volatile display_source_t s_source_active = DISPLAY_SOURCE_ARTWORK;
+static atomic_bool s_blank;
 
 // Forward declarations
 static esp_err_t prepare_vsync(void);
-static void wait_for_render_mode(display_render_mode_t target_mode);
 static esp_err_t create_upscale_workers(void);
 
 // ============================================================================
-// Initialization
+// Settings
 // ============================================================================
 
-esp_err_t display_renderer_init(esp_lcd_panel_handle_t panel,
-                                uint8_t **buffers,
-                                uint8_t buffer_count,
-                                size_t buffer_bytes,
-                                size_t row_stride)
+static void take_settings(void)
 {
-    if (!panel || !buffers || buffer_count == 0 || buffer_bytes == 0 || row_stride == 0) {
-        return ESP_ERR_INVALID_ARG;
+    static p3a_settings_t settings;  // too large for a task stack
+    p3a_settings_get(&settings);
+    if (atomic_exchange(&s_rotation, settings.rotation) != settings.rotation) {
+        ESP_LOGI(DISPLAY_TAG, "rotation %d degrees", (int)settings.rotation);
+        // The picture on the panel is for the old orientation.
+        display_renderer_note_content_discontinuity();
     }
-
-    g_display_panel = panel;
-    g_display_buffers = buffers;
-    g_display_buffer_count = buffer_count;
-    g_display_buffer_bytes = buffer_bytes;
-    g_display_row_stride = row_stride;
-
-    // Initialize buffer state tracking
-    for (int i = 0; i < buffer_count && i < P3A_MAX_DISPLAY_BUFFERS; i++) {
-        g_buffer_info[i].state = BUFFER_STATE_FREE;
-    }
-    g_displaying_idx = -1;
-    g_last_submitted_idx = -1;
-
-    // Create semaphore for triple buffering
-    g_buffer_free_sem = xSemaphoreCreateCounting(buffer_count, buffer_count);
-    if (!g_buffer_free_sem) {
-        ESP_LOGE(DISPLAY_TAG, "Failed to create buffer-free semaphore");
-        return ESP_ERR_NO_MEM;
-    }
-
-    // Ready-frame hand-off queue (producer -> consumer). Depth covers the at most
-    // one banked frame plus headroom; the real in-flight cap is g_buffer_free_sem.
-    g_ready_queue = xQueueCreate(2, sizeof(ready_frame_t));
-    if (!g_ready_queue) {
-        ESP_LOGE(DISPLAY_TAG, "Failed to create ready-frame queue");
-        return ESP_ERR_NO_MEM;
-    }
-
-    esp_err_t err = prepare_vsync();
-    if (err != ESP_OK) {
-        return err;
-    }
-
-    g_display_mutex = xSemaphoreCreateMutex();
-    if (!g_display_mutex) {
-        ESP_LOGE(DISPLAY_TAG, "Failed to create display mutex");
-        return ESP_ERR_NO_MEM;
-    }
-
-    // Load saved rotation
-    display_rotation_t saved_rotation = (display_rotation_t)config_store_get_rotation();
-    if (saved_rotation != DISPLAY_ROTATION_0) {
-        ESP_LOGI(DISPLAY_TAG, "Restoring saved rotation: %d degrees", saved_rotation);
-        g_screen_rotation = saved_rotation;
-        ugfx_ui_set_rotation(saved_rotation);
-    }
-
-    ESP_LOGI(DISPLAY_TAG, "Display renderer initialized");
-    return ESP_OK;
+    atomic_store(&s_max_speed, settings.playback_max_speed);
+    atomic_store(&s_background, settings.background_color);
+    atomic_store(&g_display_show_fps, settings.show_fps);
 }
+
+static void on_setting_changed(const p3a_event_t *event, void *ctx)
+{
+    (void)ctx;
+    switch (event->payload.i32) {
+    case P3A_SET_ROTATION:
+    case P3A_SET_PLAYBACK_MAX_SPEED:
+    case P3A_SET_BACKGROUND_COLOR:
+    case P3A_SET_SHOW_FPS:
+        take_settings();
+        break;
+    default:
+        break;
+    }
+}
+
+display_rotation_t display_renderer_get_rotation(void)
+{
+    return (display_rotation_t)atomic_load(&s_rotation);
+}
+
+void display_renderer_get_background(uint8_t *r, uint8_t *g, uint8_t *b)
+{
+    unsigned rgb = atomic_load(&s_background);
+    *r = (uint8_t)(rgb >> 16);
+    *g = (uint8_t)(rgb >> 8);
+    *b = (uint8_t)rgb;
+}
+
+size_t display_renderer_row_stride(void)
+{
+    return g_display_row_stride;
+}
+
+size_t display_renderer_buffer_bytes(void)
+{
+    return g_display_buffer_bytes;
+}
+
+const uint8_t *display_renderer_displayed_buffer(void)
+{
+    int8_t index = g_displaying_idx;
+    return index >= 0 && index < g_display_buffer_count ? g_display_buffers[index] : NULL;
+}
+
+// ============================================================================
+// Start
+// ============================================================================
 
 esp_err_t display_renderer_ensure_upscale_workers(void)
 {
     if (g_upscale_worker_top && g_upscale_worker_bottom) {
         return ESP_OK;
     }
-
     return create_upscale_workers();
 }
 
+// One worker per core, at the producer's priority. Their stacks are internal
+// RAM, as the RENDER class says: they run every frame.
 static esp_err_t create_upscale_workers(void)
 {
     if (!g_upscale_worker_top) {
-        if (xTaskCreatePinnedToCore(display_upscale_worker_top_task,
-                                    "upscale_top",
-                                    2048,
-                                    NULL,
-                                    CONFIG_P3A_RENDER_TASK_PRIORITY,
-                                    &g_upscale_worker_top,
-                                    0) != pdPASS) {
-            ESP_LOGE(DISPLAY_TAG, "Failed to create top upscale worker task");
-            return ESP_FAIL;
+        p3a_task_config_t top = P3A_TASK_CONFIG("upscale_top", display_upscale_worker_top_task, NULL, 2048, P3A_TASK_RENDER);
+        top.core = 0;
+        esp_err_t err = p3a_task_create(&top, &g_upscale_worker_top);
+        if (err != ESP_OK) {
+            return err;
         }
     }
-
     if (!g_upscale_worker_bottom) {
-        if (xTaskCreatePinnedToCore(display_upscale_worker_bottom_task,
-                                    "upscale_bottom",
-                                    2048,
-                                    NULL,
-                                    CONFIG_P3A_RENDER_TASK_PRIORITY,
-                                    &g_upscale_worker_bottom,
-                                    1) != pdPASS) {
-            ESP_LOGE(DISPLAY_TAG, "Failed to create bottom upscale worker task");
-            if (g_upscale_worker_top) {
-                vTaskDelete(g_upscale_worker_top);
-                g_upscale_worker_top = NULL;
-            }
-            return ESP_FAIL;
+        p3a_task_config_t bottom =
+            P3A_TASK_CONFIG("upscale_bottom", display_upscale_worker_bottom_task, NULL, 2048, P3A_TASK_RENDER);
+        bottom.core = 1;
+        esp_err_t err = p3a_task_create(&bottom, &g_upscale_worker_bottom);
+        if (err != ESP_OK) {
+            return err;
         }
     }
-
     return ESP_OK;
 }
 
-void display_renderer_deinit(void)
+esp_err_t display_renderer_start(void)
 {
-    // Delete the producer first (stops new frames being enqueued), then the
-    // consumer (stops dequeue/submit), then the queue once both readers are gone.
-    if (g_display_producer_task) {
-        vTaskDelete(g_display_producer_task);
-        g_display_producer_task = NULL;
+    if (g_display_consumer_task != NULL) {
+        return ESP_ERR_INVALID_STATE;
     }
-
-    if (g_display_consumer_task) {
-        vTaskDelete(g_display_consumer_task);
-        g_display_consumer_task = NULL;
+    g_display_panel = p3a_board_get_panel();
+    g_display_buffer_count = p3a_board_get_buffer_count();
+    g_display_buffer_bytes = p3a_board_get_buffer_bytes();
+    g_display_row_stride = p3a_board_get_row_stride();
+    if (g_display_panel == NULL || g_display_buffer_count == 0 || g_display_buffer_count > P3A_MAX_DISPLAY_BUFFERS) {
+        ESP_LOGE(DISPLAY_TAG, "no panel, or an unexpected number of framebuffers (%u)", (unsigned)g_display_buffer_count);
+        return ESP_ERR_INVALID_STATE;
     }
-
-    if (g_ready_queue) {
-        vQueueDelete(g_ready_queue);
-        g_ready_queue = NULL;
-    }
-
-    if (g_upscale_worker_top) {
-        vTaskDelete(g_upscale_worker_top);
-        g_upscale_worker_top = NULL;
-    }
-
-    if (g_upscale_worker_bottom) {
-        vTaskDelete(g_upscale_worker_bottom);
-        g_upscale_worker_bottom = NULL;
-    }
-
-    if (g_display_mutex) {
-        vSemaphoreDelete(g_display_mutex);
-        g_display_mutex = NULL;
-    }
-
-    if (g_display_panel && g_display_vsync_sem) {
-        esp_lcd_dpi_panel_event_callbacks_t cbs = {
-            .on_refresh_done = NULL,
-        };
-        esp_lcd_dpi_panel_register_event_callbacks(g_display_panel, &cbs, NULL);
-    }
-
-    if (g_display_vsync_sem) {
-        vSemaphoreDelete(g_display_vsync_sem);
-        g_display_vsync_sem = NULL;
-    }
-
-    // Clean up triple buffering state
-    if (g_buffer_free_sem) {
-        vSemaphoreDelete(g_buffer_free_sem);
-        g_buffer_free_sem = NULL;
-    }
-    for (int i = 0; i < P3A_MAX_DISPLAY_BUFFERS; i++) {
+    for (int i = 0; i < g_display_buffer_count; i++) {
+        s_buffers[i] = p3a_board_get_buffer(i);
         g_buffer_info[i].state = BUFFER_STATE_FREE;
     }
     g_displaying_idx = -1;
     g_last_submitted_idx = -1;
 
-    g_display_panel = NULL;
-    g_display_buffers = NULL;
-    g_display_buffer_count = 0;
-}
+    g_buffer_free_sem = xSemaphoreCreateCounting(g_display_buffer_count, g_display_buffer_count);
+    // Ready-frame hand-off queue (producer -> consumer). Depth covers the at most
+    // one banked frame plus headroom; the real in-flight cap is g_buffer_free_sem.
+    g_ready_queue = xQueueCreate(2, sizeof(ready_frame_t));
+    s_registry_lock = xSemaphoreCreateMutex();
+    if (!g_buffer_free_sem || !g_ready_queue || !s_registry_lock) {
+        return ESP_ERR_NO_MEM;
+    }
 
-esp_err_t display_renderer_start(void)
-{
+    take_settings();
+    esp_err_t err = p3a_event_subscribe(P3A_EVENT_SETTING_CHANGED, on_setting_changed, NULL);
+    if (err != ESP_OK) {
+        ESP_LOGW(DISPLAY_TAG, "settings will not be followed: %s", esp_err_to_name(err));
+    }
+    display_fps_overlay_register();
+
+    err = prepare_vsync();
+    if (err != ESP_OK) {
+        return err;
+    }
+
     // Consumer first: it blocks harmlessly on the empty ready-queue until the
-    // producer enqueues. Both pinned to core 1 — the consumer must hit vsync
-    // deadlines (priority +1 so it preempts the heavy producer), and the producer
-    // co-locates with the bottom upscale worker it blocks on.
-    if (g_display_consumer_task == NULL) {
-        if (xTaskCreatePinnedToCore(display_consumer_task,
-                                    "display_consumer",
-                                    4096,
-                                    NULL,
-                                    CONFIG_P3A_RENDER_TASK_PRIORITY + 1,
-                                    &g_display_consumer_task,
-                                    1) != pdPASS) {
-            ESP_LOGE(DISPLAY_TAG, "Failed to start display consumer task");
-            return ESP_FAIL;
-        }
+    // producer enqueues. Both on the render core: the consumer must hit vsync
+    // deadlines (one priority step up, so that it preempts the heavy producer),
+    // and the producer shares a core with the bottom upscale worker it waits for.
+    p3a_task_config_t consumer = P3A_TASK_CONFIG("display_consumer", display_consumer_task, NULL, 4096, P3A_TASK_RENDER);
+    consumer.priority_offset = 1;
+    p3a_task_config_t producer = P3A_TASK_CONFIG("display_producer", display_producer_task, NULL, 4096, P3A_TASK_RENDER);
+    if ((err = p3a_task_create(&consumer, &g_display_consumer_task)) != ESP_OK ||
+        (err = p3a_task_create(&producer, &g_display_producer_task)) != ESP_OK) {
+        ESP_LOGE(DISPLAY_TAG, "the display tasks did not start: %s", esp_err_to_name(err));
+        return err;
     }
-
-    if (g_display_producer_task == NULL) {
-        if (xTaskCreatePinnedToCore(display_producer_task,
-                                    "display_producer",
-                                    4096,
-                                    NULL,
-                                    CONFIG_P3A_RENDER_TASK_PRIORITY,
-                                    &g_display_producer_task,
-                                    1) != pdPASS) {
-            ESP_LOGE(DISPLAY_TAG, "Failed to start display producer task");
-            if (g_display_consumer_task) {
-                vTaskDelete(g_display_consumer_task);
-                g_display_consumer_task = NULL;
-            }
-            return ESP_FAIL;
-        }
-    }
+    ESP_LOGI(DISPLAY_TAG, "started: %u framebuffers, rotation %d", (unsigned)g_display_buffer_count,
+             (int)display_renderer_get_rotation());
     return ESP_OK;
 }
 
 // ============================================================================
-// Frame callback
+// Sources and overlays
 // ============================================================================
 
-void display_renderer_set_frame_callback(display_frame_callback_t callback, void *user_ctx)
+void display_renderer_set_source(display_source_t slot, display_frame_source_fn fn, void *ctx)
 {
-    if (g_display_mutex && xSemaphoreTake(g_display_mutex, portMAX_DELAY) == pdTRUE) {
-        g_display_frame_callback = callback;
-        g_display_frame_callback_ctx = user_ctx;
-        xSemaphoreGive(g_display_mutex);
-    } else {
-        g_display_frame_callback = callback;
-        g_display_frame_callback_ctx = user_ctx;
+    if ((int)slot < 0 || slot >= DISPLAY_SOURCE_COUNT_ || s_registry_lock == NULL) {
+        return;
     }
+    xSemaphoreTake(s_registry_lock, portMAX_DELAY);
+    s_sources[slot].fn = fn;
+    s_sources[slot].ctx = ctx;
+    xSemaphoreGive(s_registry_lock);
+    // Whatever is queued was drawn by the previous owner of the slot.
+    display_renderer_note_content_discontinuity();
+}
+
+esp_err_t display_renderer_add_overlay(display_overlay_fn fn, void *ctx, bool over_ui)
+{
+    if (fn == NULL || s_registry_lock == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    esp_err_t err = ESP_ERR_NO_MEM;
+    xSemaphoreTake(s_registry_lock, portMAX_DELAY);
+    if (s_overlay_count < MAX_OVERLAYS) {
+        s_overlays[s_overlay_count] = (overlay_t){.fn = fn, .ctx = ctx, .over_ui = over_ui};
+        s_overlay_count++;
+        err = ESP_OK;
+    }
+    xSemaphoreGive(s_registry_lock);
+    return err;
 }
 
 void display_renderer_note_content_discontinuity(void)
@@ -355,125 +325,41 @@ void display_renderer_note_content_discontinuity(void)
     frame_trace_mark(FT_MARK_SWAP, FT_PHASE_EVENT, gen);
 }
 
-// ============================================================================
-// Mode switching
-// ============================================================================
-
-static void wait_for_render_mode(display_render_mode_t target_mode)
+void display_renderer_set_blank(bool blank)
 {
-    const TickType_t check_delay = pdMS_TO_TICKS(5);
-    const TickType_t timeout = pdMS_TO_TICKS(500);
-    TickType_t waited = 0;
-
-    while (g_display_mode_active != target_mode) {
-        vTaskDelay(check_delay);
-        waited += check_delay;
-        if (waited >= timeout) {
-            ESP_LOGW(DISPLAY_TAG, "Timed out waiting for render mode %d (active=%d)",
-                     target_mode, g_display_mode_active);
-            break;
-        }
-    }
+    atomic_store(&s_blank, blank);
 }
 
-esp_err_t display_renderer_enter_ui_mode(void)
+display_source_t display_renderer_active_source(void)
 {
-    ESP_LOGI(DISPLAY_TAG, "Entering UI mode");
-    g_display_mode_request = DISPLAY_RENDER_MODE_UI;
-    
-    // Nudge the producer in case it is blocked acquiring a free buffer, so it
-    // promptly loops, re-reads g_display_mode_request, and flips
-    // g_display_mode_active (which wait_for_render_mode polls). The mode flip
-    // itself bumps the content generation, flushing stale animation frames.
+    return s_source_active;
+}
+
+esp_err_t display_renderer_select_source(display_source_t slot)
+{
+    if ((int)slot < 0 || slot >= DISPLAY_SOURCE_COUNT_) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    s_source_request = slot;
+
+    // Nudge the producer in case it is blocked acquiring a free buffer, so that
+    // it loops, reads the request and switches. The switch itself bumps the
+    // content generation, flushing the other source's queued frames.
     if (g_buffer_free_sem) {
         xSemaphoreGive(g_buffer_free_sem);
         vTaskDelay(pdMS_TO_TICKS(10));
         xSemaphoreGive(g_buffer_free_sem);
     }
-    
-    wait_for_render_mode(DISPLAY_RENDER_MODE_UI);
-    ESP_LOGI(DISPLAY_TAG, "UI mode active");
+
+    const TickType_t step = pdMS_TO_TICKS(5);
+    for (TickType_t waited = 0; s_source_active != slot; waited += step) {
+        if (waited >= pdMS_TO_TICKS(500)) {
+            ESP_LOGW(DISPLAY_TAG, "timed out waiting for source %d (active %d)", (int)slot, (int)s_source_active);
+            return ESP_ERR_TIMEOUT;
+        }
+        vTaskDelay(step);
+    }
     return ESP_OK;
-}
-
-void display_renderer_exit_ui_mode(void)
-{
-    ESP_LOGI(DISPLAY_TAG, "Exiting UI mode");
-    g_display_mode_request = DISPLAY_RENDER_MODE_ANIMATION;
-
-    // Nudge the producer (see enter_ui_mode) so it re-reads the mode promptly.
-    if (g_buffer_free_sem) {
-        xSemaphoreGive(g_buffer_free_sem);
-    }
-
-    wait_for_render_mode(DISPLAY_RENDER_MODE_ANIMATION);
-    ESP_LOGI(DISPLAY_TAG, "Animation mode active");
-}
-
-bool display_renderer_is_ui_mode(void)
-{
-    return (g_display_mode_active == DISPLAY_RENDER_MODE_UI);
-}
-
-// ============================================================================
-// Rotation
-// ============================================================================
-
-esp_err_t display_renderer_set_rotation(display_rotation_t rotation)
-{
-    if (rotation != DISPLAY_ROTATION_0 && rotation != DISPLAY_ROTATION_90 && 
-        rotation != DISPLAY_ROTATION_180 && rotation != DISPLAY_ROTATION_270) {
-        ESP_LOGE(DISPLAY_TAG, "Invalid rotation angle: %d", rotation);
-        return ESP_ERR_INVALID_ARG;
-    }
-    
-    if (g_rotation_in_progress) {
-        ESP_LOGW(DISPLAY_TAG, "Rotation operation already in progress");
-        return ESP_ERR_INVALID_STATE;
-    }
-    
-    if (rotation == g_screen_rotation) {
-        ESP_LOGI(DISPLAY_TAG, "Already at rotation %d degrees", rotation);
-        return ESP_OK;
-    }
-    
-    g_rotation_in_progress = true;
-    display_rotation_t old_rotation = g_screen_rotation;
-    g_screen_rotation = rotation;
-    
-    ESP_LOGI(DISPLAY_TAG, "Setting screen rotation from %d to %d degrees", old_rotation, rotation);
-    
-    esp_err_t err = ugfx_ui_set_rotation(rotation);
-    if (err != ESP_OK) {
-        ESP_LOGW(DISPLAY_TAG, "Failed to set µGFX rotation: %s", esp_err_to_name(err));
-    }
-    
-    config_store_set_rotation((uint16_t)rotation);
-    g_rotation_in_progress = false;
-    
-    ESP_LOGI(DISPLAY_TAG, "Screen rotation set to %d degrees", rotation);
-    return ESP_OK;
-}
-
-display_rotation_t display_renderer_get_rotation(void)
-{
-    return g_screen_rotation;
-}
-
-// ============================================================================
-// Dimension queries
-// ============================================================================
-
-void display_renderer_get_dimensions(int *width, int *height, size_t *stride)
-{
-    if (width) *width = EXAMPLE_LCD_H_RES;
-    if (height) *height = EXAMPLE_LCD_V_RES;
-    if (stride) *stride = g_display_row_stride;
-}
-
-size_t display_renderer_get_buffer_bytes(void)
-{
-    return g_display_buffer_bytes;
 }
 
 // ============================================================================
@@ -575,30 +461,41 @@ static int8_t acquire_free_buffer(uint32_t timeout_ms)
 }
 
 // ============================================================================
-// Producer task: acquire a buffer, render (decode + upscale + overlays), enqueue
+// Producer task: acquire a buffer, render (source + overlays), enqueue
 // ============================================================================
+
+// Returns the buffer to the free pool without queuing it.
+static void release_unqueued(int8_t index)
+{
+    g_buffer_info[index].state = BUFFER_STATE_FREE;
+    if (g_buffer_free_sem) {
+        xSemaphoreGive(g_buffer_free_sem);
+    }
+}
 
 void display_producer_task(void *arg)
 {
     (void)arg;
 
-    // Tracks the previous "black output" state (paused or brightness-zero). A
+    // Tracks the previous "black output" state (blank or brightness-zero). A
     // transition bumps the content generation so the consumer drops queued
     // frames from the superseded epoch (e.g. pause should freeze immediately).
     bool prev_black = false;
+    // True when the frame on the panel is not the active source's own last one.
+    bool must_redraw = true;
 
     while (true) {
-        display_render_mode_t mode = g_display_mode_request;
-        if (mode != g_display_mode_active) {
-            // Mode switch: invalidate frames queued for the old mode, and
-            // make redraw-on-change UI screens draw a fresh first frame.
-            frame_trace_mark(FT_MARK_MODE_SWITCH, FT_PHASE_EVENT, (uint32_t)mode);
+        display_source_t slot = s_source_request;
+        if (slot != s_source_active) {
+            // Source switch: invalidate frames queued by the other source, and
+            // make the new one draw a fresh first frame.
+            frame_trace_mark(FT_MARK_MODE_SWITCH, FT_PHASE_EVENT, (uint32_t)slot);
             display_renderer_note_content_discontinuity();
-            ugfx_ui_invalidate();
+            must_redraw = true;
         }
-        g_display_mode_active = mode;
+        s_source_active = slot;
 
-        const bool ui_mode = (mode == DISPLAY_RENDER_MODE_UI);
+        const bool ui_mode = (slot != DISPLAY_SOURCE_ARTWORK);
 
         // ================================================================
         // 1. Acquire a free buffer to render into
@@ -618,95 +515,76 @@ void display_producer_task(void *arg)
         uint8_t *back_buffer = g_display_buffers[back_buffer_idx];
 
         if (!back_buffer) {
-            g_buffer_info[back_buffer_idx].state = BUFFER_STATE_FREE;
-            if (g_buffer_free_sem) {
-                xSemaphoreGive(g_buffer_free_sem);
-            }
+            release_unqueued(back_buffer_idx);
             vTaskDelay(pdMS_TO_TICKS(10));
             continue;
         }
 
         // ================================================================
-        // 2. Render the frame (mode branch)
+        // 2. Render the frame
         // ================================================================
         int frame_delay_ms = 100;
 
-        bool brightness_zero = (app_lcd_get_brightness() == 0);
-        bool anim_paused = app_lcd_is_animation_paused();
-        bool black = anim_paused || brightness_zero;
+        // Black output: asked for (pause), or the backlight is off anyway.
+        bool black = atomic_load(&s_blank) || p3a_board_get_brightness() == 0;
         if (black != prev_black) {
             // Entering or leaving black output: drop queued frames so the
             // change lands on the next vsync. Leaving black also needs a
-            // fresh UI frame (the last presented frame was black).
+            // fresh frame from the source (the last presented frame was black).
             display_renderer_note_content_discontinuity();
-            ugfx_ui_invalidate();
+            must_redraw = true;
             prev_black = black;
         }
 
-        if (brightness_zero && !anim_paused) {
-            // User manually set brightness to 0 (not paused): skip callback
-            memset(back_buffer, 0, g_display_buffer_bytes);
-            frame_delay_ms = 100;
-        } else if (anim_paused) {
-            // Paused: always output black regardless of render mode
+        if (black) {
             memset(back_buffer, 0, g_display_buffer_bytes);
             frame_delay_ms = 100;
         } else {
-            if (ui_mode) {
-                frame_delay_ms = ugfx_ui_render_to_buffer(back_buffer, g_display_row_stride);
-                if (frame_delay_ms == UGFX_UI_FRAME_UNCHANGED) {
-                    // Static screen, nothing new to show: release the buffer
-                    // without queuing it, so the panel keeps the last
-                    // submitted frame, and idle instead of re-rendering.
-                    // The OTA screens used to redraw in full every 50 ms;
-                    // each redraw took longer than that, so this task never
-                    // blocked, IDLE1 starved, and the task watchdog fired
-                    // every 15 s for the whole update. Its register dump
-                    // runs in interrupt context long enough to delay the
-                    // DSI vsync ISR, which shows as a blue frame.
-                    g_buffer_info[back_buffer_idx].state = BUFFER_STATE_FREE;
-                    if (g_buffer_free_sem) {
-                        xSemaphoreGive(g_buffer_free_sem);
-                    }
+            xSemaphoreTake(s_registry_lock, portMAX_DELAY);
+            const source_t source = s_sources[slot];
+            xSemaphoreGive(s_registry_lock);
+
+            if (source.fn) {
+                frame_delay_ms = source.fn(back_buffer, must_redraw, source.ctx);
+                if (frame_delay_ms == DISPLAY_FRAME_UNCHANGED && !must_redraw) {
+                    // Nothing new to show: release the buffer without queuing
+                    // it, so the panel keeps the last submitted frame, and
+                    // idle instead of re-rendering. (In 1.x a screen that
+                    // redrew in full every 50 ms took longer than that per
+                    // redraw; this task never blocked, the idle task starved,
+                    // and the task watchdog's report delayed the vsync
+                    // interrupt, which showed as a blue frame.)
+                    release_unqueued(back_buffer_idx);
                     vTaskDelay(pdMS_TO_TICKS(50));
                     continue;
                 }
                 if (frame_delay_ms < 0) {
-                    memset(back_buffer, 0, g_display_buffer_bytes);
-                    frame_delay_ms = 100;
+                    // The source failed, or answered "unchanged" when a fresh
+                    // frame was required: skip this frame. The consumer never
+                    // sees it; the panel keeps showing the last one.
+                    release_unqueued(back_buffer_idx);
+                    vTaskDelay(pdMS_TO_TICKS(10));
+                    continue;
                 }
+                must_redraw = false;
             } else {
-                display_frame_callback_t callback = g_display_frame_callback;
-                void *ctx = g_display_frame_callback_ctx;
-
-                if (callback) {
-                    frame_delay_ms = callback(back_buffer, ctx);
-                    if (frame_delay_ms < 0) {
-                        // Callback error: release the buffer and skip this frame.
-                        // The consumer never sees it; DMA keeps showing the last
-                        // submitted frame.
-                        g_buffer_info[back_buffer_idx].state = BUFFER_STATE_FREE;
-                        if (g_buffer_free_sem) {
-                            xSemaphoreGive(g_buffer_free_sem);
-                        }
-                        vTaskDelay(pdMS_TO_TICKS(10));
-                        continue;
-                    }
-                } else {
-                    memset(back_buffer, 0, g_display_buffer_bytes);
-                    frame_delay_ms = 100;
-                }
+                // Nobody draws for this slot yet.
+                memset(back_buffer, 0, g_display_buffer_bytes);
+                frame_delay_ms = 100;
             }
 
             // ================================================================
             // 3. Bake overlays into the frame (before it is queued)
             // ================================================================
-            fps_update_and_draw(back_buffer);
-
-            if (!ui_mode) {
-                processing_notification_update_and_draw(back_buffer);
-                reaction_overlay_update_and_draw(back_buffer);
-                pin_overlay_update_and_draw(back_buffer);
+            xSemaphoreTake(s_registry_lock, portMAX_DELAY);
+            overlay_t overlays[MAX_OVERLAYS];
+            const int overlay_count = s_overlay_count;
+            memcpy(overlays, s_overlays, sizeof(overlays));
+            xSemaphoreGive(s_registry_lock);
+            for (int i = 0; i < overlay_count && slot != DISPLAY_SOURCE_TEST; i++) {
+                if (!ui_mode || overlays[i].over_ui) {
+                    overlays[i].fn(back_buffer, overlays[i].ctx);
+                }
             }
         }
 
@@ -783,10 +661,10 @@ void display_consumer_task(void *arg)
             last_presented_gen = rf.generation;
         }
 
-        const bool max_speed = config_store_get_max_speed_playback();
+        const bool max_speed = atomic_load(&s_max_speed);
 
         // ================================================================
-        // 2. Frame timing — virtual playhead with fractional vsync alignment
+        // 2. Frame timing: virtual playhead with fractional vsync alignment
         // ================================================================
         //
         // The playhead advances by THIS frame's carried duration AFTER it is
@@ -809,7 +687,7 @@ void display_consumer_task(void *arg)
                 ft_flags |= FT_FLAG_BASELINED;
 #endif
             } else {
-                // Drift safeguard — POSITIVE direction only.
+                // Drift safeguard: POSITIVE direction only.
                 //
                 // Positive drift (now ran ahead of target by more than the
                 // threshold) means a stall (slow decode, SD-I/O burst, OS
@@ -821,7 +699,7 @@ void display_consumer_task(void *arg)
                 // NEGATIVE drift (target > now) is the NORMAL state for any
                 // frame whose duration exceeds one loop iteration: the sleep
                 // below waits until the playhead catches up. We MUST NOT resync
-                // there — doing so would spin the loop at the vsync rate (the
+                // there: doing so would spin the loop at the vsync rate (the
                 // original 60-fps-pin bug).
                 int64_t drift_us = now_us - s_target_present_us;
                 if (drift_us > FRAME_TIMING_RESYNC_US) {
@@ -904,7 +782,7 @@ void display_consumer_task(void *arg)
         g_buffer_info[back_buffer_idx].state = BUFFER_STATE_PENDING;
         g_last_submitted_idx = back_buffer_idx;
 
-        esp_lcd_panel_draw_bitmap(g_display_panel, 0, 0, EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES, back_buffer);
+        esp_lcd_panel_draw_bitmap(g_display_panel, 0, 0, P3A_DISPLAY_WIDTH, P3A_DISPLAY_HEIGHT, back_buffer);
 
         g_last_frame_present_us = esp_timer_get_time();
 

@@ -163,7 +163,9 @@ def test_the_setup_network_is_on_the_air(uart):
     reboot(uart)
     assert wait_access_point(uart)["ap"] is True
     seen = False
-    deadline = time.monotonic() + 45
+    # Windows refreshes its list of networks on its own schedule, about once a
+    # minute while it is connected; a new network can take that long to show.
+    deadline = time.monotonic() + 150
     while not seen and time.monotonic() < deadline:
         scan = subprocess.run(["netsh", "wlan", "show", "networks"], capture_output=True, text=True)
         if "SSID" not in scan.stdout:

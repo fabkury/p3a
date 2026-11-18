@@ -10,7 +10,6 @@
 
 #include "sdkconfig.h"
 
-#if CONFIG_P3A_PPA_UPSCALE_ENABLE
 
 #include "esp_err.h"
 #include "display_renderer.h"
@@ -49,4 +48,3 @@ void display_ppa_upscale_deinit(void);
 }
 #endif
 
-#endif // CONFIG_P3A_PPA_UPSCALE_ENABLE

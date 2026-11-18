@@ -165,7 +165,7 @@ commits can cite them.
 | M7 | Upload response puts the raw filename into JSON unescaped | `http_api/http_api_upload.c` |
 | M8 | PICO-8 audio stop clears `s_task` after a fixed 100 ms delay, no handshake | `pico8/pico8_audio.c` |
 | M9 | Event bus calls handlers while holding its dispatch mutex | `event_bus/event_bus.c` |
-| M10 | Parallel upscaler waits for both worker bits with no overall deadline | `main/display_upscaler.c` |
+| M10 | Parallel upscaler waits for both worker bits with no overall deadline | `main/display_upscaler.c` **Fixed in 2.0** (`v2`, M2.1): the wait has a 2 s deadline; still open in 1.x |
 | M11 | `show_url` hands off a request through unlocked globals and a binary semaphore; a queued URL can be dropped | `show_url/show_url.c` |
 | M12 | Fresh-boot NVS erase list includes the unused `p3a_boot` and omits `ota` | `p3a_core/fresh_boot.c` (~line 149) |
 | M13 | HAM and Smithsonian BYOK keys go into URLs unencoded | `art_institution/museums/ham.c`, `smithsonian.c` |

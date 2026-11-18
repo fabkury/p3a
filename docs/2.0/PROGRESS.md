@@ -10,7 +10,7 @@ times.
 |---|---|
 | Phase | 2, player and library (Phases 0 and 1 complete) |
 | Current milestone | M2.1 display pipeline and decoders |
-| Next action | M2.1 part 2, the display pipeline: read `docs/infrastructure/display-pipeline.md` and `docs/jitter/REPORT.md` (fix 3, band-stealing upscale, and the Phase 6 catch-up policy live in these files and move untouched), then `legacy/main/display_renderer.c`, `display_renderer_priv.h`, `display_upscaler.c`, `display_ppa_upscaler.c`. Bring them into a `player`-layer component with the frame trace calls intact; audit M10 (the parallel upscaler waits with no deadline) is due here. Test hook: push decoded frames from the corpus through the renderer and compare the HTTP screenshot with a reference upscaled on the workstation. Then part 3: the animation player's decode path, the frame-trace endpoints, `host/jitter-lab` adapted, a trace baseline. Part 3 also decides whether end-of-animation becomes uniform across formats (see the M2.1 part 1 entry) |
+| Next action | M2.1 part 3, the player's decode path: read `legacy/main/animation_player.c`, `animation_player_loader.c`, `animation_player_render.c` and `animation_player_priv.h` (2,568 lines), and `legacy/components/loader_service`. Bring in what turns a file into frames on the panel: load (POSIX `read()` into an aligned buffer, jitter fix 6), open the decoder, build the aspect-ratio maps, choose the upscaler, decode a frame ahead, swap. It becomes the artwork source of `display_renderer`; the test hook's own fit and lookup code in `p3a_test_render.c` is then replaced by the real map builder. Decide here whether end of animation becomes uniform across formats (see the part 1 entry). Then the frame-trace endpoints under `/api/v2/test/`, `host/jitter-lab` adapted to them, a short trace baseline on the corpus, and the FPS overlay test that needs a running animation. The scheduler, history and channels are M2.2 to M2.4, not this |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -41,7 +41,7 @@ reopened (why).
 | M1.3 storage | done 2026-11-18. Tiers: host tests (8 programs, under ASan and UBSan too), device tests (62 cases), release and test builds, the configuration guard. The repair paths of `sd_repair` cannot be exercised on a healthy card and are carried over on trust |
 | M1.4 settings | done 2026-11-18. Tiers: host tests (9 programs, under ASan and UBSan too), generator self-test (15 cases), device tests (76 cases, 14 of them new), release and test builds, the configuration guard. The touch-recovery restart itself is not exercised (the controller works); its counters and rule are |
 | M1.5 net base | done 2026-11-18. Tiers: host tests (12 programs, under ASan and UBSan too), tool self-tests, device tests (119 cases, on the real Wi-Fi), release and test builds, the configuration guard. Awaiting manual check M1.5-a (the portal from a phone). The Wi-Fi recovery ladders are carried over untested |
-| M2.1 Display pipeline and decoders | in progress. Part 1 done 2026-11-18 (the decoders): host tests (13 programs, under ASan and UBSan too), device tests (202 cases, 83 of them the decoder corpus), both builds, the configuration guard. Parts 2 and 3 (display renderer and upscalers; the player's decode path, frame trace and jitter lab) not started |
+| M2.1 Display pipeline and decoders | in progress. Parts 1 and 2 done 2026-11-18 (decoders; the display pipeline and both upscalers): host tests (13 programs), device tests (221 cases), release, test and trace builds, the configuration guard. Part 3 (the player's decode path, frame trace over HTTP, the jitter lab) not started. No jitter measurement has been made on 2.0 yet |
 | M2.2 Library core | not started |
 | M2.3 Source interface, local source, scheduler | not started |
 | M2.4 Loader pipeline, C and D | not started |
@@ -192,6 +192,14 @@ M0.1, 2026-11-17 (paths relative to the 1.x tree):
 Dead functions inside files that are otherwise live were not hunted down;
 they are simply not moved when their file is.
 
+M2.1 part 2, 2026-11-18:
+
+- From the display renderer: `display_renderer_deinit`, the display mutex,
+  the render-mode enum and its enter and exit calls (now sources), the
+  rotation setter that wrote the config store, the state variables of the
+  processing, reaction and pin overlays (they return with those features),
+  and the RGB565, `P3A_PERF_DEBUG` and single-worker code paths.
+
 M2.1, 2026-11-18:
 
 - `animation_decoder_decode_next` (RGBA) and its five per-format
@@ -263,6 +271,79 @@ M1.1, 2026-11-17:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-18: M2.1 part 2, the display pipeline
+
+- New component `components/display_renderer` (layer `player`). Moved from
+  `legacy/main` with `git mv`: `display_renderer.c`, its private header,
+  `display_upscaler.c`, `display_ppa_upscaler.c`, `display_fps_overlay.c`
+  and the two public headers.
+- **The timing code moved unchanged**: the vsync callback, the buffer
+  states and the free-buffer wait, the ready queue, and the whole consumer
+  (the playhead, the 250 ms resync, the Phase 6 re-baseline, the half-period
+  vsync lock, the stale-signal guard), with every frame-trace call. Jitter
+  fix 3 (band-stealing upscale) is in `display_upscaler.c` as it was. The
+  only edits inside that region are two names (the panel size constants,
+  and where "ignore frame delays" is read from).
+- What changed is the edges, which in 1.x reached into the UI, the config
+  store and the pause state:
+  - **Sources.** Three slots (artwork, UI, test patterns), one active. A
+    source draws whole frames and may answer "unchanged" (the buffer goes
+    back and the producer idles, which 1.x did only for the UI) or fail
+    (frame skipped). It is told when its previous frame is not what the
+    panel shows, so that "unchanged" is never answered to a blank panel.
+    The `ugfx_ui_*` calls are gone; the UI registers itself in Phase 3.
+  - **Overlays** register themselves and say whether they also draw over
+    the UI. The FPS overlay moved with the renderer. The processing,
+    reaction and pin overlays stay in `legacy/` until their features move.
+  - **Black output** is `display_renderer_set_blank()` (pause will use it)
+    or brightness zero read from the board.
+  - **Settings are followed through the change event**: rotation, "ignore
+    frame delays", the FPS switch, the background colour. 1.x read the
+    config store in the consumer for every frame.
+  - **Tasks** come from `p3a_task_create()`: the consumer one priority step
+    above the producer, both on the render core; one upscale worker per
+    core. `deinit` is gone (tasks are long-lived).
+  - **Audit M10**: the wait for the two upscale workers has an overall
+    deadline (2 s). It had none, so a worker that never answered hung the
+    producer for good.
+  - Code for build options this board never uses is removed: RGB565
+    panels (15 blocks in the upscaler), a profiling flag, a single-worker
+    debug switch. The PPA option is always on, as 1.x shipped it.
+- The pipeline starts at boot and owns the framebuffers from then on. With
+  nothing registered the panel is black.
+- **The panel test commands now go through the pipeline.** `lcd fill`,
+  `bars` and `gradient` used to write a framebuffer and present it
+  themselves, which cannot coexist with the running pipeline; they are now
+  its test source, and screenshots read the buffer the pipeline reports as
+  displayed. So the old board tests exercise the real path.
+- Test hook `POST /api/v2/test/render`: raw pixels in, fitted to the
+  panel through either upscaler in the current rotation.
+- Verified, device tests (19 new, 221 in all): a 90 by 90 picture scaled to
+  the full panel with all 518,400 pixels compared; seven other shapes
+  including 1 by 1, non-integer ratios and 720 by 720; a picture larger
+  than the panel; all four rotations following the setting with exactly
+  one redraw per change; borders following the background colour; an
+  unchanged picture not being drawn again; blanking and brightness zero
+  showing black and the picture returning; switching sources and back;
+  the hardware (bilinear) scaler within a mean of 6 levels of a bilinear
+  reference, smooth, correctly placed and bordered. The nearest-neighbour
+  comparisons are exact.
+- Verified, builds: release, test, and trace (the frame trace compiled in),
+  with the configuration guard.
+- Not verified: **timing.** No frame-trace run has been made on 2.0, so the
+  jitter pass bar (no presented-frame lateness of 100 ms or more over a
+  multi-hour soak) is not re-established; that needs the player (part 3)
+  and then a soak (M6.1 at the latest; a short baseline in part 3). The
+  upscale deadline path (M10) and the FPS overlay's drawing are not
+  exercised: the first needs a stuck worker, the second a running
+  animation.
+- Numbers: the test image is 1.41 MB, the release image 908 KB.
+- One test was loosened, for a reason outside the firmware: the check that
+  the workstation's Wi-Fi scan lists `p3a-setup` failed twice in a row.
+  Watching both sides showed the network on the air and Windows listing it
+  about 30 s later, on its own scan schedule; the test's window was 45 s
+  from a point where part of that was already spent. It now waits 150 s.
 
 ### 2026-11-18: M2.1 part 1, the decoders, and two 1.x picture bugs
 

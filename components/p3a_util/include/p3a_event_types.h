@@ -19,8 +19,16 @@ typedef enum {
     // payload.i32: the new p3a_mem_level_t.
     P3A_EVENT_MEM_PRESSURE_CHANGED = 0x0100,
 
-    // --- board 0x0200, storage 0x0300, sources 0x0400, library 0x0500,
-    //     player 0x0600, ui 0x0700, net 0x0800: none yet ---
+    // --- board (0x0200): none yet ---
+
+    // --- storage (0x0300) ---
+    // The SD card has been declared failed for the rest of this boot: a boot
+    // probe failed, or three writes in a row did. Nothing may write to it any
+    // more. Emitted once. No payload.
+    P3A_EVENT_SD_HEALTH_FAILED = 0x0300,
+
+    // --- sources 0x0400, library 0x0500, player 0x0600, ui 0x0700,
+    //     net 0x0800: none yet ---
 
     // --- test hooks (0xFF00): never emitted by release code ---
     P3A_EVENT_TEST_A = 0xFF00,

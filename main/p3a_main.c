@@ -12,6 +12,7 @@
 #include "p3a_event.h"
 #include "p3a_job.h"
 #include "p3a_mem.h"
+#include "p3a_storage.h"
 #include "sdio_bus.h"
 #include "slave_ota.h"
 #include "sdkconfig.h"
@@ -53,9 +54,10 @@ void app_main(void)
     boot_step("touch", p3a_board_touch_init(3000));
 
     boot_step("SDIO bus coordinator", sdio_bus_init());
-    // Health checks, self-repair and the p3a folder tree arrive with the
-    // storage layer (M1.3). Without a card the device still boots.
-    boot_step("SD card", p3a_board_sd_mount());
+    // Mount, FAT self-repair, the root folder, the health probe. Without a
+    // usable card the device still boots; storage is then latched as failed.
+    // The root folder will come from the settings store (M1.4).
+    boot_step("storage", p3a_storage_start(NULL));
 
     // The Wi-Fi co-processor: bring its link up and update its firmware if the
     // image in the slave_fw partition is newer. An update takes over the

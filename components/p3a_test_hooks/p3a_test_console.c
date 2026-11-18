@@ -97,7 +97,8 @@ static void dispatch(char *line)
     }
     if (run_from(s_core_commands, sizeof(s_core_commands) / sizeof(s_core_commands[0]), name, args) ||
         run_from(p3a_test_util_commands, p3a_test_util_command_count, name, args) ||
-        run_from(p3a_test_board_commands, p3a_test_board_command_count, name, args)) {
+        run_from(p3a_test_board_commands, p3a_test_board_command_count, name, args) ||
+        run_from(p3a_test_storage_commands, p3a_test_storage_command_count, name, args)) {
         return;
     }
     p3a_test_reply_err("unknown command");

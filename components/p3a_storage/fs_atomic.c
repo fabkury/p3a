@@ -10,6 +10,8 @@
 #include "sd_health.h"
 #include "sd_repair.h"
 #include "esp_log.h"
+#include "p3a_board.h"
+#include "p3a_err.h"
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
@@ -21,7 +23,7 @@ static const char *TAG = "fs_atomic";
 // (http_api_upload); keep headroom for the ".tmp"/".bak" suffixes.
 #define FS_ATOMIC_PATH_MAX 520
 
-#define SD_MOUNT_PREFIX "/sdcard"
+#define SD_MOUNT_PREFIX P3A_SD_MOUNT_POINT
 
 static bool is_sd_path(const char *path)
 {
@@ -126,7 +128,7 @@ esp_err_t fs_atomic_write_cb(const char *final_path, fs_atomic_writer_cb_t write
         return ESP_ERR_INVALID_ARG;
     }
     if (refuse_latched(final_path)) {
-        return ESP_ERR_INVALID_STATE;
+        return P3A_ERR_SD_FAILED;
     }
 
     char tmp_path[FS_ATOMIC_PATH_MAX];
@@ -222,7 +224,7 @@ esp_err_t fs_atomic_rename(const char *tmp_path, const char *final_path,
     }
     if (refuse_latched(final_path)) {
         unlink(tmp_path);  // caller's tmp is orphaned either way; tidy up
-        return ESP_ERR_INVALID_STATE;
+        return P3A_ERR_SD_FAILED;
     }
     // A repaired directory surfaces as ESP_ERR_NOT_FINISHED (a transient
     // failure to the caller): the tmp is gone with the quarantined directory

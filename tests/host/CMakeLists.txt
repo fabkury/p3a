@@ -72,3 +72,12 @@ p3a_host_test(test_event_table
 p3a_host_test(test_mem_pressure
     SOURCES util/test_mem_pressure.c ${UTIL}/p3a_mem_pressure.c
     INCLUDES ${UTIL}/include)
+
+# --- storage ----------------------------------------------------------------
+set(STORAGE "${P3A_COMPONENTS}/p3a_storage")
+p3a_host_test(test_sd_path
+    SOURCES storage/test_sd_path.c ${STORAGE}/sd_path.c
+    INCLUDES ${STORAGE}/include ${P3A_STUBS})
+p3a_host_test(test_frame
+    SOURCES storage/test_frame.c ${STORAGE}/p3a_frame.c ${UTIL}/p3a_crc32.c ${UTIL}/p3a_err.c
+    INCLUDES ${STORAGE}/include ${UTIL}/include ${P3A_STUBS})

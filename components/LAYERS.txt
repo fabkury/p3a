@@ -14,4 +14,5 @@ p3a_board      board
 sdio_bus       board
 sd_idle_wait   board
 slave_ota      board
+p3a_storage    storage
 p3a_test_hooks net

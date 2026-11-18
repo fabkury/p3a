@@ -166,6 +166,9 @@ over HTTP.
   for atomic write, the health latch and a directory repair.
 - Manual: behaviour across a power cut during a write.
 - Exit: host and device tests pass.
+- As built: one component, `p3a_storage`. The per-store paths of the 1.x
+  layout were dropped from `sd_path`; M2.2 defines 2.0's. `sd_repair`'s
+  repair paths are carried over untested (they need a failing card).
 
 ### M1.4 settings
 

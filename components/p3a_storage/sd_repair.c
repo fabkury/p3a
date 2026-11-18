@@ -9,6 +9,8 @@
 #include "sd_repair.h"
 #include "sd_path.h"
 #include "esp_log.h"
+#include "p3a_board.h"
+#include "psram_alloc.h"
 #include "esp_timer.h"
 #include "esp_heap_caps.h"
 #include "sdmmc_cmd.h"
@@ -26,7 +28,7 @@
 
 static const char *TAG = "sd_repair";
 
-#define SD_MOUNT_PREFIX "/sdcard"
+#define SD_MOUNT_PREFIX P3A_SD_MOUNT_POINT
 #define LOST_DIR_NAME   "lost"
 // The probe name is long on purpose: it needs 6 contiguous directory
 // entries (5 LFN + 1 SFN), like the artwork names p3a writes. A short name
@@ -199,7 +201,7 @@ bool sd_repair_dir_is_damaged(const char *dir_path)
     }
     // Path buffers live on the heap: this runs on whichever task hit the
     // failure (download workers included), and their stacks are small.
-    char *probe = malloc(REPAIR_PATH_MAX);
+    char *probe = psram_malloc(REPAIR_PATH_MAX);
     if (!probe) {
         return false;
     }
@@ -250,8 +252,8 @@ esp_err_t sd_repair_quarantine_dir(const char *dir_path)
     }
 
     // Two heap path buffers: lost/ directory, then the destination name.
-    char *lost_dir = malloc(REPAIR_PATH_MAX);
-    char *dest = malloc(REPAIR_PATH_MAX);
+    char *lost_dir = psram_malloc(REPAIR_PATH_MAX);
+    char *dest = psram_malloc(REPAIR_PATH_MAX);
     esp_err_t err = ESP_FAIL;
     if (!lost_dir || !dest) {
         err = ESP_ERR_NO_MEM;
@@ -321,9 +323,9 @@ esp_err_t sd_repair_heal_for_write(const char *file_path)
 
     // Three heap path buffers: the target directory, the prefix being
     // walked, and that prefix's parent.
-    char *dir = malloc(REPAIR_PATH_MAX);
-    char *probe = malloc(REPAIR_PATH_MAX);
-    char *parent = malloc(REPAIR_PATH_MAX);
+    char *dir = psram_malloc(REPAIR_PATH_MAX);
+    char *probe = psram_malloc(REPAIR_PATH_MAX);
+    char *parent = psram_malloc(REPAIR_PATH_MAX);
     esp_err_t err = ESP_ERR_NOT_FOUND;
     bool repaired = false;
     if (!dir || !probe || !parent) {

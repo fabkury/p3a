@@ -188,9 +188,9 @@ Same pages and look, new internals (D11).
 
 | | Capability | 2.0 | M | Note |
 |---|---|---|---|---|
-| [ ] | Configurable SD root, validated, reboot to apply | keep | M1.3, M1.4 | |
-| [ ] | Atomic writes; health latch (boot probe or three failed writes) that stops downloads until reboot | keep | M1.3 | |
-| [ ] | Self-repair: quarantine to `lost/`, FAT mirror repair at boot, counters | keep | M1.3 | |
+| [ ] | Configurable SD root, validated, reboot to apply | keep | M1.3, M1.4 | Validation and resolution done and host-tested (M1.3); the setting itself arrives with M1.4 |
+| [ ] | Atomic writes; health latch (boot probe or three failed writes) that stops downloads until reboot | keep | M1.3 | Atomic writes and the latch verified on the device; "stops downloads" waits for a download manager (M4.1) |
+| [ ] | Self-repair: quarantine to `lost/`, FAT mirror repair at boot, counters | keep | M1.3 | Moved; the boot-time FAT comparison runs. The repair paths need a failing card and are untested in 2.0 |
 | [ ] | Eviction: watermarks scaled to the card, age halving from 30 days to a 4-hour floor, needs a synced clock, never touches local files or pins | keep | M4.1 | Told about pins by data |
 | [ ] | Stale channel indices dropped after 60 days | keep | M4.1 | |
 | [ ] | Five cache trees and a pinned tree on the card | change | M2.2 | One blob store |

@@ -9,7 +9,7 @@
  *
  * All variants share these semantics:
  *  - Fail-fast on a latched SD failure: if sd_health_is_failed() and the
- *    destination is under /sdcard, return ESP_ERR_INVALID_STATE without
+ *    destination is under /sdcard, return P3A_ERR_SD_FAILED without
  *    touching the filesystem (the code callers already treat as "SD not
  *    available, defer").
  *  - Write sequence: unlink stale tmp -> fopen tmp -> write -> fflush ->

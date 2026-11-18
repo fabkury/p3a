@@ -9,7 +9,8 @@
 
 #include "sd_health.h"
 #include "sd_path.h"
-#include "event_bus.h"
+#include "p3a_board.h"
+#include "p3a_event.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -20,9 +21,8 @@
 
 static const char *TAG = "sd_health";
 
-// Only paths under the SD mount prefix count toward SD health; LittleFS
-// (/webui) writes must never trip the latch.
-#define SD_MOUNT_PREFIX "/sdcard"
+// Only paths under the SD mount point count toward SD health.
+#define SD_MOUNT_PREFIX P3A_SD_MOUNT_POINT
 
 static portMUX_TYPE s_lock = portMUX_INITIALIZER_UNLOCKED;
 static volatile bool s_failed = false;   // write-once latch
@@ -46,7 +46,7 @@ static void latch_failed(const char *reason)
         return;
     }
     ESP_LOGE(TAG, "SD CARD FAILURE latched (%s) - writes/downloads disabled until reboot", reason);
-    event_bus_emit_simple(P3A_EVENT_SD_HEALTH_FAILED);
+    p3a_event_emit(P3A_EVENT_SD_HEALTH_FAILED);
 }
 
 static bool is_sd_path(const char *path)

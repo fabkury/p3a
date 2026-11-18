@@ -105,6 +105,12 @@ All in `components/p3a_util`; each header explains itself at the top.
   `p3a_event_types.h` with their meaning and payload.
 - **Optional work** (a download, a refresh, a new TLS session) checks
   `p3a_mem_level()` before starting.
+- **Files on the SD card** go through `components/p3a_storage`: paths are
+  built by `sd_path` (never a literal `/sdcard/p3a`), writes go through
+  `fs_atomic`, and binary files are `p3a_frame` containers with a schema
+  number. A file that fails to load is never deleted. Free space is read
+  from `p3a_storage_space()`, never computed in a request path. What may be
+  assumed about FAT is stated in `p3a_storage.h`.
 - **Logic is split from hardware** so it can be host-tested: the pure part
   in its own file with no IDF includes (`p3a_job_table.c`,
   `p3a_mem_pressure.c`), the thin device part beside it.

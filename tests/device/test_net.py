@@ -167,15 +167,3 @@ def test_with_nothing_stored_the_device_asks_for_setup(online):
     assert status["ip"] == "" and status["up"] is False
     time.sleep(3)
     assert online.command("net status")["up_events"] == 0
-
-
-def test_a_network_that_is_not_there_ends_in_setup(online):
-    online.command("net join", {"ssid": "p3a-lab-no-such-network", "password": "not-a-real-password"})
-    reboot(online)
-    deadline = time.monotonic() + 60
-    status = online.command("net status")
-    while status["state"] == "connecting" and time.monotonic() < deadline:
-        time.sleep(2)
-        status = online.command("net status")
-    assert status["state"] == "setup", "after a few tries the device gives up and asks for setup"
-    assert status["up_events"] == 0

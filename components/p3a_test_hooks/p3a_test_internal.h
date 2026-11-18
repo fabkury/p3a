@@ -36,3 +36,9 @@ extern const size_t p3a_test_net_command_count;
 
 // Starts counting network up and down events, from the start of the console.
 void p3a_test_net_subscribe(void);
+
+// The framebuffer the board test commands last presented, or NULL.
+const unsigned char *p3a_test_shown_buffer(void);
+
+// Adds the /api/v2/test/ routes and starts capturing log lines.
+void p3a_test_http_start(void);

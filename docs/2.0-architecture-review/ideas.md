@@ -100,6 +100,29 @@ own set of two or three. License terms of the chosen families for embedding
 in an Apache 2.0 firmware; the per-family `*-Info.md` files should state
 this.
 
+## Added 2026-11-18
+
+### 4. A list of nearby networks on the setup page
+
+**What it is.** The setup page asks the user to type the Wi-Fi name, as 1.x
+did. A scan would let them pick it from a list, with signal strength, and
+would remove the commonest setup error after a mistyped password: a
+mistyped name.
+
+**Where it lands.** `components/p3a_net`: a `GET /api/v2/wifi/scan`
+answered as a job (a scan takes two to three seconds), and a list on
+`static/setup/index.html` with the typed field kept as the fallback for
+hidden networks.
+
+**What it depends on.** The radio must be in access-point-plus-station mode
+to scan while serving setup. That mode has not been tried through the
+co-processor, including the units whose co-processor is stuck on firmware
+2.7.0.
+
+**Open questions.** Whether scanning disturbs the phones joined to the
+setup network enough to matter (the radio leaves its channel briefly).
+Whether to scan once when setup starts and cache the list, or on request.
+
 ## How to add an idea
 
 Append a dated section with the same four parts: what it is, where it lands

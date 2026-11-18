@@ -119,6 +119,11 @@ static const uint8_t *shown_buffer(void)
     return s_shown < 0 ? NULL : p3a_board_get_buffer(s_shown);
 }
 
+const uint8_t *p3a_test_shown_buffer(void)
+{
+    return shown_buffer();
+}
+
 static void reply_shown(esp_err_t err)
 {
     if (err != ESP_OK) {

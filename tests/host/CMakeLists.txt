@@ -116,3 +116,17 @@ p3a_host_test(test_http
     SOURCES net/test_http.c ${NET}/http_route.c ${NET}/http_envelope.c ${UTIL}/p3a_crc32.c ${UTIL}/p3a_err.c
     INCLUDES ${NET}/include ${UTIL}/include ${P3A_STUBS}
     LIBS cjson)
+
+# The built-in pages, embedded exactly as the firmware build embeds them.
+set(STATIC_GEN "${CMAKE_BINARY_DIR}/gen-static")
+execute_process(
+    COMMAND ${Python3_EXECUTABLE} "${P3A_ROOT}/tools/embed_static.py" "${NET}/static" "${STATIC_GEN}"
+    RESULT_VARIABLE static_gen_result)
+if(NOT static_gen_result EQUAL 0)
+    message(FATAL_ERROR "the static pages could not be embedded; see the message above")
+endif()
+file(GLOB_RECURSE static_sources CONFIGURE_DEPENDS "${NET}/static/*")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${static_sources} "${P3A_ROOT}/tools/embed_static.py")
+p3a_host_test(test_setup
+    SOURCES net/test_setup.c ${NET}/net_dns.c ${NET}/http_static.c ${STATIC_GEN}/p3a_static_gen.c
+    INCLUDES ${NET}/include)

@@ -38,6 +38,9 @@ typedef enum {
     // The device had an address and no longer has one. Not emitted for a
     // failed attempt while it was already down. No payload.
     P3A_EVENT_NET_DOWN,
+    // The device has no network to join and has opened its setup access
+    // point. It stays there until it is restarted. No payload.
+    P3A_EVENT_NET_SETUP_STARTED,
 
     // --- test hooks (0xFF00): never emitted by release code ---
     P3A_EVENT_TEST_A = 0xFF00,

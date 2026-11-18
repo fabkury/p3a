@@ -202,8 +202,8 @@ Same pages and look, new internals (D11).
 
 | | Capability | 2.0 | M | Note |
 |---|---|---|---|---|
-| [ ] | Setup network `p3a-setup` with DNS capture and OS sign-in sheet | keep | M1.5 | |
-| [ ] | Three first-connection attempts, then setup mode; after a first success, retry forever with back-off | keep | M1.5 | |
+| [ ] | Setup network `p3a-setup` with DNS capture and OS sign-in sheet | keep | M1.5 | Built and device-tested from the inside; a phone joining is manual check M1.5-a |
+| [x] | Three first-connection attempts, then setup mode; after a first success, retry forever with back-off | changed | M1.5 | D35: three tries for a network that refuses, two minutes for one that is absent. Device-tested both ways |
 | [ ] | Health monitor, reconnect, reinit, and a single reboot when the Wi-Fi chip is stuck, then degraded offline playback | keep | M1.5 | |
 | [ ] | SDIO link failure: countdown and reboot, degraded mode after three | keep | M1.5 | |
 | [ ] | Names: `p3a` or `p3a-{name}` for mDNS, DHCP, the setup-mode alias, the installed-app name and the screens | keep | M1.5 | |

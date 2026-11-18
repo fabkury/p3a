@@ -23,10 +23,6 @@
 #define NET_MAX_SSID_LEN     32
 #define NET_MAX_PASSWORD_LEN 64  // a passphrase is at most 63; 64 is a key in hex
 
-// How many tries the first connection after boot gets before the device
-// decides its credentials do not work here and needs setting up.
-#define NET_INITIAL_TRIES 3
-
 // Drops in a row (no address in between) before the driver is re-initialised.
 #define NET_MAX_CONSECUTIVE_DROPS 10
 
@@ -54,6 +50,9 @@ typedef struct {
     int attempt;                  // reconnect tries since the last address
     int consecutive_drops;
     bool ever_connected;          // an address was obtained at least once this boot
+    bool driver_started;          // esp_wifi_remote_init() has succeeded
+    int refusals;                 // first join: failures where the network was there
+    int64_t join_started_us;      // first join: when it began
     bool reinit_in_progress;      // the recovery worker owns reconnection
     TickType_t reinit_started;
     int no_ip_cycles;             // health checks in a row without an address
@@ -84,6 +83,14 @@ void net_restart_after_countdown(const char *why);
 
 // net_time.c
 void net_time_start(void);
+
+// net_setup.c: the setup access point.
+// Moves to the setup state and brings the access point up (as a job).
+void net_enter_setup(void);
+bool net_setup_active(void);
+
+// net_wifi.c: the name the device takes on the LAN, "p3a" or "p3a-<name>".
+const char *net_hostname(void);
 
 // net_api.c: adds the built-in /api/v2 routes.
 void net_api_register(void);

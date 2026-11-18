@@ -75,6 +75,11 @@ void net_set_state(p3a_net_state_t state)
     }
 }
 
+const char *net_hostname(void)
+{
+    return s_hostname;
+}
+
 bool p3a_net_is_up(void)
 {
     return atomic_load(&g_net.state) == P3A_NET_UP;
@@ -222,10 +227,21 @@ static void reconnect_timer_cb(void *arg)
     }
 }
 
-static void on_disconnected(void)
+// What the radio says when it could not find the network at all.
+static bool reason_is_absent(int reason)
 {
+    return reason == WIFI_REASON_NO_AP_FOUND || reason == WIFI_REASON_BEACON_TIMEOUT;
+}
+
+static void on_disconnected(int reason)
+{
+    // Stopping the station to become the setup access point also ends here.
+    if (atomic_load(&g_net.state) == P3A_NET_SETUP) {
+        return;
+    }
     atomic_fetch_add(&g_net.drops, 1);
-    ESP_LOGW(TAG, "Wi-Fi disconnected (ever connected: %d, attempt %d)", g_net.ever_connected, g_net.attempt);
+    ESP_LOGW(TAG, "Wi-Fi disconnected (reason %d, ever connected: %d, attempt %d)", reason, g_net.ever_connected,
+             g_net.attempt);
     if (g_net.events != NULL) {
         xEventGroupClearBits(g_net.events, NET_CONNECTED_BIT);
     }
@@ -236,25 +252,35 @@ static void on_disconnected(void)
     }
     net_set_state(P3A_NET_CONNECTING);
 
-    // Stuck cycling: tear the driver down and start over.
+    // Stuck cycling: tear the driver down and start over. Not before the
+    // first connection: there the question is whether to offer setup.
     g_net.consecutive_drops++;
-    if (g_net.consecutive_drops >= NET_MAX_CONSECUTIVE_DROPS) {
+    if (g_net.ever_connected && g_net.consecutive_drops >= NET_MAX_CONSECUTIVE_DROPS) {
         ESP_LOGE(TAG, "%d drops in a row: re-initialising Wi-Fi", g_net.consecutive_drops);
         g_net.consecutive_drops = 0;
         net_schedule_reinit();
         return;
     }
 
-    // The first connection after boot gets a few tries. If none works, the
-    // stored network is not usable here and the device needs setting up.
-    // After a first success, keep trying for as long as it takes.
-    if (!g_net.ever_connected && g_net.attempt >= NET_INITIAL_TRIES) {
-        ESP_LOGW(TAG, "could not join the stored network after %d tries", NET_INITIAL_TRIES);
-        net_set_state(P3A_NET_SETUP);
-        return;
+    // Before the first connection of this boot, decide whether the stored
+    // network is worth more tries (net_backoff.h). After a first success,
+    // keep trying for as long as it takes.
+    bool absent = reason_is_absent(reason);
+    if (!g_net.ever_connected) {
+        if (!absent) {
+            g_net.refusals++;
+        }
+        uint32_t since_ms = (uint32_t)((esp_timer_get_time() - g_net.join_started_us) / 1000);
+        if (net_first_join_gives_up(g_net.refusals, since_ms, absent)) {
+            ESP_LOGW(TAG, "could not join the stored network (%s): offering setup",
+                     absent ? "it is not in range" : "it refused the connection");
+            net_enter_setup();
+            return;
+        }
     }
     g_net.attempt++;
-    uint32_t delay_ms = net_backoff_delay_ms(g_net.attempt, g_net.ever_connected);
+    // A network that is not there is retried at the reconnection pace.
+    uint32_t delay_ms = net_backoff_delay_ms(g_net.attempt, g_net.ever_connected || absent);
     if (g_net.reconnect_timer != NULL) {
         esp_timer_stop(g_net.reconnect_timer);
         // Never connect from inside the event handler: go through the timer
@@ -294,14 +320,15 @@ static void event_handler(void *arg, esp_event_base_t base, int32_t id, void *da
 {
     (void)arg;
     if (base == WIFI_REMOTE_EVENT && id == WIFI_EVENT_STA_START) {
-        if (!g_net.reinit_in_progress) {
+        if (!g_net.reinit_in_progress && atomic_load(&g_net.state) != P3A_NET_SETUP) {
             esp_err_t err = esp_wifi_remote_connect();
             if (err != ESP_OK) {
                 ESP_LOGW(TAG, "connect failed: %s", esp_err_to_name(err));
             }
         }
     } else if (base == WIFI_REMOTE_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) {
-        on_disconnected();
+        const wifi_event_sta_disconnected_t *event = data;
+        on_disconnected(event != NULL ? event->reason : 0);
     } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
         on_got_ip((const ip_event_got_ip_t *)data);
     } else if (base == IP_EVENT && id == IP_EVENT_STA_LOST_IP) {
@@ -360,7 +387,12 @@ static esp_err_t start_station(const char *ssid, const char *password)
     wifi_init_config_t init = WIFI_INIT_CONFIG_DEFAULT();
     wifi_config_t config;
     net_fill_sta_config(&config, ssid, password);
-    if ((err = esp_wifi_remote_init(&init)) != ESP_OK || (err = register_handlers_once()) != ESP_OK ||
+    if ((err = esp_wifi_remote_init(&init)) != ESP_OK) {
+        return err;
+    }
+    g_net.driver_started = true;
+    g_net.join_started_us = esp_timer_get_time();
+    if ((err = register_handlers_once()) != ESP_OK ||
         (err = esp_wifi_remote_set_mode(WIFI_MODE_STA)) != ESP_OK ||
         (err = esp_wifi_remote_set_config(WIFI_IF_STA, &config)) != ESP_OK ||
         (err = esp_wifi_remote_start()) != ESP_OK) {
@@ -419,7 +451,7 @@ esp_err_t p3a_net_start(void)
     s_has_credentials = net_load_credentials(s_ssid, password) == ESP_OK;
     if (!s_has_credentials) {
         ESP_LOGW(TAG, "no Wi-Fi network stored: the device needs setting up");
-        net_set_state(P3A_NET_SETUP);
+        net_enter_setup();
         return ESP_OK;
     }
 

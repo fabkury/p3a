@@ -8,9 +8,9 @@ times.
 
 | | |
 |---|---|
-| Phase | 1, platform (Phase 0 complete) |
-| Current milestone | M1.5 net base |
-| Next action | M1.5 part 3, the setup portal: read `legacy/components/wifi_manager/wifi_captive_portal.c` (the last file there) and the 1.x portal pages. Build: soft AP `p3a-setup` when the state is `setup`, DNS catch-all, the static table for embedded gzipped pages (a build-time generator; the portal page is its first user), `PUT` and `DELETE /api/v2/wifi` for the credentials, a scan endpoint, then restart. Device tests can check the AP comes up and the endpoints work from the station side; joining the AP from a phone is manual. Then part 4 (HTTP test hooks: screenshot, clock, log capture, registered with `p3a_http_add_routes`) |
+| Phase | 2, player and library (Phases 0 and 1 complete) |
+| Current milestone | M2.1 display pipeline and decoders |
+| Next action | Start M2.1: read PLAN.md M2.1, `docs/2.0-architecture-review/firmware-internals.md` on the display pipeline, and `docs/jitter/` (the fixes that must survive the move and the pass bar). Then the legacy sources: `legacy/main/display_renderer*.c`, the decoders (`animation_decoder`, `animated_gif_decoder`, `libwebp_decoder`, `espressif__libpng`) and their managed components. Bring the decoders in first, behind one interface, with host tests against small sample files where the decoder code is portable; then the frame pipeline on the device with the trace build. `host/jitter-lab` is adapted in this milestone |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -40,8 +40,8 @@ reopened (why).
 | M1.2 board | done 2026-11-17. Tiers: device tests (47 cases, twice), release, test and trace builds, the configuration guard, CI. Awaiting manual checks M1.2-a to d. The co-processor update itself cannot run on the dev unit (its C6 is on the unupdatable 2.7.0); see M1.2-e |
 | M1.3 storage | done 2026-11-18. Tiers: host tests (8 programs, under ASan and UBSan too), device tests (62 cases), release and test builds, the configuration guard. The repair paths of `sd_repair` cannot be exercised on a healthy card and are carried over on trust |
 | M1.4 settings | done 2026-11-18. Tiers: host tests (9 programs, under ASan and UBSan too), generator self-test (15 cases), device tests (76 cases, 14 of them new), release and test builds, the configuration guard. The touch-recovery restart itself is not exercised (the controller works); its counters and rule are |
-| M1.5 net base | in progress. Parts 1 and 2 done 2026-11-18 (Wi-Fi, recovery, mDNS, clock; the HTTP server and the built-in `/api/v2`): host tests (11 programs), device tests (105 cases, on the real Wi-Fi), both builds, the configuration guard. Parts 3 and 4 (setup portal, HTTP test hooks) not started |
-| M2.1 Display pipeline and decoders | not started |
+| M1.5 net base | done 2026-11-18. Tiers: host tests (12 programs, under ASan and UBSan too), tool self-tests, device tests (119 cases, on the real Wi-Fi), release and test builds, the configuration guard. Awaiting manual check M1.5-a (the portal from a phone). The Wi-Fi recovery ladders are carried over untested |
+| M2.1 Display pipeline and decoders | next |
 | M2.2 Library core | not started |
 | M2.3 Source interface, local source, scheduler | not started |
 | M2.4 Loader pipeline, C and D | not started |
@@ -108,6 +108,20 @@ Open:
   up dark blue and clearly dim. Put it back with
   `python host/p3a-lab/lab.py cmd "settings factory-reset"` and another
   reboot: black and bright again.
+- **M1.5-a, setup from a phone.** Put the unit in setup with
+  `python host/p3a-lab/lab.py cmd "net forget"` and
+  `python host/p3a-lab/lab.py cmd reboot`. On a phone, join the Wi-Fi
+  network `p3a-setup` (no password). The phone should open the setup page
+  by itself within a few seconds (its "sign in to network" sheet); if it
+  does not, open `http://192.168.4.1/`. Check that the page looks right,
+  type the Wi-Fi name and password and the device name `fab`, and press
+  "Save & connect": the page should say "Saved! Rebooting now" with
+  `http://p3a-fab.local/` as the address, and within about 15 seconds
+  `python host/p3a-lab/lab.py cmd "net status"` should report `"up": true`.
+  Worth trying on both an iPhone and an Android phone if both are at hand.
+  Also worth one try with a wrong password: the unit should offer
+  `p3a-setup` again within about a minute. If anything goes wrong,
+  `python host/p3a-lab/lab.py provision` puts the unit back online.
 
 Cleared:
 
@@ -177,6 +191,21 @@ M0.1, 2026-11-17 (paths relative to the 1.x tree):
 Dead functions inside files that are otherwise live were not hunted down;
 they are simply not moved when their file is.
 
+M1.5, 2026-11-18:
+
+- `legacy/webui/setup/success.html`, `error.html`, `erased.html`: their
+  content became states of the one setup page
+  (`components/p3a_net/static/setup/index.html`, moved from the 1.x
+  `index.html`).
+- `legacy/components/wifi_manager/CMakeLists.txt` and `Kconfig`: every
+  source of that component has moved to `components/p3a_net`. Its two
+  build options (`WIFI_MANAGER_ENABLED`, `WIFI_MANAGER_SNTP_SERVER`) were
+  read by nothing.
+- From the portal code: the form-encoded `/save` and `/erase` handlers and
+  their hand-written parser (replaced by `PUT` and `DELETE /api/v2/wifi`
+  with JSON), the server-side `{SSID}`, `{HOSTNAME}` and `{DEVICE_NAME}`
+  substitution in pages, and the second HTTP server.
+
 M1.4, 2026-11-18 (not carried over from `config_store`; the files stay in
 `legacy/` until their last readers move):
 
@@ -221,6 +250,91 @@ M1.1, 2026-11-17:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-18: M1.5 parts 3 and 4, setup and the HTTP test hooks. Phase 1 complete
+
+Setup (part 3):
+
+- `net_setup.c` (moved from `wifi_captive_portal.c`, the last file of
+  `legacy/components/wifi_manager`): when the state becomes `setup` a job
+  turns the radio into the open access point `p3a-setup` at 192.168.4.1,
+  starts the DNS catch-all and mDNS, and emits
+  `P3A_EVENT_NET_SETUP_STARTED`. The 1.x second HTTP server is gone: the
+  one server serves setup too.
+- `net_dns.c`, pure: the DNS answer. 1.x built it inline in the task. It
+  now refuses anything that is not a plain query, checks that the name ends
+  inside the packet, drops what follows the first question (the 1.x reply
+  was malformed when the query carried an EDNS record), and answers
+  questions for anything but an IPv4 address with "no record", so that a
+  phone falls back at once instead of waiting.
+- Built-in pages: `tools/embed_static.py` gzips the folder
+  `components/p3a_net/static/` into a C table at configure time
+  (`http_static.h`); the server serves a GET that no route took from it,
+  with an ETag. Adding a page is adding a file. The web UI (M5.1) uses the
+  same path. This is the first piece of announced change A (one binary, no
+  web UI partition).
+- The portal behaviour lives in the server's "no route" path: in setup, an
+  unknown GET outside `/api/` is redirected to `http://192.168.4.1/`, and
+  `/` is the setup page. On the LAN the same requests are plain 404s.
+- One setup page instead of four. `static/setup/index.html` keeps the 1.x
+  look and talks to `/api/v2/wifi`; the 1.x success, error and erased pages
+  became states of it. 3.2 KB on the wire.
+- `GET`, `PUT` and `DELETE /api/v2/wifi`. `PUT` checks the network name,
+  the password and the optional device name before storing anything.
+- A behaviour change, decided as D35: a stored network that is merely
+  absent at boot is retried for two minutes before setup is offered, where
+  1.x gave it three tries (about ten seconds) and then sat in setup until
+  someone power-cycled it. A unit that boots faster than the router after
+  a power cut now comes back by itself. A network that is there and
+  refuses the connection still gets three tries, so a mistyped password
+  shows the portal again within a minute. The rule is a pure function
+  (`net_first_join_gives_up`), host-tested.
+
+HTTP test hooks (part 4), in `p3a_test_http.c`, registered through
+`p3a_http_add_routes()` and absent from a release build:
+
+- `GET /api/v2/test/screenshot[?div=N]`: the panel as a BMP. A 90 by 90
+  thumbnail takes 0.1 s, where the UART route takes about fifteen. The
+  full 720 by 720 frame (1.5 MB) takes about 8 s: the device sends at
+  roughly 190 KB/s to the LAN. That rate is a property of the link through
+  the co-processor, not of the hook (batching the rows changed nothing),
+  and is worth measuring properly when uploads and updates arrive.
+- `GET /api/v2/test/log[?since=N]`: the last 256 log lines, numbered, so a
+  test can read what a command logged without the UART.
+- `GET` and `POST /api/v2/test/clock`: read and set the clock, for the
+  tests of everything that will depend on dates.
+
+Numbers from the device: in setup the internal pool has 278 KB free of 413.
+The setup page is 9,988 bytes, 3.2 KB gzipped. Release image 988 KB.
+
+- Verified, host tests: the DNS answer (shape, the empty answer, the
+  dropped tail, every refusal, every buffer length, garbage of every
+  length), the lookup of built-in pages against the real embedded table,
+  the give-up rule. Verified, tool self-tests: the embedder (round trip,
+  reproducible output, refusals). Verified, device tests: the page over the
+  LAN, gzipped, byte for byte the file, with 304; no redirects on the LAN;
+  the Wi-Fi endpoints, including `PUT` refusing eight kinds of bad input
+  without storing anything and a good `PUT` renaming and restarting;
+  `DELETE` leading to setup with the access point up, every name resolving
+  to the device, nine operating-system probes and other unknown pages
+  redirected, the page at `/`, the API untouched; the network seen in the
+  workstation's Wi-Fi scan; a refused password reaching setup in under 80 s;
+  an absent network still being tried after 60 s and reaching setup at
+  about two minutes with no driver re-initialisation; the HTTP screenshot
+  equal to the UART one and exact against known pixels; log capture and
+  paging; setting the clock.
+- Not verified: a phone actually joining and its sign-in sheet opening
+  (manual check M1.5-a); the mDNS alias that lets a named device answer to
+  its own name during setup (kept from 1.x). The DNS and HTTP halves were exercised over
+  loopback on the device, not over the radio.
+- Left for later: the setup screen on the panel (M3.3), which will also
+  want the number of joined clients; a list of nearby networks on the
+  setup page (recorded in `ideas.md`).
+
+Phase 1 exit ("the device boots, mounts the card, holds settings, joins
+Wi-Fi and answers over HTTP", and M1.5's "from erased flash to answering
+`/api/v2/status` with no human step") is met: `lab.py up` followed by
+`lab.py provision` does it.
 
 ### 2026-11-18: M1.5 part 2, the HTTP server and `/api/v2`
 
@@ -337,7 +451,7 @@ what was verified and at which tier, the commit.
   logs) and `wait_online`; the device-test session ends by leaving the unit
   online.
 - The dev unit's name. The first run put the unit on the LAN as plain
-  `p3a`, the name of another of Fab's devices, for about ten minutes before
+  `p3a`, the name of another device on this LAN (a friend's unit), for about ten minutes before
   it was noticed. The lab now always names the dev unit `fab`
   (`DEV_UNIT_NAME`), sets the name before the credentials, and no test
   joins under the bare name.

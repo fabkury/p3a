@@ -116,16 +116,22 @@ input[type=text]:focus, input[type=password]:focus { border-color: var(--c-prima
 .help code { background: rgba(139,92,255,0.16); color: #D9CCFF; padding: 2px 6px; border-radius: 8px; }
 .hint { margin: 4px 0 0; font-size: 0.78rem; color: var(--c-card-fg-faint); }
 .divider { height: 1px; background: var(--c-card-border); margin: 12px 0; }
+.pill { display: inline-block; background: rgba(139,92,255,0.16); color: #D9CCFF; padding: 3px 10px; border-radius: 999px; font-weight: 600; }
+.error { margin: 0 0 10px; padding: 10px 12px; border-radius: var(--r-md); background: rgba(255,77,77,0.14); color: #FFB3B3; font-size: 0.9rem; }
+.list { margin: 10px 0 0; padding-left: 20px; font-size: 0.88rem; color: var(--c-card-fg-muted); line-height: 1.45; }
+[hidden] { display: none !important; }
 </style>
 </head>
 <body>
   <div class="header">
     <h1>p3a</h1>
-    <p class="subtitle">Wi-Fi setup</p>
+    <p class="subtitle" id="subtitle">Wi-Fi setup</p>
   </div>
-  <div class="card">
+
+  <div class="card" id="view-form">
     <h2>Connect to Wi-Fi</h2>
-    <form action="/save" method="POST" autocomplete="on">
+    <p class="error" id="error" hidden></p>
+    <form id="form" autocomplete="on">
       <div class="field">
         <label for="ssid">Network name (SSID)</label>
         <input type="text" id="ssid" name="ssid" required maxlength="32" autocapitalize="none" spellcheck="false" placeholder="e.g. MyHomeWiFi">
@@ -137,30 +143,87 @@ input[type=text]:focus, input[type=password]:focus { border-color: var(--c-prima
       <div class="field">
         <label for="device_name">Device name (optional)</label>
         <p class="hint"><strong style="font-size:0.92rem;">Device names are useful only if you have more than one p3a.</strong> If you have just one, it's more convenient to leave it empty.</p>
-        <input type="text" id="device_name" name="device_name" maxlength="16"
-               pattern="[a-z0-9-]*" autocapitalize="none" spellcheck="false"
-               placeholder="e.g. bedroom" value="{DEVICE_NAME}">
+        <input type="text" id="device_name" name="device_name" maxlength="16" pattern="[a-z0-9-]*" autocapitalize="none" spellcheck="false" placeholder="e.g. bedroom">
         <p class="hint">This name will become part of the device's LAN host name. Lowercase letters, numbers, and hyphens only.</p>
       </div>
-      <button class="btn" type="submit">Save &amp; connect</button>
+      <button class="btn" type="submit" id="save">Save &amp; connect</button>
     </form>
     <p class="help">After saving, p3a will reboot and join your Wi-Fi network. Then open <code id="post-url">http://p3a.local/</code> to control your p3a.</p>
-    <div class="divider"></div>
-    <form action="/erase" method="POST" onsubmit="return confirm('Erase saved Wi-Fi credentials? p3a will reboot into setup mode.');">
-      <button class="btn btn-secondary" type="submit">Erase Wi-Fi credentials</button>
-    </form>
+    <div id="erase-block" hidden>
+      <div class="divider"></div>
+      <button class="btn btn-secondary" type="button" id="erase">Erase Wi-Fi credentials</button>
+    </div>
   </div>
+
+  <div class="card" id="view-saved" hidden>
+    <h2>Saved! Rebooting now</h2>
+    <p class="help" style="margin-top:0">Connecting to:</p>
+    <div class="pill" id="saved-ssid"></div>
+    <p class="help">p3a has saved your credentials and will now reboot. The <code>p3a-setup</code> network will cease to exist and p3a will connect to the Wi-Fi network you provided.</p>
+    <ul class="list">
+      <li>After the device turns on, wait a few seconds for it to connect to Wi-Fi.</li>
+      <li>Then, with your phone or computer on that same Wi-Fi network, open <code class="saved-url"></code> to control your p3a.</li>
+      <li>If p3a cannot connect (a mistyped password, for example), it will offer the <code>p3a-setup</code> network again for you to reconfigure.</li>
+    </ul>
+    <div class="divider"></div>
+    <a class="btn" id="open" style="display:block;text-align:center;text-decoration:none" href="#">Open p3a</a>
+  </div>
+
+  <div class="card" id="view-erased" hidden>
+    <h2>Wi-Fi credentials erased</h2>
+    <p class="help" style="margin-top:0">p3a is rebooting into setup mode. Join the <code>p3a-setup</code> Wi-Fi network and this page will open again, or go to <code>http://192.168.4.1/</code>.</p>
+  </div>
+
   <script>
   (function(){
-    var dn = document.getElementById('device_name');
-    var url = document.getElementById('post-url');
-    dn.addEventListener('input', function() {
+    function $(id){ return document.getElementById(id); }
+    var dn = $('device_name'), url = $('post-url'), err = $('error');
+    function host(){ var n = dn.value.trim(); return n ? 'p3a-' + n : 'p3a'; }
+    dn.addEventListener('input', function(){
       this.value = this.value.toLowerCase().replace(/[^a-z0-9-]/g, '');
-      var name = this.value.trim();
-      var host = name ? 'p3a-' + name : 'p3a';
-      url.textContent = 'http://' + host + '.local/';
+      url.textContent = 'http://' + host() + '.local/';
     });
-    dn.dispatchEvent(new Event('input'));
+    function show(view){
+      ['view-form','view-saved','view-erased'].forEach(function(v){ $(v).hidden = (v !== view); });
+    }
+    function fail(message){ err.textContent = message; err.hidden = false; $('save').disabled = false; }
+    function call(method, body){
+      return fetch('/api/v2/wifi', {
+        method: method,
+        headers: body ? {'Content-Type': 'application/json'} : {},
+        body: body ? JSON.stringify(body) : undefined
+      }).then(function(r){ return r.json(); });
+    }
+    // What the device already holds: its name, and whether there is a network to erase.
+    fetch('/api/v2/settings').then(function(r){ return r.json(); }).then(function(d){
+      if (d.ok && d.data.device_name){ dn.value = d.data.device_name; dn.dispatchEvent(new Event('input')); }
+    }).catch(function(){});
+    call('GET').then(function(d){
+      if (d.ok && d.data.has_credentials){ $('erase-block').hidden = false; }
+    }).catch(function(){});
+
+    $('form').addEventListener('submit', function(e){
+      e.preventDefault();
+      err.hidden = true;
+      $('save').disabled = true;
+      var ssid = $('ssid').value;
+      call('PUT', {ssid: ssid, password: $('password').value, device_name: dn.value.trim()}).then(function(d){
+        if (!d.ok){ fail(d.error); return; }
+        var target = 'http://' + d.data.hostname + '.local/';
+        $('saved-ssid').textContent = ssid;
+        document.querySelectorAll('.saved-url').forEach(function(el){ el.textContent = target; });
+        $('open').href = target;
+        $('open').textContent = 'Open ' + d.data.hostname + '.local';
+        $('subtitle').textContent = 'connecting to wi-fi';
+        show('view-saved');
+      }).catch(function(){ fail('p3a did not answer. Check that you are still on the p3a-setup network and try again.'); });
+    });
+    $('erase').addEventListener('click', function(){
+      if (!confirm('Erase saved Wi-Fi credentials? p3a will reboot into setup mode.')) return;
+      call('DELETE').then(function(d){
+        if (d.ok){ show('view-erased'); } else { fail(d.error); }
+      }).catch(function(){ fail('p3a did not answer.'); });
+    });
   })();
   </script>
 </body>

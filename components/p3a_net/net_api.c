@@ -8,6 +8,9 @@
 //   PATCH  /api/v2/settings               change settings, all or nothing
 //   GET    /api/v2/settings/schema        the settings schema, as written (not enveloped)
 //   GET    /api/v2/secrets/museum-keys    the two keys the browser needs (decision D33)
+//   GET    /api/v2/wifi                   the stored network and whether the device is in setup
+//   PUT    /api/v2/wifi                   store a network (and optionally the device name), restart
+//   DELETE /api/v2/wifi                   forget the network, restart into setup
 //   GET    /api/v2/jobs/{id}              a job's state and progress
 //   POST   /api/v2/system/reboot          restart
 //   POST   /api/v2/system/factory-reset   erase settings and credentials, restart
@@ -297,7 +300,7 @@ static esp_err_t restart_soon(void)
             return err;
         }
     }
-    esp_err_t err = esp_timer_start_once(timer, 750 * 1000);
+    esp_err_t err = esp_timer_start_once(timer, 1500 * 1000);
     return err == ESP_ERR_INVALID_STATE ? ESP_OK : err;  // already counting down
 }
 
@@ -391,6 +394,89 @@ static void delete_coredump(p3a_http_request_t *req)
     p3a_http_ok(req, NULL);
 }
 
+// --- Wi-Fi ----------------------------------------------------------------------
+
+static void get_wifi(p3a_http_request_t *req)
+{
+    p3a_net_status_t net;
+    p3a_net_status(&net);
+    cJSON *data = cJSON_CreateObject();
+    cJSON_AddStringToObject(data, "state", p3a_net_state_name(net.state));
+    cJSON_AddBoolToObject(data, "setup", net.state == P3A_NET_SETUP);
+    cJSON_AddBoolToObject(data, "has_credentials", net.has_credentials);
+    cJSON_AddStringToObject(data, "ssid", net.ssid);
+    cJSON_AddStringToObject(data, "hostname", net.hostname);
+    p3a_http_ok(req, data);
+}
+
+// {"ssid": "...", "password": "...", "device_name": "..."}; the last two are
+// optional. Everything is checked before anything is stored.
+static void put_wifi(p3a_http_request_t *req)
+{
+    const cJSON *body = p3a_http_body(req);
+    const cJSON *ssid = cJSON_GetObjectItemCaseSensitive(body, "ssid");
+    const cJSON *password = cJSON_GetObjectItemCaseSensitive(body, "password");
+    const cJSON *name = cJSON_GetObjectItemCaseSensitive(body, "device_name");
+    if (!cJSON_IsString(ssid) || ssid->valuestring[0] == '\0' || strlen(ssid->valuestring) > 32) {
+        p3a_http_fail(req, 400, "INVALID_SSID", "the network name must be 1 to 32 characters");
+        return;
+    }
+    if (password != NULL && (!cJSON_IsString(password) || strlen(password->valuestring) > 64)) {
+        p3a_http_fail(req, 400, "INVALID_PASSWORD", "the password must be at most 64 characters");
+        return;
+    }
+    if (name != NULL) {
+        if (!cJSON_IsString(name)) {
+            p3a_http_fail(req, 400, "INVALID_SETTING", "device_name must be a string");
+            return;
+        }
+        esp_err_t err = p3a_settings_set_str(P3A_SET_DEVICE_NAME, name->valuestring);
+        if (err == ESP_ERR_INVALID_ARG) {
+            p3a_http_fail(req, 400, "INVALID_SETTING",
+                          "the device name may hold up to 16 of a-z, 0-9 and '-', not starting or ending with '-'");
+            return;
+        }
+        if (err != ESP_OK) {
+            p3a_http_fail_err(req, err, "saving the device name");
+            return;
+        }
+    }
+    esp_err_t err = p3a_net_set_credentials(ssid->valuestring, password != NULL ? password->valuestring : "");
+    if (err == ESP_OK) {
+        err = restart_soon();
+    }
+    if (err != ESP_OK) {
+        p3a_http_fail_err(req, err, "saving the network");
+        return;
+    }
+    // Where to find the device once it has restarted and joined.
+    static p3a_settings_t settings;
+    p3a_settings_get(&settings);
+    char hostname[24] = "p3a";
+    if (settings.device_name[0] != '\0') {
+        snprintf(hostname, sizeof(hostname), "p3a-%s", settings.device_name);
+    }
+    cJSON *data = cJSON_CreateObject();
+    cJSON_AddStringToObject(data, "hostname", hostname);
+    cJSON_AddBoolToObject(data, "restarting", true);
+    p3a_http_ok(req, data);
+}
+
+static void delete_wifi(p3a_http_request_t *req)
+{
+    esp_err_t err = p3a_net_erase_credentials();
+    if (err == ESP_OK) {
+        err = restart_soon();
+    }
+    if (err != ESP_OK) {
+        p3a_http_fail_err(req, err, "forgetting the network");
+        return;
+    }
+    cJSON *data = cJSON_CreateObject();
+    cJSON_AddBoolToObject(data, "restarting", true);
+    p3a_http_ok(req, data);
+}
+
 // --- the table ------------------------------------------------------------------
 
 static const p3a_http_route_t s_routes[] = {
@@ -399,6 +485,9 @@ static const p3a_http_route_t s_routes[] = {
     {P3A_HTTP_PATCH, P3A_HTTP_BODY_JSON, "/api/v2/settings", patch_settings},
     {P3A_HTTP_GET, P3A_HTTP_RAW, "/api/v2/settings/schema", get_settings_schema},
     {P3A_HTTP_GET, 0, "/api/v2/secrets/museum-keys", get_museum_keys},
+    {P3A_HTTP_GET, 0, "/api/v2/wifi", get_wifi},
+    {P3A_HTTP_PUT, P3A_HTTP_BODY_JSON, "/api/v2/wifi", put_wifi},
+    {P3A_HTTP_DELETE, 0, "/api/v2/wifi", delete_wifi},
     {P3A_HTTP_GET, 0, "/api/v2/jobs/{id}", get_job},
     {P3A_HTTP_POST, 0, "/api/v2/system/reboot", post_reboot},
     {P3A_HTTP_POST, P3A_HTTP_BODY_JSON, "/api/v2/system/factory-reset", post_factory_reset},

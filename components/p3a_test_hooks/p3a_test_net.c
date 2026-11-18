@@ -7,9 +7,12 @@
 #include <time.h>
 
 #include "cJSON.h"
+#include "esp_netif.h"
+#include "esp_wifi.h"
 #include "esp_wifi_remote.h"
 #include "lwip/inet.h"
 #include "lwip/netdb.h"
+#include "lwip/sockets.h"
 #include "p3a_clock.h"
 #include "p3a_err.h"
 #include "p3a_event.h"
@@ -108,8 +111,131 @@ static void cmd_resolve(const char *host)
     p3a_test_reply_ok(json);
 }
 
+// net setup: what the setup access point looks like from inside.
+static void cmd_setup(void)
+{
+    char ip[16] = "";
+    esp_netif_t *ap = esp_netif_get_handle_from_ifkey("WIFI_AP_DEF");
+    esp_netif_ip_info_t info;
+    if (ap != NULL && esp_netif_get_ip_info(ap, &info) == ESP_OK) {
+        snprintf(ip, sizeof(ip), IPSTR, IP2STR(&info.ip));
+    }
+    wifi_mode_t mode = WIFI_MODE_NULL;
+    wifi_config_t config = {0};
+    bool is_ap = esp_wifi_remote_get_mode(&mode) == ESP_OK && mode == WIFI_MODE_AP &&
+                 esp_wifi_remote_get_config(WIFI_IF_AP, &config) == ESP_OK;
+    char json[160];
+    snprintf(json, sizeof(json), "{\"ap\":%s,\"ssid\":\"%.32s\",\"open\":%s,\"channel\":%d,\"ip\":\"%s\"}",
+             is_ap ? "true" : "false", is_ap ? (const char *)config.ap.ssid : "",
+             is_ap && config.ap.authmode == WIFI_AUTH_OPEN ? "true" : "false", is_ap ? config.ap.channel : 0, ip);
+    p3a_test_reply_ok(json);
+}
+
+// net selfdns <name>: asks the device's own DNS catch-all for a name, over
+// the loopback interface, as a phone on the setup network would.
+static void cmd_selfdns(const char *name)
+{
+    uint8_t packet[300] = {0x12, 0x34, 0x01, 0x00, 0x00, 0x01};
+    size_t at = 12;
+    const char *label = name;
+    while (*label != '\0' && at < 200) {
+        const char *dot = strchr(label, '.');
+        size_t len = dot != NULL ? (size_t)(dot - label) : strlen(label);
+        if (len == 0 || len > 63) {
+            break;
+        }
+        packet[at++] = (uint8_t)len;
+        memcpy(packet + at, label, len);
+        at += len;
+        label += len + (dot != NULL ? 1 : 0);
+    }
+    packet[at++] = 0;
+    packet[at++] = 0;
+    packet[at++] = 1;  // type A
+    packet[at++] = 0;
+    packet[at++] = 1;  // class IN
+
+    char json[128] = "{\"answered\":false}";
+    int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (sock >= 0) {
+        const struct timeval wait = {.tv_sec = 2};
+        setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &wait, sizeof(wait));
+        struct sockaddr_in to = {.sin_family = AF_INET, .sin_port = htons(53)};
+        to.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        sendto(sock, packet, at, 0, (const struct sockaddr *)&to, sizeof(to));
+        uint8_t reply[320];
+        int n = recv(sock, reply, sizeof(reply), 0);
+        if (n >= (int)at + 16 && reply[0] == 0x12 && reply[1] == 0x34) {
+            const uint8_t *ip = reply + n - 4;
+            snprintf(json, sizeof(json), "{\"answered\":true,\"answers\":%d,\"ip\":\"%d.%d.%d.%d\",\"bytes\":%d}",
+                     (reply[6] << 8) | reply[7], ip[0], ip[1], ip[2], ip[3], n);
+        }
+        close(sock);
+    }
+    p3a_test_reply_ok(json);
+}
+
+// net selfhttp <path>: a GET to the device's own HTTP server over loopback,
+// reporting the status line and the headers a portal test cares about.
+static void cmd_selfhttp(const char *path)
+{
+    static char buf[1024];
+    int status = 0;
+    char location[64] = "";
+    char encoding[16] = "";
+    char type[48] = "";
+    int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (sock >= 0) {
+        const struct timeval wait = {.tv_sec = 4};
+        setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &wait, sizeof(wait));
+        struct sockaddr_in to = {.sin_family = AF_INET, .sin_port = htons(80)};
+        to.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        if (connect(sock, (const struct sockaddr *)&to, sizeof(to)) == 0) {
+            int len = snprintf(buf, sizeof(buf), "GET %.200s HTTP/1.1\r\nHost: probe.example\r\nConnection: close\r\n\r\n", path);
+            send(sock, buf, (size_t)len, 0);
+            int got = 0;
+            while (got < (int)sizeof(buf) - 1) {
+                int n = recv(sock, buf + got, sizeof(buf) - 1 - (size_t)got, 0);
+                if (n <= 0) {
+                    break;
+                }
+                got += n;
+            }
+            buf[got] = '\0';
+            sscanf(buf, "HTTP/1.1 %d", &status);
+            const char *h;
+            if ((h = strstr(buf, "\r\nLocation: ")) != NULL) {
+                sscanf(h + 12, "%63[^\r]", location);
+            }
+            if ((h = strstr(buf, "\r\nContent-Encoding: ")) != NULL) {
+                sscanf(h + 20, "%15[^\r]", encoding);
+            }
+            if ((h = strstr(buf, "\r\nContent-Type: ")) != NULL) {
+                sscanf(h + 16, "%47[^\r]", type);
+            }
+        }
+        close(sock);
+    }
+    char json[256];
+    snprintf(json, sizeof(json), "{\"status\":%d,\"location\":\"%s\",\"encoding\":\"%s\",\"type\":\"%s\"}", status, location,
+             encoding, type);
+    p3a_test_reply_ok(json);
+}
+
 static void cmd_net(const char *args)
 {
+    if (strcmp(args, "setup") == 0) {
+        cmd_setup();
+        return;
+    }
+    if (strncmp(args, "selfdns ", 8) == 0) {
+        cmd_selfdns(args + 8);
+        return;
+    }
+    if (strncmp(args, "selfhttp ", 9) == 0) {
+        cmd_selfhttp(args + 9);
+        return;
+    }
     if (strcmp(args, "status") == 0) {
         cmd_status();
     } else if (strncmp(args, "join ", 5) == 0) {
@@ -132,7 +258,7 @@ static void cmd_net(const char *args)
     } else if (strncmp(args, "resolve ", 8) == 0) {
         cmd_resolve(args + 8);
     } else {
-        p3a_test_reply_err("usage: net status|join <json>|forget|drop|resolve <host>");
+        p3a_test_reply_err("usage: net status|join <json>|forget|drop|resolve <host>|setup|selfdns <name>|selfhttp <path>");
     }
 }
 

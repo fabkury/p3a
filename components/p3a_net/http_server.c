@@ -9,6 +9,7 @@
 
 #include "esp_log.h"
 #include "http_envelope.h"
+#include "http_static.h"
 #include "lwip/sockets.h"
 #include "net_internal.h"
 #include "p3a_err.h"
@@ -244,6 +245,8 @@ static bool read_json_body(p3a_http_request_t *req)
     return true;
 }
 
+static bool serve_unrouted_get(httpd_req_t *raw, const char *path, size_t path_len);
+
 static esp_err_t dispatch(httpd_req_t *raw)
 {
     p3a_http_request_t req = {.raw = raw};
@@ -268,6 +271,9 @@ static esp_err_t dispatch(httpd_req_t *raw)
         allowed |= these;
     }
     if (route == NULL) {
+        if (allowed == 0 && req.method == P3A_HTTP_GET && serve_unrouted_get(raw, raw->uri, path_len)) {
+            return ESP_OK;
+        }
         if (allowed != 0) {
             char allow[40] = "";
             for (int m = 0; m < P3A_HTTP_METHOD_COUNT; m++) {
@@ -294,6 +300,59 @@ static esp_err_t dispatch(httpd_req_t *raw)
         send_error(&req, 500, "INTERNAL", "the handler did not answer");
     }
     return ESP_OK;
+}
+
+// --- pages ----------------------------------------------------------------------
+
+#define SETUP_URL "http://192.168.4.1/"
+
+static void send_static(httpd_req_t *raw, const p3a_static_file_t *file)
+{
+    char asked[64];
+    httpd_resp_set_hdr(raw, "ETag", file->etag);
+    // Kept by the browser but checked each time: a 304 is a few bytes, and a
+    // firmware update is seen at once.
+    httpd_resp_set_hdr(raw, "Cache-Control", "no-cache");
+    if (httpd_req_get_hdr_value_str(raw, "If-None-Match", asked, sizeof(asked)) == ESP_OK &&
+        p3a_http_etag_matches(asked, file->etag)) {
+        httpd_resp_set_status(raw, p3a_http_status_line(304));
+        httpd_resp_send(raw, NULL, 0);
+        return;
+    }
+    httpd_resp_set_type(raw, file->content_type);
+    if (file->gzipped) {
+        httpd_resp_set_hdr(raw, "Content-Encoding", "gzip");
+    }
+    httpd_resp_send(raw, (const char *)file->data, (ssize_t)file->len);
+}
+
+// A GET that no route took: a built-in page, or, while the device is its own
+// access point, the way to the setup page. Returns false for "answer 404".
+//
+// In setup every unknown page redirects. A phone that has just joined asks
+// its operating system's probe URL (/generate_204, /hotspot-detect.html,
+// /connecttest.txt and others); getting a redirect instead of the expected
+// answer is what makes it open its sign-in sheet on the target.
+static bool serve_unrouted_get(httpd_req_t *raw, const char *path, size_t path_len)
+{
+    const p3a_static_file_t *file = p3a_static_find(path, path_len);
+    if (file == NULL && net_setup_active()) {
+        if (path_len == 1) {
+            file = p3a_static_find("/setup/", 7);
+        } else if (strncmp(path, "/api/", 5) != 0) {
+            httpd_resp_set_status(raw, "302 Found");
+            httpd_resp_set_hdr(raw, "Location", SETUP_URL);
+            httpd_resp_set_hdr(raw, "Cache-Control", "no-store");
+            httpd_resp_set_type(raw, "text/html");
+            httpd_resp_sendstr(raw, "<a href=\"" SETUP_URL "\">p3a setup</a>");
+            return true;
+        }
+    }
+    if (file == NULL) {
+        return false;
+    }
+    send_static(raw, file);
+    return true;
 }
 
 // --- the server -----------------------------------------------------------------

@@ -18,6 +18,7 @@
 #include "nvs.h"
 #include "p3a_clock.h"
 #include "p3a_event.h"
+#include "p3a_http.h"
 #include "p3a_recovery.h"
 #include "p3a_settings.h"
 #include "p3a_task.h"
@@ -406,6 +407,12 @@ esp_err_t p3a_net_start(void)
     if ((err = p3a_task_create(&recovery, &g_net.recovery_task)) != ESP_OK ||
         (err = p3a_task_create(&health, &g_net.health_task)) != ESP_OK) {
         return err;
+    }
+
+    // The server is up whatever happens to Wi-Fi: it also serves setup.
+    err = p3a_http_start();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "no HTTP server: %s", esp_err_to_name(err));
     }
 
     char password[NET_MAX_PASSWORD_LEN + 1];

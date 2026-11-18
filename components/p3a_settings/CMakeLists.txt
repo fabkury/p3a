@@ -28,5 +28,6 @@ idf_component_register(
          "${gen_dir}/p3a_settings_gen.c"
     INCLUDE_DIRS "include" "${gen_dir}"
     REQUIRES json
+    EMBED_TXTFILES "settings.json"
     PRIV_REQUIRES nvs_flash p3a_storage p3a_util
 )

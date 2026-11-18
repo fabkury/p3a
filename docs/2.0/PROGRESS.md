@@ -10,7 +10,7 @@ times.
 |---|---|
 | Phase | 1, platform (Phase 0 complete) |
 | Current milestone | M1.5 net base |
-| Next action | M1.5 part 2, the HTTP server: read `docs/2.0-architecture-review/web-ui-and-api.md` and `legacy/components/http_api` (the router and the envelope helpers first). Build in `components/p3a_net`: the pure route table and matcher and the JSON envelope (host-tested), the server started at `P3A_EVENT_NET_UP`, `GET /api/v2/status`, `GET` and `PATCH /api/v2/settings` on `p3a_settings` (plus the schema itself), `/api/v2/jobs/{id}`, reboot, factory reset. Decide Q2 (keys in clear) and Q6 (core dump download) with Fab. Then part 3 (setup portal: `legacy/components/wifi_manager/wifi_captive_portal.c` is the last file there, and the `setup` state is where it plugs in) and part 4 (HTTP test hooks: screenshot, clock, log capture) |
+| Next action | M1.5 part 3, the setup portal: read `legacy/components/wifi_manager/wifi_captive_portal.c` (the last file there) and the 1.x portal pages. Build: soft AP `p3a-setup` when the state is `setup`, DNS catch-all, the static table for embedded gzipped pages (a build-time generator; the portal page is its first user), `PUT` and `DELETE /api/v2/wifi` for the credentials, a scan endpoint, then restart. Device tests can check the AP comes up and the endpoints work from the station side; joining the AP from a phone is manual. Then part 4 (HTTP test hooks: screenshot, clock, log capture, registered with `p3a_http_add_routes`) |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -40,7 +40,7 @@ reopened (why).
 | M1.2 board | done 2026-11-17. Tiers: device tests (47 cases, twice), release, test and trace builds, the configuration guard, CI. Awaiting manual checks M1.2-a to d. The co-processor update itself cannot run on the dev unit (its C6 is on the unupdatable 2.7.0); see M1.2-e |
 | M1.3 storage | done 2026-11-18. Tiers: host tests (8 programs, under ASan and UBSan too), device tests (62 cases), release and test builds, the configuration guard. The repair paths of `sd_repair` cannot be exercised on a healthy card and are carried over on trust |
 | M1.4 settings | done 2026-11-18. Tiers: host tests (9 programs, under ASan and UBSan too), generator self-test (15 cases), device tests (76 cases, 14 of them new), release and test builds, the configuration guard. The touch-recovery restart itself is not exercised (the controller works); its counters and rule are |
-| M1.5 net base | in progress. Part 1 done 2026-11-18 (Wi-Fi station, credentials, recovery, mDNS, clock): host tests (10 programs), device tests (89 cases, 13 of them new, on the real Wi-Fi), both builds, the configuration guard. Parts 2 to 4 (HTTP server and API, setup portal, HTTP test hooks) not started |
+| M1.5 net base | in progress. Parts 1 and 2 done 2026-11-18 (Wi-Fi, recovery, mDNS, clock; the HTTP server and the built-in `/api/v2`): host tests (11 programs), device tests (105 cases, on the real Wi-Fi), both builds, the configuration guard. Parts 3 and 4 (setup portal, HTTP test hooks) not started |
 | M2.1 Display pipeline and decoders | not started |
 | M2.2 Library core | not started |
 | M2.3 Source interface, local source, scheduler | not started |
@@ -221,6 +221,76 @@ M1.1, 2026-11-17:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-18: M1.5 part 2, the HTTP server and `/api/v2`
+
+- Fab decided Q2 and Q6 (D33, D34): keys always masked with one narrow
+  call for the two museum keys; crash dumps downloadable and erasable.
+- New in `components/p3a_net`, all new code (the 7,450 lines of
+  `legacy/components/http_api` stay in the quarry; their handlers move with
+  their features):
+  - `http_route.c`, pure: the route table and the one matcher. Literal
+    segments, `{param}` segments, a trailing `*`; 404 told apart from 405
+    with the allowed methods; URL decoding that refuses malformed escapes
+    and control characters.
+  - `http_envelope.c`, pure: the success and error envelopes (the error one
+    needs no heap), the status and code for every `esp_err_t` including
+    each p3a error, weak ETags and `If-None-Match` matching.
+  - `http_server.c`: one wildcard registration per method into one
+    dispatcher. A handler receives a request object and answers exactly
+    once through `p3a_http_ok`, `p3a_http_accepted` or `p3a_http_fail`; the
+    envelope, the `Content-Type`, `Cache-Control` and, for a GET, the ETag
+    and the 304 are applied there. A handler that does not answer gets a
+    500 sent for it. Bodies are capped at 16 KB and must be a JSON object.
+    The socket settings of 1.x are kept (12 sockets, LRU purge, reset on
+    close, core 0).
+  - `net_api.c`: status, settings (read, change, schema), the museum keys,
+    jobs, reboot, factory reset, crash dump (read and erase). Other tables
+    are added with `p3a_http_add_routes()`.
+- The server starts with the network layer and stays up whatever the Wi-Fi
+  state, because setup will be served by it too.
+- The settings schema is embedded as written and served unwrapped: it is a
+  document, not an answer.
+- Test hook `crash` (a deliberate `abort()`), and a `expects_crash` marker
+  so that one test may crash the firmware without failing the crash watch.
+- **A bug found by the new crash test, and a platform rule.** The first
+  version read the crash-dump summary in a job. With a dump stored, the
+  device crashed on every boot: `assert failed:
+  spi_flash_disable_interrupts_caches_and_other_cpu` on task
+  `p3a_jobs_io`. The IDF reads the summary by memory-mapping the partition;
+  mapping flash turns the cache off for a moment; a task whose stack is in
+  PSRAM cannot run with the cache off. Every task class except `RENDER`
+  has a PSRAM stack. The dump is now read once at boot from `app_main`'s
+  task, and the function refuses to run from a PSRAM stack. The rule is in
+  `AGENTS.md`. Ordinary flash reads and writes (`esp_partition_read`, NVS)
+  are safe from any task, as the settings tests show; it is the `mmap`
+  family that is not. This matters for firmware updates: `esp_ota_end()`
+  verifies the image through the same mapping, so an install cannot simply
+  be a job (new open question O16).
+  The dump endpoint diagnosed this bug itself: read over HTTP, it named the
+  task and the assert.
+- Numbers from the device: the server costs about 17 KB of the internal
+  pool (280 KB free of 416 with Wi-Fi up and the server idle). 120 status
+  requests in a row lose no memory and drop no connection. Release image
+  now 977 KB (Wi-Fi, mDNS and the HTTP server linked in; it was 757 KB
+  after M1.4).
+- Verified, host tests: 19 cases for the matcher, the decoder, the
+  envelopes (every truncation length parses as JSON), the error map and the
+  ETags. Verified, device tests over the real network, cross-checked on the
+  UART: status; 404, 405 with `Allow`, 414; ETag and 304, and a new ETag
+  after a change; settings equal to the store; PATCH saving, all or
+  nothing, with the reason; non-object, truncated, empty and oversized
+  bodies refused; all four keys masked, the museum call returning two with
+  `no-store` and no ETag; the schema byte for byte; jobs by id; reboot;
+  factory reset needing its confirmation, then erasing and landing in
+  `setup`; a crash producing a dump that is summarised, downloaded (an ELF
+  of the reported size), erased, and gone after a restart; 120 requests
+  leaving no loss.
+- Not verified: behaviour with more than 12 simultaneous clients, and slow
+  or stalled clients (the 10 s timeouts). Candidates for the soak work.
+- Deferred: `uptime_s` makes the status answer different every second, so
+  its ETag never matches; the web UI's polling design (M5.1) decides
+  whether status is split into a stable and a live part.
 
 ### 2026-11-18: M1.5 part 1, the device is on Wi-Fi
 

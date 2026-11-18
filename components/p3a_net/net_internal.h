@@ -84,3 +84,6 @@ void net_restart_after_countdown(const char *why);
 
 // net_time.c
 void net_time_start(void);
+
+// net_api.c: adds the built-in /api/v2 routes.
+void net_api_register(void);

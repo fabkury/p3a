@@ -6,6 +6,7 @@
 #include "p3a_test_hooks.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "driver/uart.h"
@@ -67,9 +68,21 @@ static void cmd_reboot(const char *args)
     esp_restart();
 }
 
+// Crashes on purpose, so that the crash path (panic handler, core dump to
+// flash, restart) can be tested.
+static void cmd_crash(const char *args)
+{
+    (void)args;
+    p3a_test_reply_ok("{}");
+    fflush(stdout);
+    vTaskDelay(pdMS_TO_TICKS(100));
+    abort();
+}
+
 static const p3a_test_command_t s_core_commands[] = {
     {"version", cmd_version},
     {"reboot", cmd_reboot},
+    {"crash", cmd_crash},
 };
 
 static bool run_from(const p3a_test_command_t *table, size_t count, const char *name, const char *args)

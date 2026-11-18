@@ -26,6 +26,7 @@ def pytest_addoption(parser):
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "live: needs the internet or a third-party service")
+    config.addinivalue_line("markers", "expects_crash: the test crashes the firmware on purpose")
 
 
 @pytest.fixture(scope="session")
@@ -54,6 +55,8 @@ def uart(bring_up, request):
     link.note(f"=== {request.node.nodeid}")
     start = link.mark()
     yield link
+    if request.node.get_closest_marker("expects_crash"):
+        return
     crashed = link.panics(since=start)
     if crashed:
         pytest.fail("the firmware crashed or reset during this test:\n" + "\n".join(crashed[:10])

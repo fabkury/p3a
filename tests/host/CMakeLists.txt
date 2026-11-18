@@ -109,3 +109,10 @@ p3a_host_test(test_settings_model
             ${STORAGE}/sd_path.c
     INCLUDES ${SETTINGS}/include ${SETTINGS_GEN} ${STORAGE}/include ${P3A_STUBS}
     LIBS cjson)
+
+# --- net --------------------------------------------------------------------
+set(NET "${P3A_COMPONENTS}/p3a_net")
+p3a_host_test(test_http
+    SOURCES net/test_http.c ${NET}/http_route.c ${NET}/http_envelope.c ${UTIL}/p3a_crc32.c ${UTIL}/p3a_err.c
+    INCLUDES ${NET}/include ${UTIL}/include ${P3A_STUBS}
+    LIBS cjson)

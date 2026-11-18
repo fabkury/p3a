@@ -56,6 +56,10 @@ esp_err_t p3a_settings_set_str(p3a_setting_id_t id, const char *value);
 // Every setting as a new JSON object, secrets masked. The caller deletes it.
 cJSON *p3a_settings_json(void);
 
+// The schema itself (settings.json, as written), for the web UI, which draws
+// the settings page from it. *len excludes the terminator.
+const char *p3a_settings_schema(size_t *len);
+
 // True once a setting marked "reboot" has changed during this boot.
 bool p3a_settings_reboot_needed(void);
 

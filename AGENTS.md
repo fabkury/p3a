@@ -92,6 +92,13 @@ All in `components/p3a_util`; each header explains itself at the top.
 - **Tasks** are created only with `p3a_task_create()` and a class
   (`RENDER`, `TOUCH`, `APP`, `NETWORK`, `BACKGROUND`). No literal
   priorities, no hand-rolled PSRAM stacks. Tasks are long-lived.
+- **Never memory-map flash from a p3a task.** Every class except `RENDER`
+  has its stack in PSRAM, the job runners included, and the IDF asserts
+  when flash is mapped from such a task (`esp_partition_mmap`,
+  `spi_flash_mmap`, and what uses them: the core-dump summary,
+  `esp_image_verify`, `esp_ota_end`). Ordinary reads and writes
+  (`esp_partition_read`, NVS) are fine. Do mapping work from `app_main`'s
+  task at boot, and guard it with `esp_ptr_external_ram()` on a local.
 - **Run-once or slow work** is a job (`p3a_job_submit()`), never a task
   made for one call and never done on a task that must stay responsive.
 - **Allocation** defaults to PSRAM through `psram_alloc.h`. Internal RAM is
@@ -121,6 +128,11 @@ All in `components/p3a_util`; each header explains itself at the top.
   code that needs the network subscribes to `P3A_EVENT_NET_UP` and
   `P3A_EVENT_NET_DOWN` or asks `p3a_net_is_up()`, and copes with "no".
   Anything that needs a real date asks `p3a_clock_is_set()` first.
+- **HTTP endpoints** are rows in a route table (`p3a_http.h`). A handler
+  answers once through `p3a_http_ok`, `p3a_http_accepted` or
+  `p3a_http_fail` and never writes an envelope, a status line or a header
+  for them by hand. Everything is under `/api/v2/`. Anything slower than a
+  few milliseconds is a job answered with 202.
 - **Test hooks** live only in `components/p3a_test_hooks`, one command file
   per area, every symbol prefixed `p3a_test_`.
 - **Managed components** are declared in the `idf_component.yml` of the

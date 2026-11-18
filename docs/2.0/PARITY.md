@@ -241,11 +241,11 @@ also listed in the ledger.
 | Id | 1.x behaviour | Question | Before |
 |---|---|---|---|
 | Q1 | Brightness is saved by the web UI but never read at boot, so the device always starts at 100 | Decided 2026-11-18 (D28): remembered and restored at boot | done |
-| Q2 | Reading settings returns the stored API keys in clear to anyone on the LAN. The browser-side museum browse reads the Harvard and Smithsonian keys this way | Keep, or return keys only through a narrower call? | M1.5 |
+| Q2 | Reading settings returns the stored API keys in clear to anyone on the LAN. The browser-side museum browse reads the Harvard and Smithsonian keys this way | Decided 2026-11-18 (D33): always masked; one narrow call for the two museum keys only | done |
 | Q3 | The first update check happens 12 hours after boot, never at boot | Add a check shortly after boot? | M5.2 |
 | Q4 | Pinned Giphy, Klipy and museum art is upscaled nearest-neighbour, while the same art in its own channel is bilinear. The user guide documents this | In 2.0 the record knows its source, so bilinear would follow the art. Which is wanted? | M4.4 |
 | Q5 | There is no factory reset a user can reach; only "erase Wi-Fi" and "unregister" | Decided 2026-11-18 (D28): added, API and web UI. The store side is done; the API call is M1.5 and the button M5.1 | done |
-| Q6 | Core dumps are written to flash but nothing can read them without a cable | Offer a download in the API? | M1.5 |
+| Q6 | Core dumps are written to flash but nothing can read them without a cable | Decided 2026-11-18 (D34): summary in status, download and erase calls, a warning in the web UI | done |
 | Q7 | Giphy rendition, format and prefer-downsized, the view-ack flag and the processing-indicator switch are settable only through the API | Decided 2026-11-18 (D29): kept as settings, hidden from the page | done |
 | Q8 | Raw SD debug endpoints and the frame-trace provocations exist behind build options | Carry them into 2.0's test hooks, or leave them in 1.x? | M1.3 |
 | Q9 | The Makapix `set_mirror` command answers "unsupported" | Leave as is? | M4.5 |

@@ -260,6 +260,16 @@ cJSON *p3a_settings_json(void)
     return p3a_settings_to_json(&copy, P3A_SETTINGS_JSON_MASK_SECRETS);
 }
 
+const char *p3a_settings_schema(size_t *len)
+{
+    extern const char schema_start[] asm("_binary_settings_json_start");
+    extern const char schema_end[] asm("_binary_settings_json_end");
+    if (len != NULL) {
+        *len = (size_t)(schema_end - schema_start) - 1;  // EMBED_TXTFILES adds a terminator
+    }
+    return schema_start;
+}
+
 bool p3a_settings_reboot_needed(void)
 {
     lock();

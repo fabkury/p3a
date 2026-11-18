@@ -189,6 +189,19 @@ idf.py fullclean
   `MSYSTEM` variables.
 - Before a checkpoint: the tree checks, the host tests, both builds, and the
   device tests. CI repeats all but the last on every push to `v2`.
+- **A dependency change needs a from-scratch configure in the CI container**
+  before it is pushed. The workstation keeps downloaded components and a
+  resolver cache, so it can pass where a clean machine fails. Docker runs
+  inside WSL; clone into the WSL home (not `/tmp`, not `/mnt/c`) and run:
+
+  ```bash
+  git clone -q --branch v2 --depth 1 file:///mnt/c/<repo> ~/p3a-ci && cd ~/p3a-ci
+  docker run --rm -v ~/p3a-ci:/work -w /work espressif/idf:v5.5.4 bash -c     'git config --global --add safe.directory /work; . $IDF_PATH/export.sh; export ESP_IDF_VERSION=5.5; idf.py reconfigure'
+  ```
+
+  One "Missing kconfig option. Re-run the build process..." warning is
+  normal; the error "after retry" is not. The container leaves root-owned
+  files: delete `~/p3a-ci` from inside a container.
 - `idf.py monitor` and .NET `SerialPort` reset the board when they open the
   port. To read the log without a reset, open the port with DTR and RTS held
   low (pyserial: set `dtr = False` and `rts = False` before `open()`); a short

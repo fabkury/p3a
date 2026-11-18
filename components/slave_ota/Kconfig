@@ -23,3 +23,32 @@ config P3A_SLAVE_OTA_MOCK_DURATION_MS
       issue commands.
 
 endmenu
+
+# Not options: three hidden constants, all 0.
+#
+# esp_hosted releases newer than the one pinned in this component's
+# idf_component.yml make three USB host libraries conditional on these
+# symbols (rules of the form "$CONFIG{...} == 1"). When the component manager
+# resolves dependencies on a machine without a warm cache (a CI runner, a new
+# workstation) it reads those newer manifests too, and the IDF then aborts the
+# configure step with "Missing required kconfig option after retry", because
+# no Kconfig file defines the symbols: the pinned esp_hosted predates them.
+# Defining them here as 0 lets the resolver evaluate the rules (false: p3a
+# reaches the co-processor over SDIO, not USB) and carry on.
+#
+# They are integers because the rules compare them with 1; the resolver
+# rejects a boolean there.
+#
+# Remove them when esp_hosted is bumped to a release that defines the symbols
+# itself; Kconfig will then report them as defined in two places.
+config ESP_HOSTED_HOST_USB_CDC_ACM_MANIFEST
+    int
+    default 0
+
+config ESP_HOSTED_HOST_USB_CHERRYUSB_MANIFEST
+    int
+    default 0
+
+config ESP_HOSTED_HOST_USB_RNDIS_MANIFEST
+    int
+    default 0

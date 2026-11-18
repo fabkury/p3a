@@ -42,3 +42,6 @@ const unsigned char *p3a_test_shown_buffer(void);
 
 // Adds the /api/v2/test/ routes and starts capturing log lines.
 void p3a_test_http_start(void);
+
+// Adds the decoder test route and its worker task.
+void p3a_test_decode_start(void);

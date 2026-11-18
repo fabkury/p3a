@@ -18,7 +18,7 @@
 
 static const char *TAG = "http";
 
-#define MAX_TABLES     4
+#define MAX_TABLES     8
 #define MAX_JSON_BODY  (16 * 1024)
 #define MAX_PATH_LEN   256
 

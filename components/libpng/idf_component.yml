@@ -1,0 +1,6 @@
+## zlib, pinned to the version p3a 1.x shipped with (legacy/dependencies.lock).
+dependencies:
+  idf: '>=5.0'
+  espressif/zlib: "1.3.2"
+description: libpng 1.6.52 with the official APNG read patch (local fork, see README.md)
+version: 1.6.52

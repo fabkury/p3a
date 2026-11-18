@@ -1,0 +1,5 @@
+## libjpeg-turbo, for the JPEGs the hardware decoder refuses (progressive,
+## odd subsampling, too large). Pinned to the version p3a 1.x shipped with
+## (legacy/dependencies.lock).
+dependencies:
+  espressif/libjpeg-turbo: "3.1.1~1"

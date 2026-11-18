@@ -52,7 +52,7 @@ describe what a client can do, not the 1.x URL.
 
 | | Capability | 2.0 | M | Note |
 |---|---|---|---|---|
-| [ ] | Animated WebP, GIF, APNG; static PNG, JPEG, BMP; transparency | keep | M2.1 | |
+| [ ] | Animated WebP, GIF, APNG; static PNG, JPEG, BMP; transparency | keep | M2.1 | Decoders moved and pixel-tested against a corpus (part 1). Two 1.x bugs fixed on the way: JPEG colour range (D38), animated WebP blending. Short frame delays now play as in browsers (D37). On screen with part 2 |
 | [ ] | Fit to screen with aspect ratio kept, centred, borders in the background colour; the colour also prepaints boot | keep | M2.4 | |
 | [ ] | Bilinear upscaling for Giphy, Klipy and museum art; nearest-neighbour for the rest | keep | M2.4 | |
 | [ ] | Pinned Giphy, Klipy and museum art plays nearest-neighbour, because the choice is made by channel type | decide | M4.4 | Q4 |

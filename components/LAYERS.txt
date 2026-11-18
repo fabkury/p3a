@@ -16,5 +16,9 @@ sd_idle_wait   board
 slave_ota      board
 p3a_storage    storage
 p3a_settings   storage
+animation_decoder player
+animated_gif   player vendored
+libpng         player vendored
+libwebp_decoder player vendored
 p3a_net        net
 p3a_test_hooks net

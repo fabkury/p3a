@@ -431,7 +431,14 @@ def provision(uart: Uart, timeout: float = 45.0) -> dict:
     everything it logs.
     """
     wifi = load_secrets()["wifi"]
-    status = uart.command("net status")
+    try:
+        status = uart.command("net status")
+    except LabError:
+        # The first command after the port is opened is sometimes lost (a
+        # stray byte ahead of it), and a unit that was just flashed may still
+        # be booting. Once more, with time to finish booting.
+        time.sleep(8)
+        status = uart.command("net status")
     named = status.get("hostname") == f"p3a-{DEV_UNIT_NAME}"
     joined = status.get("has_credentials") and status.get("ssid") == wifi["ssid"]
     if not (named and joined):

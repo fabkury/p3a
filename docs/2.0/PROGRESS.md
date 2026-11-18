@@ -10,7 +10,7 @@ times.
 |---|---|
 | Phase | 2, player and library (Phases 0 and 1 complete) |
 | Current milestone | M2.1 display pipeline and decoders |
-| Next action | Start M2.1: read PLAN.md M2.1, `docs/2.0-architecture-review/firmware-internals.md` on the display pipeline, and `docs/jitter/` (the fixes that must survive the move and the pass bar). Then the legacy sources: `legacy/main/display_renderer*.c`, the decoders (`animation_decoder`, `animated_gif_decoder`, `libwebp_decoder`, `espressif__libpng`) and their managed components. Bring the decoders in first, behind one interface, with host tests against small sample files where the decoder code is portable; then the frame pipeline on the device with the trace build. `host/jitter-lab` is adapted in this milestone |
+| Next action | M2.1 part 2, the display pipeline: read `docs/infrastructure/display-pipeline.md` and `docs/jitter/REPORT.md` (fix 3, band-stealing upscale, and the Phase 6 catch-up policy live in these files and move untouched), then `legacy/main/display_renderer.c`, `display_renderer_priv.h`, `display_upscaler.c`, `display_ppa_upscaler.c`. Bring them into a `player`-layer component with the frame trace calls intact; audit M10 (the parallel upscaler waits with no deadline) is due here. Test hook: push decoded frames from the corpus through the renderer and compare the HTTP screenshot with a reference upscaled on the workstation. Then part 3: the animation player's decode path, the frame-trace endpoints, `host/jitter-lab` adapted, a trace baseline. Part 3 also decides whether end-of-animation becomes uniform across formats (see the M2.1 part 1 entry) |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -41,7 +41,7 @@ reopened (why).
 | M1.3 storage | done 2026-11-18. Tiers: host tests (8 programs, under ASan and UBSan too), device tests (62 cases), release and test builds, the configuration guard. The repair paths of `sd_repair` cannot be exercised on a healthy card and are carried over on trust |
 | M1.4 settings | done 2026-11-18. Tiers: host tests (9 programs, under ASan and UBSan too), generator self-test (15 cases), device tests (76 cases, 14 of them new), release and test builds, the configuration guard. The touch-recovery restart itself is not exercised (the controller works); its counters and rule are |
 | M1.5 net base | done 2026-11-18. Tiers: host tests (12 programs, under ASan and UBSan too), tool self-tests, device tests (119 cases, on the real Wi-Fi), release and test builds, the configuration guard. Awaiting manual check M1.5-a (the portal from a phone). The Wi-Fi recovery ladders are carried over untested |
-| M2.1 Display pipeline and decoders | next |
+| M2.1 Display pipeline and decoders | in progress. Part 1 done 2026-11-18 (the decoders): host tests (13 programs, under ASan and UBSan too), device tests (202 cases, 83 of them the decoder corpus), both builds, the configuration guard. Parts 2 and 3 (display renderer and upscalers; the player's decode path, frame trace and jitter lab) not started |
 | M2.2 Library core | not started |
 | M2.3 Source interface, local source, scheduler | not started |
 | M2.4 Loader pipeline, C and D | not started |
@@ -135,6 +135,7 @@ and proposals are in [DECISIONS.md](DECISIONS.md) under "Open decisions".
 | Id | Question | Needed before |
 |---|---|---|
 | Q1 to Q10 | Ten 1.x behaviours that look accidental (brightness not restored at boot, API keys readable over the LAN, no update check for 12 hours, and others). Keep or change each? Listed in [PARITY.md](PARITY.md) under "Behaviours to decide" | M1.3 at the earliest; each row names its milestone |
+| O17 | Two picture-quality bugs found in 1.x while testing the 2.0 decoders are in every unit in the field: hardware-decoded JPEGs have about 16% too much contrast with clipped shadows and highlights, and animated WebP loses the colour of half-transparent pixels. Both fixes are small and self-contained. Port them to `main` for 1.2.5? | 1.2.5 |
 | O2 | Should 1.2.5 carry a notice about 2.0, and with what wording? | 1.2.5 |
 | O4 | Which VEXED font families and sizes? | M3.2 |
 | O3 | Keep uGFX for text, or replace it with a glyph-sheet renderer? | M3.2 |
@@ -190,6 +191,18 @@ M0.1, 2026-11-17 (paths relative to the 1.x tree):
 
 Dead functions inside files that are otherwise live were not hunted down;
 they are simply not moved when their file is.
+
+M2.1, 2026-11-18:
+
+- `animation_decoder_decode_next` (RGBA) and its five per-format
+  implementations: no callers, and unsafe (audit H14).
+- `components/animation_decoder/Kconfig`: its one option is a constant.
+- `debug_http_log` calls and the `CONFIG_P3A_PERF_DEBUG` blocks in the WebP
+  decoder: profiling code for a build option nothing sets.
+- `animation_pixel_format_t` and the `pixel_format` field: every decoder
+  reported the same value.
+- The mutual requirement between `animation_decoder` and
+  `animated_gif_decoder`.
 
 M1.5, 2026-11-18:
 
@@ -250,6 +263,103 @@ M1.1, 2026-11-17:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-18: M2.1 part 1, the decoders, and two 1.x picture bugs
+
+- Fab confirmed the direction after Phase 1: keep the improvements and
+  polish coming, ask when in doubt. He decided D37 (short frame delays play
+  as browsers play them).
+- Moved out of `legacy/components` with `git mv`:
+  - `animation_decoder` to `components/animation_decoder` (layer `player`),
+    with `gif_animation_decoder.cpp` joining it from `animated_gif_decoder`.
+  - `animated_gif_decoder` to `components/animated_gif`: now only the
+    vendored AnimatedGIF library. The two components used to require each
+    other; that cycle is gone.
+  - `libwebp_decoder` (unchanged: libwebp 1.4.0 fetched by tag at build
+    time) and `espressif__libpng` to `components/libpng` (the APNG fork;
+    604 files, marked vendored).
+- What changed on the way in:
+  - The dispatcher. 1.x had it inside the WebP file, as seven functions of
+    `if (type == ...)` chains. It is now `animation_decoder.c`: one table of
+    operations per format. The WebP decoder is a format like the others.
+  - The unused RGBA entry point is deleted from the interface and from all
+    five decoders (audit H14: it wrote four bytes per pixel into buffers
+    sized for three).
+  - Sizes from a file are checked before anything is computed from them
+    (audit H1). One limit for every format,
+    `ANIMATION_DECODER_MAX_DIMENSION` (4096 a side): JPEG hardware path,
+    JPEG software path after scaling, PNG, GIF, WebP, BMP. PNG and GIF had
+    no limit and could wrap a buffer size on a crafted file.
+  - The decoders no longer reach up into the configuration store for the
+    background colour. The component holds it
+    (`animation_decoder_set_background`), takes it from the
+    `background_color` setting at start and follows the change event.
+  - Allocation goes through `psram_alloc.h`. The Kconfig option for the
+    still-frame delay is a constant. The dead profiling code in the WebP
+    path is gone.
+  - Still needed and kept: the link-time wrapper for the IDF's
+    `jpeg_release_codec_handle` (the bug is still in v5.5.4) and the alias
+    the managed libjpeg-turbo component needs to configure.
+- **The test corpus** (`tests/assets/decoders/`, made by
+  `tests/assets/make_corpus.py`, deterministic, 270 KB): 39 good files
+  covering the kinds each decoder handles (PNG colour types, APNG dispose
+  and blend modes, GIF disposal methods, WebP lossy, lossless, still and
+  animated, JPEG baseline, progressive, grey, subsampled and larger than
+  the screen, BMP depths) and 41 bad ones (truncated, damaged, not images,
+  and headers claiming up to 100,000 pixels a side).
+- **The reference is an independent decoder**, Pillow, on the workstation:
+  the device test fetches each decoded frame over HTTP and compares pixels.
+  For APNG the test composites frames itself from the specification,
+  because Pillow's reader is not exact where a translucent pixel is drawn
+  over another (the device is).
+- **Two bugs in 1.x found this way**, both in every unit in the field:
+  1. *Hardware JPEG colour.* The IDF's hardware JPEG path converts to RGB
+     with video-range coefficients (16 to 235), and a JPEG file is full
+     range. Every baseline JPEG had about 16% too much contrast, with
+     everything below 16 crushed to black and above 235 clipped to white.
+     Measured: 8 to 13 levels of mean error per channel against libjpeg.
+     Fix (D38): ask the hardware for YCbCr and convert in software with
+     libjpeg's own constants. Now 0.06 levels with full-resolution colour.
+     With subsampled colour the mean is 4.8 on a deliberately harsh test
+     picture, because the hardware repeats colour samples where libjpeg
+     interpolates; brightness matches to 0.02.
+  2. *Animated WebP with partial transparency.* The blend added the
+     premultiplied colour before dividing by 255 instead of after, which
+     discarded it: soft edges came out as darkened background. Errors of up
+     to 160 levels; now within rounding.
+  Whether to port them to 1.2.5 is open question O17.
+- A behaviour change, D37: a declared frame delay of 10 ms or less plays as
+  100 ms, in every format, as in every browser. This also gives a
+  single-frame GIF the 100 ms of every other still (it reported 1 ms).
+- Test hook `POST /api/v2/test/decode`: send a file, get its description
+  (per-frame CRC, delay and decode time) or one frame's pixels. Decoding
+  runs on its own task.
+- The BMP decoder, p3a's own parser, also runs on the workstation under the
+  sanitizers: the corpus, every truncation of every good file, every header
+  byte at five extreme values, and 15,000 randomly damaged copies. Silent.
+- Numbers from the device: every decoder stays within 3.1 KB of stack. The
+  1440 by 1440 progressive JPEG decodes (scaled to 720) in 650 ms. The test
+  image is 1.39 MB with the decoders linked; the release image is 900 KB,
+  because nothing in a release build calls them until the player arrives.
+- Verified: 13 host test programs with MinGW and under ASan and UBSan; 83
+  decoder device tests (39 good files pixel-compared frame by frame, exact
+  for lossless formats; delays; reset; 41 bad files refused or stopped
+  cleanly; the background colour followed; two full passes over the corpus
+  leaving PSRAM where it was); the full device suite; release and test
+  builds with the configuration guard; a from-scratch configure in the CI
+  container.
+- Not verified: nothing reaches the panel yet (part 2). libwebp, libpng,
+  libjpeg-turbo and AnimatedGIF are run only on the corpus, not fuzzed.
+- Noted, not changed:
+  - What happens after an animation's last frame differs by format (GIF
+    starts again by itself; WebP and APNG report an error until reset), and
+    an opaque still gives its frame only once. Both are as in 1.x and are
+    now stated in the header. Part 3, with the player's loop in hand,
+    decides whether to make them uniform.
+  - GIF and APNG report transparency for files that have none. It only
+    costs a little time on a background change.
+  - The hardware JPEG path repeats colour samples instead of interpolating
+    them. Visible only at harsh colour edges; museum photographs have few.
 
 ### 2026-11-18: M1.5 parts 3 and 4, setup and the HTTP test hooks. Phase 1 complete
 

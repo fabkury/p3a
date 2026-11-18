@@ -130,3 +130,16 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${static_sources}
 p3a_host_test(test_setup
     SOURCES net/test_setup.c ${NET}/net_dns.c ${NET}/http_static.c ${STATIC_GEN}/p3a_static_gen.c
     INCLUDES ${NET}/include)
+
+# --- player -----------------------------------------------------------------
+# The BMP decoder is p3a's own parser of untrusted bytes: run on the corpus
+# and on mutated copies of it, where the sanitizers can see every access.
+set(DECODER "${P3A_COMPONENTS}/animation_decoder")
+p3a_host_test(test_bmp_decoder
+    SOURCES player/test_bmp_decoder.c ${DECODER}/bmp_animation_decoder.c
+    INCLUDES ${DECODER}/include ${DECODER} ${P3A_STUBS})
+target_compile_definitions(test_bmp_decoder PRIVATE
+    P3A_DECODER_CORPUS="${P3A_ROOT}/tests/assets/decoders")
+# The decoder came from 1.x and was not written to -Wconversion. The
+# sanitizers are the point of this test, so only that warning is relaxed.
+target_compile_options(test_bmp_decoder PRIVATE -Wno-conversion -Wno-sign-conversion)

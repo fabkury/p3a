@@ -4,6 +4,7 @@
 // Boot never aborts on a recoverable failure: a step that fails is logged and
 // the device carries on with what it has.
 
+#include "animation_decoder.h"
 #include "esp_app_desc.h"
 #include "esp_chip_info.h"
 #include "esp_log.h"
@@ -58,6 +59,9 @@ void app_main(void)
     // fails the device runs on defaults.
     boot_step("settings", p3a_settings_start());
     p3a_settings_get(&s_settings);
+
+    // Decoders blend transparency onto the background colour and follow it.
+    boot_step("decoders", animation_decoder_start());
 
     // The panel comes up painted in the background colour, then the backlight
     // goes to the stored brightness.

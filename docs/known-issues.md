@@ -135,7 +135,7 @@ commits can cite them.
 
 | ID | Problem | Where | Fix direction |
 |----|---------|-------|---------------|
-| H1 | JPEG width/height only checked for 0; `aligned_w * aligned_h * 3` can wrap in 32-bit `size_t`, so a crafted file can overrun the HW-path buffer (SW path too) | `animation_decoder/jpeg_animation_decoder.c`, `jpeg_animation_decoder_sw.c` | Reject dimensions above a maximum; compute sizes in 64-bit |
+| H1 | JPEG width/height only checked for 0; `aligned_w * aligned_h * 3` can wrap in 32-bit `size_t`, so a crafted file can overrun the HW-path buffer (SW path too) | `animation_decoder/jpeg_animation_decoder.c`, `jpeg_animation_decoder_sw.c` | Reject dimensions above a maximum; compute sizes in 64-bit **Fixed in 2.0** (`v2`, M2.1); still open in 1.x |
 | H2 | `channel_cache_save` reads the cache arrays without `cache->mutex` while a merge can free them | `channel_manager/channel_cache.c` (`channel_cache_flush_all` path) | Snapshot under the mutex, write outside it |
 | H3 | Eviction's LAi cleanup loop dereferences `evicted_ids` with no NULL guard after a failed allocation | `channel_manager/channel_cache_evict.c` (~line 99) | Guard with `if (evicted_ids)` |
 | H4 | `pending_find()` returns the node after releasing `s_pending_mutex`; a timed-out waiter can free it while the response callback writes to it | `makapix/makapix_api.c` (~line 153) | Match, write and give under the mutex |
@@ -147,7 +147,7 @@ commits can cite them.
 | H11 | `showToast()` is an empty stub, so every save confirmation and error in the playset editor is silent | `webui/playset-editor.html` (~line 2034) | Real implementation, ideally shared (see M29) |
 | H12 | PICO-8 `fbView` is captured once; WASM heap growth detaches it and frames go black | `webui/pico8/pico8.js` | Re-derive when `fbView.buffer !== Module.HEAPU8.buffer` |
 | H13 | Disconnect handler `vTaskDelete`s the status-publish task, which may be inside `esp_mqtt_client_publish()` | `makapix/makapix_connection.c` | Let the task exit on a flag |
-| H14 | Public RGBA `animation_decoder_decode_next` has no callers and writes `W*H*4` into buffers sized `W*H*3` | `animation_decoder/include/animation_decoder.h` and the four decoders | Delete the RGBA entry point |
+| H14 | Public RGBA `animation_decoder_decode_next` has no callers and writes `W*H*4` into buffers sized `W*H*3` | `animation_decoder/include/animation_decoder.h` and the four decoders | Delete the RGBA entry point **Fixed in 2.0** (`v2`, M2.1); still open in 1.x |
 | H16 | REST routes span three naming eras with no version prefix; `GET /api/museum/rate-limits` skips the `{ok,data}` envelope | `http_api/http_api.c`, `http_api_rest_museum.c` | Decide and document the frozen surface |
 | H18 | `pin_lists.h` still documents v1 behavior (post_id 0, monotonic ids); the code rejects `original_post_id <= 0` | `pin_lists/include/pin_lists.h` | Rewrite the header for v2 |
 | H19 | No build CI and no tests; the only workflow publishes to Pages | `.github/workflows/` | A build-on-push job, then host tests for pure logic |

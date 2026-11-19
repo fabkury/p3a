@@ -10,7 +10,7 @@ times.
 |---|---|
 | Phase | 2, player and library (Phases 0 and 1 complete) |
 | Current milestone | M2.1 display pipeline and decoders |
-| Next action | M2.3 Source interface, local source, scheduler | in progress. Part 1 done: the scheduler's arithmetic (`sched_core`), host-tested. Playsets, sources, the scheduler proper and the routes are not started |
+| Next action | M2.3 part 2: playsets. Read in `legacy/components/play_scheduler`: `playset_store.h` and `.c` (the packed 144-byte entry), `playset_json.c`, `active_playset_store.c`, and how `channel_id` is computed in `play_scheduler_playsets.c`. Build, pure and host-tested: the canonical packed playset entry with 96-byte identifiers and no `artwork` sub-struct, its JSON form (refusing, not cutting, what does not fit), and the channel id over a canonical form. Then the playset store and the active playset as `p3a_frame` containers (audit M21), `source_ops_t` with its registry, and the local source: the user's files in `animations/` are indexed where they are, not moved into the blob store (working decision, see the M2.2 entry). Then the scheduler proper over `sched_core` and `p3a_index`, `player_commands`, the routes (playsets, actions, upload; audit M7) and their device tests |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -43,7 +43,7 @@ reopened (why).
 | M1.5 net base | done 2026-11-18. Tiers: host tests (12 programs, under ASan and UBSan too), tool self-tests, device tests (119 cases, on the real Wi-Fi), release and test builds, the configuration guard. Awaiting manual check M1.5-a (the portal from a phone). The Wi-Fi recovery ladders are carried over untested |
 | M2.1 Display pipeline and decoders | done 2026-11-19, awaiting manual check M2.1-a. Tiers: host tests (15 programs), the whole device suite (235 cases on the test build; 6 timing cases on the trace-test build), release, test, trace and trace-test builds, the configuration guard. Timing has a baseline of minutes only; the jitter pass bar waits for the soak (M6.1) |
 | M2.2 Library core | done 2026-11-19. Tiers: host tests (15 programs), the whole device suite (240 cases), release, test and trace builds, the configuration guard. The `refs` table of the plan was not built (D48) |
-| M2.3 Source interface, local source, scheduler | not started |
+| M2.3 Source interface, local source, scheduler | in progress. Part 1 done: the scheduler's arithmetic (`sched_core`), host-tested. Playsets, sources, the scheduler proper and the routes are not started |
 | M2.4 Loader pipeline, C and D | not started |
 | M3.1 Screen model and hook table | not started |
 | M3.2 Text and fonts | not started |

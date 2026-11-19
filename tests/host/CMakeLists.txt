@@ -147,3 +147,9 @@ target_compile_options(test_bmp_decoder PRIVATE -Wno-conversion -Wno-sign-conver
 p3a_host_test(test_player_fit
     SOURCES player/test_player_fit.c ${P3A_COMPONENTS}/animation_player/player_fit.c
     INCLUDES ${P3A_COMPONENTS}/animation_player)
+
+# --- library ----------------------------------------------------------------
+set(LIBRARY "${P3A_COMPONENTS}/p3a_library")
+p3a_host_test(test_record_index
+    SOURCES library/test_record_index.c ${LIBRARY}/p3a_record.c ${LIBRARY}/p3a_index.c ${UTIL}/p3a_err.c
+    INCLUDES ${LIBRARY}/include ${P3A_STUBS} ${UTIL}/include)

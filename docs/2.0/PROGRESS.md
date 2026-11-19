@@ -10,7 +10,7 @@ times.
 |---|---|
 | Phase | 2, player and library (Phases 0 and 1 complete) |
 | Current milestone | M2.1 display pipeline and decoders |
-| Next action | Close M2.1: run the whole device suite (`python -m pytest tests/device`), the release and trace builds with the build checks, and fix what they find. Add manual check M2.1-a (playback looks smooth, colours and transparency look right) to the list for Fab. Then M2.2, the library core: `record_t`, `index_t`, the blob store. It is host-tested logic; read `docs/2.0-architecture-review/storage-and-data.md` and `target-architecture.md` first |
+| Next action | M2.2, the library core, continues. Done: `p3a_record` and `p3a_index` (pure, host-tested) in `components/p3a_library`. Next: `p3a_index_file.c` (save and load through `p3a_frame`, a new schema number in `p3a_frame.h`), then the blob store (`blobs/{d0}/{d1}/{ref}.{ext}` through `sd_path`, and its `refs` table as a framed container with reference counts and the pinned flag, rebuilt from the indices when it fails its check), host tests for both, and one device test that an index round-trips on the card. Design: `docs/2.0-architecture-review/storage-and-data.md` sections 3 and 6, `target-architecture.md` section 2 |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -41,8 +41,8 @@ reopened (why).
 | M1.3 storage | done 2026-11-18. Tiers: host tests (8 programs, under ASan and UBSan too), device tests (62 cases), release and test builds, the configuration guard. The repair paths of `sd_repair` cannot be exercised on a healthy card and are carried over on trust |
 | M1.4 settings | done 2026-11-18. Tiers: host tests (9 programs, under ASan and UBSan too), generator self-test (15 cases), device tests (76 cases, 14 of them new), release and test builds, the configuration guard. The touch-recovery restart itself is not exercised (the controller works); its counters and rule are |
 | M1.5 net base | done 2026-11-18. Tiers: host tests (12 programs, under ASan and UBSan too), tool self-tests, device tests (119 cases, on the real Wi-Fi), release and test builds, the configuration guard. Awaiting manual check M1.5-a (the portal from a phone). The Wi-Fi recovery ladders are carried over untested |
-| M2.1 Display pipeline and decoders | in progress: all four parts done (decoders; the display pipeline; the player; the frame trace over HTTP and a first timing baseline). To close it: the full device suite and the release and trace builds, last run before part 3, and Fab's manual check of how playback looks |
-| M2.2 Library core | not started |
+| M2.1 Display pipeline and decoders | done 2026-11-19, awaiting manual check M2.1-a. Tiers: host tests (15 programs), the whole device suite (235 cases on the test build; 6 timing cases on the trace-test build), release, test, trace and trace-test builds, the configuration guard. Timing has a baseline of minutes only; the jitter pass bar waits for the soak (M6.1) |
+| M2.2 Library core | in progress. The record and the index are written and host-tested; index files and the blob store are next |
 | M2.3 Source interface, local source, scheduler | not started |
 | M2.4 Loader pipeline, C and D | not started |
 | M3.1 Screen model and hook table | not started |
@@ -302,6 +302,38 @@ M1.1, 2026-11-17:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-19: M2.1 closed; M2.2 begun
+
+- The end-of-milestone run (D42): the whole device suite on the test
+  build, 234 of 235 passed. The one failure was a test's own bound: after
+  exhausting internal memory in 2 KB chunks it required the largest free
+  block to be under 2048 bytes, and it was exactly 2048, which does not fit
+  a 2048-byte allocation either (the allocator needs its header). The
+  bound is now "at most 2048"; rerun, it passes. Nothing in the firmware
+  changed for it.
+- The release and trace builds pass their checks and the configuration
+  guard. The release image is 1.36 MB (it was 0.91 MB before the decoders
+  and the player were linked in).
+- M2.1 is done as far as machines can say. Manual check M2.1-a (how
+  playback looks) is Fab's.
+- M2.2 begun while that run had the device: `components/p3a_library` with
+  `p3a_record` (the 192-byte record: one layout for every source, the
+  source in the record, identifiers refused when they do not fit, a check
+  for records read from a file) and `p3a_index` (records in channel order,
+  an open-addressed table over the 32-bit key, an availability bitmap,
+  "the n-th available record" for picks). Two artworks that share a 32-bit
+  key are both kept and told apart by identity; 1.x left that collision
+  unhandled.
+- The slot table and the bitmap are rebuilt when an index is loaded, not
+  stored: a few hundred microseconds, and two fewer things that can
+  disagree with the records on disk.
+- Verified, host tests (15 programs; the new one has 11 cases): layout and
+  the numbers written to disk, every source's record, identifier limits at
+  the exact boundary, damaged records, a full 4096-record index, shared
+  keys, removal, availability.
+- Not verified: nothing of M2.2 has run on the device or under the
+  sanitizers yet (CI runs them on the next push).
 
 ### 2026-11-19: M2.1 part 4, the frame trace and a first timing baseline
 

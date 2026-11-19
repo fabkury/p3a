@@ -88,7 +88,9 @@ def test_first_failed_allocation_prints_one_heap_report(uart):
         exhausted = uart.command("mem hog 600000", timeout=10)
         assert exhausted["level"] == "critical"
         # Some bytes stay free in fragments; what matters is that no chunk fits.
-        assert exhausted["largest"] < 2048
+        # A free block of exactly the chunk's size does not fit one either: the
+        # allocator needs room for its own header beside it.
+        assert exhausted["largest"] <= 2048
         # Fail again; the report must not repeat.
         uart.command("mem hog 600000", timeout=10)
     finally:

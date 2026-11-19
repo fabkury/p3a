@@ -121,6 +121,11 @@ All in `components/p3a_util`; each header explains itself at the top.
   number. A file that fails to load is never deleted. Free space is read
   from `p3a_storage_space()`, never computed in a request path. What may be
   assumed about FAT is stated in `p3a_storage.h`.
+- **Artworks are `p3a_record_t` records in a `p3a_index_t`, and their bytes
+  are blobs** (`components/p3a_library`). A source makes records with the
+  `p3a_record_init_*` functions, hands finished downloads to
+  `p3a_blob_adopt()`, and never builds a path under `blobs/` or deletes a
+  file there itself.
 - **Logic is split from hardware** so it can be host-tested: the pure part
   in its own file with no IDF includes (`p3a_job_table.c`,
   `p3a_mem_pressure.c`), the thin device part beside it.

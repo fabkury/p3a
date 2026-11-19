@@ -85,9 +85,11 @@ int32_t p3a_index_nth_available(const p3a_index_t *index, uint32_t n);
 
 // --- files (p3a_index_file.c) ----------------------------------------------------
 
-// Saves the records as a framed container (p3a_frame.h), flagged as a cache
-// that may be rebuilt. The slot table and the bitmap are not stored.
-esp_err_t p3a_index_save(const p3a_index_t *index, const char *path);
+// Saves the records as a framed container (p3a_frame.h). `flags` says what
+// the file is: P3A_FRAME_REBUILDABLE for a cache of what a source lists,
+// P3A_FRAME_USER_DATA for a list the user made. The slot table and the
+// bitmap are not stored.
+esp_err_t p3a_index_save(const p3a_index_t *index, const char *path, uint32_t flags);
 
 // Loads a container saved by p3a_index_save() into `index`, which must have
 // been created with room for it. Every result of p3a_frame_load() and

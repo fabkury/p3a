@@ -74,6 +74,7 @@ Set before the architecture review and taken as given by everything since.
 | D45 | 2026-11-19 | Working | An index stores only its records. The key table and the availability bitmap are rebuilt at load; a record is available when it has a blob reference and is not flagged gone, and the blob store corrects that when a blob turns out to be missing | Less on disk that can disagree with itself; the rebuild is far cheaper than the read |
 | D46 | 2026-11-19 | Working | An identifier that does not fit its field is refused when the record is made, never cut. Fields: 95 characters for a IIIF key, 31 for a Giphy id, 119 for a local filename | A cut identifier names another artwork or none. 1.x skipped long museum keys per adapter and worked around the limit twice |
 | D47 | 2026-11-19 | Fab | The hardware JPEG colour fix and the animated WebP blend fix are ported to `main` for 1.2.5 (was O17) | They are in every unit in the field, they are a few lines each, and they change how pictures look for the better |
+| D48 | 2026-11-19 | Working | The blob store keeps no table of reference counts. Blobs are evicted by age; the only blobs that must never be evicted are the pinned ones, and that set comes from the pin lists when they are built. A record whose blob is gone is discovered on play and marked | The design's count had no reader. A table with one entry per file on the card costs PSRAM and is one more file that can disagree with the truth |
 
 ## 1.x decisions that stay in force
 

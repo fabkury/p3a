@@ -223,7 +223,8 @@ The device plays the user's own files through the complete 2.0 content loop.
 
 - `record_t` (192 bytes, discriminator in the record, 96-byte identifiers),
   `index_t` (slot table, availability bitmap), the blob store keyed by
-  content hash with its `refs` index.
+  content hash. (The `refs` index was dropped, D48; the set of pinned
+  blobs arrives with the pin lists.)
 - Closes: findings 3, 20, the store half of 4; change B.
 - Tests: host tests for layout, codec, slot table at 4096 records, bitmap,
   reference counting, recovery from a torn `refs` write.

@@ -112,6 +112,7 @@ static void dispatch(char *line)
         run_from(p3a_test_util_commands, p3a_test_util_command_count, name, args) ||
         run_from(p3a_test_board_commands, p3a_test_board_command_count, name, args) ||
         run_from(p3a_test_storage_commands, p3a_test_storage_command_count, name, args) ||
+        run_from(p3a_test_library_commands, p3a_test_library_command_count, name, args) ||
         run_from(p3a_test_settings_commands, p3a_test_settings_command_count, name, args) ||
         run_from(p3a_test_net_commands, p3a_test_net_command_count, name, args)) {
         return;

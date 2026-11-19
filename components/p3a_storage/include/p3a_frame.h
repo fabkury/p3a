@@ -38,8 +38,10 @@ extern "C" {
 // append. Each schema's owner defines its record and its version.
 typedef enum {
     P3A_FRAME_SCHEMA_TEST = 1,  // used by tests only
+    P3A_FRAME_SCHEMA_INDEX = 2, // p3a_record_t records in channel order (p3a_index.h)
     // Added by the milestone that brings the owner:
-    //   channel index, local scan, playset, active playset, pin order, blob refs
+    //   playset, active playset. (Channel indices, the local scan and pin
+    //   orders are all P3A_FRAME_SCHEMA_INDEX.)
 } p3a_frame_schema_t;
 
 // Flags, written to disk.

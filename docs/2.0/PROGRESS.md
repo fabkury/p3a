@@ -10,7 +10,7 @@ times.
 |---|---|
 | Phase | 2, player and library (Phases 0 and 1 complete) |
 | Current milestone | M2.1 display pipeline and decoders |
-| Next action | M2.2, the library core, continues. Done: `p3a_record` and `p3a_index` (pure, host-tested) in `components/p3a_library`. Next: `p3a_index_file.c` (save and load through `p3a_frame`, a new schema number in `p3a_frame.h`), then the blob store (`blobs/{d0}/{d1}/{ref}.{ext}` through `sd_path`, and its `refs` table as a framed container with reference counts and the pinned flag, rebuilt from the indices when it fails its check), host tests for both, and one device test that an index round-trips on the card. Design: `docs/2.0-architecture-review/storage-and-data.md` sections 3 and 6, `target-architecture.md` section 2 |
+| Next action | M2.3: the source interface, the local source, the scheduler. Read PLAN.md M2.3, `docs/2.0-architecture-review/content-pipeline.md`, and in `legacy/`: `components/play_scheduler` (SWRR, pick, history), `components/playset_store`, `playset_json.c`, `sdcard_channel`, the upload handler in `http_api_upload.c`. Start with the pure parts and their host tests: `source_ops_t` and its registry, the packed playset and its JSON, the channel id, SWRR with credit rollback, the one pick function over `p3a_index_nth_available()`. Then the local source (scan `animations/` into an index, adopt uploads into the blob store or keep them in place: decide, see the M2.2 entry), then the routes |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -42,7 +42,7 @@ reopened (why).
 | M1.4 settings | done 2026-11-18. Tiers: host tests (9 programs, under ASan and UBSan too), generator self-test (15 cases), device tests (76 cases, 14 of them new), release and test builds, the configuration guard. The touch-recovery restart itself is not exercised (the controller works); its counters and rule are |
 | M1.5 net base | done 2026-11-18. Tiers: host tests (12 programs, under ASan and UBSan too), tool self-tests, device tests (119 cases, on the real Wi-Fi), release and test builds, the configuration guard. Awaiting manual check M1.5-a (the portal from a phone). The Wi-Fi recovery ladders are carried over untested |
 | M2.1 Display pipeline and decoders | done 2026-11-19, awaiting manual check M2.1-a. Tiers: host tests (15 programs), the whole device suite (235 cases on the test build; 6 timing cases on the trace-test build), release, test, trace and trace-test builds, the configuration guard. Timing has a baseline of minutes only; the jitter pass bar waits for the soak (M6.1) |
-| M2.2 Library core | in progress. The record and the index are written and host-tested; index files and the blob store are next |
+| M2.2 Library core | done 2026-11-19. Tiers: host tests (15 programs), the whole device suite (240 cases), release, test and trace builds, the configuration guard. The `refs` table of the plan was not built (D48) |
 | M2.3 Source interface, local source, scheduler | not started |
 | M2.4 Loader pipeline, C and D | not started |
 | M3.1 Screen model and hook table | not started |
@@ -310,6 +310,48 @@ M1.1, 2026-11-17:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-19: M2.2 done: index files and the blob store
+
+- `p3a_index_save()` and `p3a_index_load()`: an index is one framed
+  container (schema 2) of its records. A file with more records than the
+  caller has room for, a failed checksum, or one record that fails its own
+  check refuses the whole file and leaves the index empty; the file is
+  never touched. The flags say whether it is a cache or a list the user
+  made.
+- The blob store, `p3a_blob`: `blobs/{d0}/{d1}/{32 hex digits}.{ext}`,
+  named by the first 16 bytes of the SHA-256 of the content.
+  `p3a_blob_adopt()` hashes a finished file, moves it into place (never a
+  copy), and drops it instead when the store already holds those bytes.
+  `p3a_blob_remove()` is the only code that deletes artwork bytes.
+- **The plan's `refs` table is not built (D48).** The design gave every
+  blob a reference count and a pinned flag in one table, but named no
+  reader for the count: eviction goes by age, as in 1.x. What must be
+  known is only which blobs the user pinned, a small set that the pin
+  lists themselves define. So: no global table (nothing to tear, nothing
+  to rebuild, no megabytes of PSRAM for a count per file on the card);
+  the set of kept blobs arrives with the pin lists, and
+  `p3a_blob_remove()` will consult it. A record whose blob was evicted is
+  found out when it is played (`MISSING`) and marked then.
+- The file is hashed by reading it back after it is written. Hashing while
+  the bytes stream in from the network is an optimisation for M4.1, when
+  the fetch code arrives.
+- Open for M2.3: whether the user's own files in `animations/` are moved
+  into the blob store or indexed where they are. Moving them would hide
+  them from someone browsing the card over USB; indexing in place means a
+  local record points at a filename, not a blob. The record has room for
+  both.
+- Verified, device tests (smoke, library, storage: 26 cases, then the
+  whole suite at the end of the milestone): an index of 2, 500 and 4096
+  records round-trips on the card with every record found again by its
+  identity; the three kinds of bad file are refused and kept; a blob's
+  name equals the SHA-256 prefix computed on the workstation; the same
+  bytes twice are one file; an empty file and an unknown format are
+  refused and the file left in place; removal, and removal of what is not
+  there.
+- Numbers: 4096 records (786 KB) save in 1.6 s and load in 0.4 s.
+- Not verified: the store under a failing card (the health latch is tested
+  on its own, not through an adoption); a multi-megabyte adoption.
 
 ### 2026-11-19: the two picture fixes ported to main (D47)
 

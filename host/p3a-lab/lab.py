@@ -5,11 +5,12 @@
     python host/p3a-lab/lab.py build [release|test]
     python host/p3a-lab/lab.py flash [release|test]      build, then flash
     python host/p3a-lab/lab.py erase                     erase the whole flash
-    python host/p3a-lab/lab.py up                        test build, flash, wait for the console, print identity
+    python host/p3a-lab/lab.py up [build]                build (default: test), flash, wait for the console, print identity
     python host/p3a-lab/lab.py provision                 put the unit on the test rig's Wi-Fi (from the secrets file)
     python host/p3a-lab/lab.py boot                      reset and print the boot log
     python host/p3a-lab/lab.py cmd <name> [json]         send one test-console command
     python host/p3a-lab/lab.py shot <file.png> [divisor] save what the test hooks last put on the panel
+    python host/p3a-lab/lab.py play <file> [smooth]      play an image or animation file on the panel
     python host/p3a-lab/lab.py port                      print the dev unit's serial port
 
 Also imported by tests/device/conftest.py. Background: docs/2.0/TESTING.md.
@@ -67,6 +68,8 @@ CONFIGS = {
     # The jitter work's overlays: release plus the frame trace, and the heavier diagnostic set.
     "trace": BuildConfig("trace", "build-trace", ("sdkconfig.trace.defaults",)),
     "diag": BuildConfig("diag", "build-diag", ("sdkconfig.diag.defaults",)),
+    # The frame trace with the test hooks, so that a test can play files and read their timing.
+    "trace-test": BuildConfig("trace-test", "build-trace-test", ("sdkconfig.test.defaults", "sdkconfig.trace.defaults")),
 }
 
 # A line matching any of these means the firmware crashed or hung.
@@ -179,7 +182,7 @@ def build(config: str = "test") -> Path:
             generated.unlink()
     run_idf(["build"], cfg)
     check = [sys.executable, str(REPO / "tools" / "check_tree.py"), "--build", cfg.build_dir]
-    if cfg.name == "test":
+    if "sdkconfig.test.defaults" in cfg.overlays:  # a build that carries the test hooks
         check.append("--test-build")
     proc = subprocess.run(check, capture_output=True, text=True)
     if proc.returncode != 0:
@@ -469,13 +472,23 @@ def main(argv: list[str]) -> int:
             erase()
             print("erased")
         elif verb == "up":
-            uart, ident = bring_up("test")
+            uart, ident = bring_up(rest[0] if rest else "test")
             uart.close()
             print(json.dumps(ident))
         elif verb == "provision":
             with Uart(log_name="cmd.log", redact=secret_values(load_secrets())) as uart:
                 status = provision(uart)
                 print(json.dumps({k: status[k] for k in ("state", "ip", "hostname", "rssi")}))
+        elif verb == "play":
+            import urllib.request
+            with Uart(log_name="cmd.log", redact=secret_values(load_secrets())) as uart:
+                ip = provision(uart)["ip"]
+            smooth = int(len(rest) > 1 and rest[1] == "smooth")
+            request = urllib.request.Request(f"http://{ip}/api/v2/test/play?smooth={smooth}",
+                                             data=Path(rest[0]).read_bytes(), method="POST")
+            with urllib.request.urlopen(request, timeout=120) as reply:
+                data = json.load(reply)["data"]
+            print(json.dumps({k: data.get(k) for k in ("outcome", "error", "width", "height", "frame_count")}))
         elif verb == "boot":
             with Uart(log_name="boot.log") as uart:
                 pos = uart.reset()

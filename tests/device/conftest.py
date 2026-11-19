@@ -6,6 +6,8 @@
                                                   a checkpoint: the smoke set and the area changed
     python -m pytest tests/device -m "not slow"   everything but the slow tests (a cross-cutting change)
     python -m pytest tests/device --no-flash      run against what the unit already has
+    python -m pytest tests/device/test_timing.py --build trace-test
+                                                  frame timing; needs the build with the frame trace
     python -m pytest tests/device -m "not live"   skip tests that need the internet
 
 Which of these runs when is in docs/2.0/TESTING.md under "What runs when".
@@ -27,6 +29,8 @@ import lab  # noqa: E402
 def pytest_addoption(parser):
     parser.addoption("--no-flash", action="store_true",
                      help="do not build and flash; test the firmware the dev unit already runs")
+    parser.addoption("--build", default="test",
+                     help="which build to flash: test (the default) or trace-test (adds the frame trace)")
 
 
 def pytest_configure(config):
@@ -38,7 +42,8 @@ def pytest_configure(config):
 @pytest.fixture(scope="session")
 def bring_up(request):
     """The dev unit, flashed with the test build of this tree, console ready."""
-    uart, ident = lab.bring_up("test", do_flash=not request.config.getoption("--no-flash"))
+    uart, ident = lab.bring_up(request.config.getoption("--build"),
+                               do_flash=not request.config.getoption("--no-flash"))
     yield uart, ident
     # Leave the unit as the next session expects it: named and on the Wi-Fi.
     try:

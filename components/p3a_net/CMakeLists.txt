@@ -21,10 +21,17 @@ if(NOT CMAKE_BUILD_EARLY_EXPANSION)
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${static_files} "${embedder}")
 endif()
 
+# The frame trace's read-out exists only in builds that trace.
+set(trace_srcs)
+if(CONFIG_P3A_FRAME_TRACE)
+    set(trace_srcs "net_trace_api.c")
+endif()
+
 idf_component_register(
     SRCS "http_envelope.c" "http_route.c" "http_server.c" "http_static.c"
          "${gen_dir}/p3a_static_gen.c"
          "net_api.c"
+         ${trace_srcs}
          "net_dns.c"
          "net_link_recovery.c"
          "net_setup.c"

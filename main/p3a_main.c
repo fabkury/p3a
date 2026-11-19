@@ -10,6 +10,7 @@
 #include "esp_app_desc.h"
 #include "esp_chip_info.h"
 #include "esp_log.h"
+#include "frame_trace.h"
 #include "p3a_board.h"
 #include "p3a_err.h"
 #include "p3a_event.h"
@@ -54,6 +55,7 @@ void app_main(void)
     ESP_LOGI(TAG, "chip rev v%d.%d, %d cores", chip.revision / 100, chip.revision % 100, chip.cores);
 
     p3a_mem_install_alloc_failure_report();
+    frame_trace_init();  // nothing unless the build traces (lab.py build trace)
     boot_step("event bus", p3a_event_bus_start());
     boot_step("job runners", p3a_jobs_start());
 

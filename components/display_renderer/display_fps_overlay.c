@@ -202,16 +202,43 @@ static void ft_draw_overlay(uint8_t *buffer)
 }
 #endif
 
+// A source that has nothing new (a still picture) is not asked to draw, so
+// nothing would put the counter on the panel, refresh it, or take it off.
+// The producer asks here before each frame whether the counter needs one
+// drawn for its own sake. Producer task only, like the draw below.
+static bool s_fps_drawn_shown;    // whether the last frame drawn carried the counter
+static int64_t s_fps_last_draw_us;
+static bool s_fps_own_redraw;     // the next frame is drawn for the counter, not by the source
+
+bool display_fps_overlay_due(void)
+{
+    const bool show = atomic_load(&g_display_show_fps);
+    if (show != s_fps_drawn_shown) {
+        return true;  // switched on or off since the last frame
+    }
+    if (show && esp_timer_get_time() - s_fps_last_draw_us >= 1000000) {
+        s_fps_own_redraw = true;  // once a second, so that a still shows a live "0"
+        return true;
+    }
+    return false;
+}
+
 // Update FPS counter and optionally draw overlay
 static void fps_update_and_draw(uint8_t *buffer, void *ctx)
 {
     (void)ctx;
     int64_t now_us = esp_timer_get_time();
     const bool s_fps_show_cached = atomic_load(&g_display_show_fps);
+    s_fps_drawn_shown = s_fps_show_cached;
+    s_fps_last_draw_us = now_us;
 
-    // Always track FPS (for debugging/logging)
-    s_fps_frame_count++;
-    
+    // Frames the source produced are counted; a redraw made for the counter is not.
+    if (s_fps_own_redraw) {
+        s_fps_own_redraw = false;
+    } else {
+        s_fps_frame_count++;
+    }
+
     if (s_fps_last_time_us == 0) {
         s_fps_last_time_us = now_us;
         return;
@@ -226,7 +253,7 @@ static void fps_update_and_draw(uint8_t *buffer, void *ctx)
     }
     
     // Draw overlay if enabled
-    if (s_fps_show_cached && buffer && s_fps_current > 0) {
+    if (s_fps_show_cached && buffer) {
         fps_draw_overlay(buffer, s_fps_current);
     }
 #if CONFIG_P3A_FRAME_TRACE

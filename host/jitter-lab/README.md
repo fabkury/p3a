@@ -1,5 +1,14 @@
 # jitter-lab — host tooling for the jitter work stream
 
+> **State on `v2` (2026-11-19).** The frame trace and its endpoints are in
+> 2.0 under `/api/v2/debug/`, and `pull_frames.py`, `analyze.py`,
+> `serial_logger.py` and `run_audit.py` work against it. The other tools
+> still speak to 1.x endpoints that 2.0 does not have yet (`build.ps1` and
+> `soak.ps1` build 1.x; `snapshot_settings.py`, `stress.py` and the
+> experiment scripts use the 1.x settings, playset and upload routes). They
+> are adapted when the soak is set up (M6.1). For a quick reading use
+> `python -m pytest tests/device/test_timing.py --build trace-test -s`.
+
 See `docs/jitter/README.md` for the work stream's status, rules and diagnostic builds.
 All tools are plain Python 3 (system `python`, needs `pyserial` + `requests`,
 both present on the laptop) or PowerShell 7.
@@ -36,12 +45,16 @@ both present on the laptop) or PowerShell 7.
 ## Device endpoints added by the diag build (`CONFIG_P3A_FRAME_TRACE`)
 
 ```
-GET  /api/debug/frames?since=<seq>    CSV; last line "#next,<seq>"
-GET  /api/debug/frames/stats          JSON aggregates, histogram, kind names, config
-POST /api/debug/frames/reset          restart aggregates (ring kept)
-POST /api/debug/mark?arg=<n>          user marker (run boundaries)
-POST /api/debug/provoke?kind=nvs|log|sd|cpu1&n=<n>   dev-only (CONFIG_P3A_FRAME_TRACE_DEV_ENDPOINTS)
+GET  /api/v2/debug/frames?since=<seq>    CSV; last line "#next,<seq>"
+GET  /api/v2/debug/frames/stats          JSON aggregates, histogram, kind names, config
+POST /api/v2/debug/frames/reset          restart aggregates (ring kept)
+POST /api/v2/debug/mark?arg=<n>          user marker (run boundaries)
 ```
+
+On `v2` these are in `components/p3a_net/net_trace_api.c`, in builds made
+with `lab.py build trace` or `build trace-test`. The 1.x `provoke` endpoint
+was not carried over; it is in the history of `main` if a stall has to be
+provoked again.
 
 UART report format (one block per stall, rate-limited 1 per 5 s):
 

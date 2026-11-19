@@ -156,5 +156,8 @@ void display_fps_overlay_register(void);
 // True while the show_fps setting is on (display_renderer.c follows it).
 extern atomic_bool g_display_show_fps;
 
+// display_fps_overlay.c: true when a frame must be drawn for the counter's sake.
+bool display_fps_overlay_due(void);
+
 #endif // DISPLAY_RENDERER_PRIV_H
 

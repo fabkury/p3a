@@ -282,6 +282,24 @@ def test_the_hardware_scaler_fills_borders_with_the_background(panel):
         panel.set(background_color="#000000")
 
 
+def test_the_fps_overlay_appears_and_goes_with_its_setting(panel):
+    black = Image.new("RGB", (8, 8))
+    panel.show(black)
+    all_black = [(240 * 240, (0, 0, 0))]
+    assert panel.screenshot(div=3).getcolors() == all_black
+    try:
+        panel.set(show_fps=True)
+        time.sleep(1.5)
+        with_overlay = panel.screenshot(div=3)
+        assert with_overlay.getcolors() != all_black, "the overlay is drawn even over a still"
+        box = with_overlay.getbbox()
+        assert (box[2] - box[0]) * (box[3] - box[1]) < 240 * 240 // 8, f"it is a small label, not {box}"
+    finally:
+        panel.set(show_fps=False)
+    time.sleep(0.5)
+    assert panel.screenshot(div=3).getcolors() == all_black, "and removed when switched off"
+
+
 # --- files of every format, and what the player reports ---------------------------
 
 def corpus(name: str) -> bytes:

@@ -10,7 +10,7 @@ times.
 |---|---|
 | Phase | 2, player and library (Phases 0 and 1 complete) |
 | Current milestone | M2.1 display pipeline and decoders |
-| Next action | M2.1 part 4, timing: frame-trace read-out under `/api/v2/test/` (trace build), `host/jitter-lab` pointed at it, a short trace baseline while the corpus animations play, and a test of the FPS overlay now that something animates. Then the end of M2.1: the full device suite, the release and trace builds, and the manual check that playback looks right. The 1.x player files still in `legacy/main` (`animation_player.c`, its headers) hold pause, SD export and UI-mode code for M2.4 and Phase 3 |
+| Next action | Close M2.1: run the whole device suite (`python -m pytest tests/device`), the release and trace builds with the build checks, and fix what they find. Add manual check M2.1-a (playback looks smooth, colours and transparency look right) to the list for Fab. Then M2.2, the library core: `record_t`, `index_t`, the blob store. It is host-tested logic; read `docs/2.0-architecture-review/storage-and-data.md` and `target-architecture.md` first |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -41,7 +41,7 @@ reopened (why).
 | M1.3 storage | done 2026-11-18. Tiers: host tests (8 programs, under ASan and UBSan too), device tests (62 cases), release and test builds, the configuration guard. The repair paths of `sd_repair` cannot be exercised on a healthy card and are carried over on trust |
 | M1.4 settings | done 2026-11-18. Tiers: host tests (9 programs, under ASan and UBSan too), generator self-test (15 cases), device tests (76 cases, 14 of them new), release and test builds, the configuration guard. The touch-recovery restart itself is not exercised (the controller works); its counters and rule are |
 | M1.5 net base | done 2026-11-18. Tiers: host tests (12 programs, under ASan and UBSan too), tool self-tests, device tests (119 cases, on the real Wi-Fi), release and test builds, the configuration guard. Awaiting manual check M1.5-a (the portal from a phone). The Wi-Fi recovery ladders are carried over untested |
-| M2.1 Display pipeline and decoders | in progress. Parts 1 to 3 done (decoders; the display pipeline; the player: a file becomes frames on the panel). Part 4 (frame trace over HTTP, the jitter lab, a timing baseline) not started. No jitter measurement has been made on 2.0 yet. The full device suite last ran before part 3 |
+| M2.1 Display pipeline and decoders | in progress: all four parts done (decoders; the display pipeline; the player; the frame trace over HTTP and a first timing baseline). To close it: the full device suite and the release and trace builds, last run before part 3, and Fab's manual check of how playback looks |
 | M2.2 Library core | not started |
 | M2.3 Source interface, local source, scheduler | not started |
 | M2.4 Loader pipeline, C and D | not started |
@@ -122,6 +122,20 @@ Open:
   Also worth one try with a wrong password: the unit should offer
   `p3a-setup` again within about a minute. If anything goes wrong,
   `python host/p3a-lab/lab.py provision` puts the unit back online.
+- **M2.1-a, how playback looks.** The tests compare framebuffers; only eyes
+  can judge the glass. With the test build on the unit
+  (`python host/p3a-lab/lab.py up`), play a few files of your own, pixel
+  art and photographs, animated and still:
+  `python host/p3a-lab/lab.py play <file>` (nearest neighbour, for pixel
+  art) and `python host/p3a-lab/lab.py play <file> smooth` (the hardware
+  scaler, as museum and Giphy pictures will use). Look for: smooth motion
+  with no stutter or tearing; clean, square pixels on pixel art; colours
+  that look right, JPEG photographs especially (2.0 fixes the harsh
+  contrast 1.x gave them, see O17); transparent parts filled with the
+  background colour; the picture centred with even borders. Also once:
+  change `rotation` in the settings while a picture is up
+  (`python host/p3a-lab/lab.py cmd "settings set" '{"rotation": 90}'`)
+  and see it turn at once.
 
 Cleared:
 
@@ -191,6 +205,13 @@ M0.1, 2026-11-17 (paths relative to the 1.x tree):
 
 Dead functions inside files that are otherwise live were not hunted down;
 they are simply not moved when their file is.
+
+M2.1 part 4, 2026-11-19:
+
+- From the 1.x frame-trace endpoints: `POST /api/debug/provoke` and its
+  four provocations (NVS, log, SD, CPU), and the two fields of the stats
+  that named the SD busy-wait variant. In the history of `main` if a stall
+  has to be provoked again.
 
 M2.1 part 3, 2026-11-19:
 
@@ -281,6 +302,52 @@ M1.1, 2026-11-17:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-19: M2.1 part 4, the frame trace and a first timing baseline
+
+- **The frame trace was never started in 2.0.** The trace build compiled it
+  in, and nothing called `frame_trace_init()`. `app_main` does now. Found
+  only because part 4 tried to read it.
+- The trace's read-out is in `components/p3a_net/net_trace_api.c` (from the
+  1.x file, moved), under `/api/v2/debug/`, in builds that trace. The CSV
+  is the 1.x format, so `host/jitter-lab/pull_frames.py` and `analyze.py`
+  work against 2.0 with their URLs changed; a pull and an analysis were
+  run against the dev unit. The lab's other tools still speak to 1.x
+  routes and are adapted with the soak (M6.1); its README says which.
+- New lab build `trace-test`: the frame trace with the test hooks, so that
+  a test can play files and read their timing.
+  `python -m pytest tests/device/test_timing.py --build trace-test -s`.
+- **First timing readings of 2.0** (dev unit, 20 s each, rotation 0):
+
+  | Playing | Frames | Late p50 | Late p99 | Late max | Produce p50 |
+  |---|---|---|---|---|---|
+  | 64 px GIF, 10 fps, nearest | 202 | 0.2 ms | 8.3 ms | 8.5 ms | 15 ms |
+  | 240 px GIF, 25 fps, nearest | 505 | 0.1 ms | 8.4 ms | 8.4 ms | 28 ms |
+  | 240 px lossless WebP, 12 fps, nearest | 251 | 0.4 ms | 8.4 ms | 8.4 ms | 47 ms |
+  | 240 px GIF, 25 fps, smooth (hardware scaler) | 505 | 0.0 ms | 8.4 ms | 8.4 ms | 18 ms |
+  | the 240 px GIF while 8 loads fail | 381 (15 s) | 0.1 ms | 8.4 ms | 8.6 ms | 28 ms |
+  | 6 swaps between a 700 px PNG and the GIF | 455 | 0.1 ms | 8.4 ms | 8.5 ms | 29 ms |
+
+  No frame was late by more than about half a refresh (the vsync lock's
+  grain), including while the next artwork loaded and across swaps. This is
+  a baseline of minutes on synthetic files. It is **not** the jitter pass
+  bar, which is hours of real use; that is M6.1.
+- A capacity fact, not a regression as far as can be told: a full-frame
+  lossless WebP animation at 240 px takes about 47 ms a frame to decode
+  and scale, so it cannot reach 25 fps. The same decoder and scaler as
+  1.x; 1.x was not measured on this file.
+- **The FPS counter did not appear over a still picture**, a bug from
+  part 3: a still is drawn once, so nothing drew the counter, refreshed it
+  or took it away. The producer now asks the counter whether it needs a
+  frame for its own sake (on switching, and once a second while on). Over a
+  still it shows a live 0, which is the truth; 1.x showed 10 because it
+  redrew stills ten times a second. Found by the test written for it.
+- Verified, device tests on the `trace-test` build (smoke, player, panel,
+  timing: 57 cases): all pass. The same player and panel tests passed on
+  the `test` build before the counter fix; the `test` build has not been
+  flashed since.
+- Not verified: the stall reporter's UART output and the trace's overlay
+  mark were not looked at.
 
 ### 2026-11-19: M2.1 part 3, the animation player
 

@@ -545,6 +545,9 @@ void display_producer_task(void *arg)
             xSemaphoreGive(s_registry_lock);
 
             if (source.fn) {
+                if (slot != DISPLAY_SOURCE_TEST && display_fps_overlay_due()) {
+                    must_redraw = true;  // overlays are not drawn over test patterns
+                }
                 frame_delay_ms = source.fn(back_buffer, must_redraw, source.ctx);
                 if (frame_delay_ms == DISPLAY_FRAME_UNCHANGED && !must_redraw) {
                     // Nothing new to show: release the buffer without queuing

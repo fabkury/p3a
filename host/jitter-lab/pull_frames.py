@@ -5,8 +5,8 @@
 
 Writes into host/jitter-lab/runs/<RUN>/:
     frames.csv      all ring rows ever seen (device CSV format, one header)
-    stats.jsonl     /api/debug/frames/stats snapshots with host timestamp
-    device.jsonl    /api/state + /api/memory snapshots (no /config: it holds API keys)
+    stats.jsonl     /api/v2/debug/frames/stats snapshots with host timestamp
+    device.jsonl    /api/v2/status snapshots (uptime, network, storage, memory)
     pull_state.json cursor (next_seq), counters, last error
 
 Ring capacity is ~8192 entries; at 30 fps that is ~4 min of frames, so poll at
@@ -29,9 +29,9 @@ EXPECTED_HOSTNAME = "p3a-fab"   # the dev unit (Fab renamed it 2026-08-28); anot
 
 def assert_dev_unit(host: str):
     """Refuse to touch any device that is not the jitter dev unit."""
-    r = requests.get(f"{host}/api/device-name", timeout=10)
+    r = requests.get(f"{host}/api/v2/status", timeout=10)
     r.raise_for_status()
-    hn = r.json().get("hostname")
+    hn = r.json()["data"]["network"]["hostname"]
     if hn != EXPECTED_HOSTNAME:
         raise SystemExit(f"REFUSING: {host} reports hostname {hn!r}, expected {EXPECTED_HOSTNAME!r} (wrong device?)")
 
@@ -77,7 +77,7 @@ def main():
 
     if a.from_head and st["next_seq"] == 0:
         try:
-            head = requests.get(f"{a.host}/api/debug/frames/stats", timeout=15).json()["data"]["next_seq"]
+            head = requests.get(f"{a.host}/api/v2/debug/frames/stats", timeout=15).json()["data"]["next_seq"]
             st["next_seq"] = int(head)
             print(f"{now_iso()} starting from ring head seq={head}", flush=True)
         except Exception as e:  # noqa: BLE001
@@ -110,14 +110,14 @@ def main():
         st["last_loop"] = now_iso()
         try:
             # Reboot detection: the device ring restarts at seq 1 after a reset.
-            head = requests.get(f"{a.host}/api/debug/frames/stats", timeout=15).json()["data"]["next_seq"]
+            head = requests.get(f"{a.host}/api/v2/debug/frames/stats", timeout=15).json()["data"]["next_seq"]
             if int(head) < st["next_seq"] - 8:
                 st["epoch"] += 1
                 st["next_seq"] = 0
                 with (run_dir / "boots.jsonl").open("a", encoding="utf-8") as f:
                     f.write(json.dumps({"host_ts": now_iso(), "epoch": st["epoch"], "device_head": int(head)}) + "\n")
                 print(f"{now_iso()} DEVICE REBOOT detected: epoch {st['epoch']}, cursor reset", flush=True)
-            r = requests.get(f"{a.host}/api/debug/frames", params={"since": st["next_seq"]}, timeout=60)
+            r = requests.get(f"{a.host}/api/v2/debug/frames", params={"since": st["next_seq"]}, timeout=60)
             r.raise_for_status()
             text = r.text
             lines = text.splitlines()
@@ -140,13 +140,13 @@ def main():
             st["pulls"] += 1
             st["last_ok"] = now_iso()
 
-            s = requests.get(f"{a.host}/api/debug/frames/stats", timeout=15).json()
+            s = requests.get(f"{a.host}/api/v2/debug/frames/stats", timeout=15).json()
             with stats_path.open("a", encoding="utf-8") as f:
                 f.write(json.dumps({"host_ts": now_iso(), "stats": s.get("data", s)}) + "\n")
 
             if n % 5 == 1:
                 dev = {"host_ts": now_iso()}
-                for ep in ("/api/state", "/api/memory?silent"):
+                for ep in ("/api/v2/status",):
                     try:
                         dev[ep] = requests.get(f"{a.host}{ep}", timeout=15).json().get("data")
                     except Exception as e:  # noqa: BLE001

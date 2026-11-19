@@ -68,14 +68,14 @@ The firmware is public (Apache 2.0). 1.x runs on real users' devices from
 | `tools/embed_static.py` | Gzips the web files under `components/p3a_net/static/` into the firmware at configure time. Adding a page is adding a file there. `tools/test_embed_static.py` is its self-test. |
 | `tools/gen_settings.py` | Generates the settings table and struct from `components/p3a_settings/settings.json` at configure time. `tools/test_gen_settings.py` is its self-test. |
 | `tools/compare_sdkconfig.py` | Fails a release build whose configuration drifts from what 1.x shipped, apart from a listed set of explained differences. When a component returns and a listed difference disappears, remove it from the list. |
-| `sdkconfig.trace.defaults`, `sdkconfig.diag.defaults`, `sdkconfig.nowrap.defaults` | The jitter work's overlays (`lab.py build trace`, `build diag`). Never folded into the release configuration. |
+| `sdkconfig.trace.defaults`, `sdkconfig.diag.defaults`, `sdkconfig.nowrap.defaults` | The jitter work's overlays (`lab.py build trace`, `build diag`; `build trace-test` adds the test hooks, for `tests/device/test_timing.py`). Never folded into the release configuration. |
 | `host/p3a-lab/` | Builds, flashes and talks to the dev unit. Use it instead of raw `idf.py` for anything that involves the device. |
 | `partitions.csv` | The 2.x partition table, fixed for the life of 2.x (`docs/2.0/DECISIONS.md` D1). |
 | `sdkconfig.defaults` | The build configuration and its source of truth. `sdkconfig` is generated and not tracked. |
 | `legacy/` | The 1.x sources, kept as the quarry 2.0 is built from. Never compiled, never included, never linked. See `legacy/README.md`. |
 | `docs/2.0/` | The work stream: protocol, plan, ledger, decisions, testing, parity. |
 | `docs/2.0-architecture-review/` | The design of 2.0. |
-| `host/` | Host tooling. `intro-anim-lab` builds from `legacy/` until M3.3. `jitter-lab` targets 1.x endpoints and the 1.x build; it is adapted at M2.1. |
+| `host/` | Host tooling. `intro-anim-lab` builds from `legacy/` until M3.3. In `jitter-lab` the puller and the analyzer work against 2.0; the rest still targets 1.x and is adapted with the soak (M6.1). |
 | `docs/` (the rest), `README.md` | Still describe 1.x. They are rewritten in one pass at M5.4; do not patch them piecemeal. |
 
 ### Layers

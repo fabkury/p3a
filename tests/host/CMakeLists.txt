@@ -137,9 +137,13 @@ p3a_host_test(test_setup
 set(DECODER "${P3A_COMPONENTS}/animation_decoder")
 p3a_host_test(test_bmp_decoder
     SOURCES player/test_bmp_decoder.c ${DECODER}/bmp_animation_decoder.c
-    INCLUDES ${DECODER}/include ${DECODER} ${P3A_STUBS})
+    # The stubs first: they stand in for psram_alloc.h; p3a_err.h is the real one.
+    INCLUDES ${DECODER}/include ${DECODER} ${P3A_STUBS} ${UTIL}/include)
 target_compile_definitions(test_bmp_decoder PRIVATE
     P3A_DECODER_CORPUS="${P3A_ROOT}/tests/assets/decoders")
 # The decoder came from 1.x and was not written to -Wconversion. The
 # sanitizers are the point of this test, so only that warning is relaxed.
 target_compile_options(test_bmp_decoder PRIVATE -Wno-conversion -Wno-sign-conversion)
+p3a_host_test(test_player_fit
+    SOURCES player/test_player_fit.c ${P3A_COMPONENTS}/animation_player/player_fit.c
+    INCLUDES ${P3A_COMPONENTS}/animation_player)

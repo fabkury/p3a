@@ -545,7 +545,7 @@ esp_err_t png_decoder_init(animation_decoder_t **decoder, const uint8_t *data, s
         ESP_LOGE(TAG, "Invalid PNG dimensions: %u x %u", (unsigned)width, (unsigned)height);
         png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
         free(png_data);
-        return ESP_ERR_INVALID_SIZE;
+        return animation_decoder_size_error((uint32_t)width, (uint32_t)height);
     }
 
     png_data->canvas_width = width;

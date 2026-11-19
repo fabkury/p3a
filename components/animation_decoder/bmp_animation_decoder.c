@@ -257,7 +257,7 @@ static esp_err_t bmp_parse_header(const uint8_t *data, size_t size, bmp_parse_t 
     if (width < 1 || width > BMP_MAX_DIM || height < 1 || height > BMP_MAX_DIM) {
         ESP_LOGE(TAG, "BMP dimensions out of range: %ux%u (cap %u)",
                  (unsigned)width, (unsigned)height, (unsigned)BMP_MAX_DIM);
-        return ESP_ERR_INVALID_SIZE;
+        return animation_decoder_size_error((uint32_t)width, (uint32_t)height);
     }
     if (bitcount != 1 && bitcount != 4 && bitcount != 8 &&
         bitcount != 16 && bitcount != 24 && bitcount != 32) {

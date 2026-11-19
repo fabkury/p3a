@@ -25,6 +25,7 @@
 #include "jpeg_decoder_internal.h"
 #include "animation_decoder.h"
 #include "esp_heap_caps.h"
+#include "p3a_err.h"
 #include "psram_alloc.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -191,7 +192,7 @@ esp_err_t jpeg_decode_sw_to_rgb888(const uint8_t *data, size_t size,
     if (out_w > ANIMATION_DECODER_MAX_DIMENSION || out_h > ANIMATION_DECODER_MAX_DIMENSION) {
         ESP_LOGE(TAG, "Too large even after scaling: %ux%u", (unsigned)out_w, (unsigned)out_h);
         jpeg_destroy_decompress(&cinfo);
-        return ESP_ERR_INVALID_SIZE;
+        return P3A_ERR_NOT_PLAYABLE;  // sound, perhaps, but not for this player
     }
 
     const size_t row_bytes = (size_t)out_w * 3u;

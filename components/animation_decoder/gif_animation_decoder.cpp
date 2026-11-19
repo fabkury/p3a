@@ -10,6 +10,7 @@
 #include "animation_decoder_internal.h"
 #include "AnimatedGIF.h"
 #include "esp_log.h"
+#include "animation_decoder_formats.h"
 #include "esp_err.h"
 #include "esp_heap_caps.h"
 #include "psram_alloc.h"
@@ -205,7 +206,8 @@ esp_err_t gif_decoder_init(animation_decoder_t **decoder, const uint8_t *data, s
         ESP_LOGE(TAG, "Failed to open GIF: error=%d", last_error);
         delete impl->gif;
         free(impl);
-        return ESP_FAIL;
+        // The library refuses a canvas over its own limit before we see it.
+        return last_error == GIF_TOO_WIDE ? (esp_err_t)P3A_ERR_NOT_PLAYABLE : ESP_FAIL;
     }
 
     // Get canvas dimensions
@@ -217,10 +219,11 @@ esp_err_t gif_decoder_init(animation_decoder_t **decoder, const uint8_t *data, s
         impl->canvas_width > ANIMATION_DECODER_MAX_DIMENSION ||
         impl->canvas_height > ANIMATION_DECODER_MAX_DIMENSION) {
         ESP_LOGE(TAG, "Invalid GIF dimensions");
+        const esp_err_t why = animation_decoder_size_error(impl->canvas_width, impl->canvas_height);
         impl->gif->close();
         delete impl->gif;
         free(impl);
-        return ESP_ERR_INVALID_SIZE;
+        return why;
     }
 
     // Allocate RGB canvas buffer for full canvas

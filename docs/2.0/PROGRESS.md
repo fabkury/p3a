@@ -10,7 +10,7 @@ times.
 |---|---|
 | Phase | 2, player and library (Phases 0 and 1 complete) |
 | Current milestone | M2.1 display pipeline and decoders |
-| Next action | M2.1 part 3, the player's decode path: read `legacy/main/animation_player.c`, `animation_player_loader.c`, `animation_player_render.c` and `animation_player_priv.h` (2,568 lines), and `legacy/components/loader_service`. Bring in what turns a file into frames on the panel: load (POSIX `read()` into an aligned buffer, jitter fix 6), open the decoder, build the aspect-ratio maps, choose the upscaler, decode a frame ahead, swap. It becomes the artwork source of `display_renderer`; the test hook's own fit and lookup code in `p3a_test_render.c` is then replaced by the real map builder. Decide here whether end of animation becomes uniform across formats (see the part 1 entry). Then the frame-trace endpoints under `/api/v2/test/`, `host/jitter-lab` adapted to them, a short trace baseline on the corpus, and the FPS overlay test that needs a running animation. The scheduler, history and channels are M2.2 to M2.4, not this |
+| Next action | M2.1 part 4, timing: frame-trace read-out under `/api/v2/test/` (trace build), `host/jitter-lab` pointed at it, a short trace baseline while the corpus animations play, and a test of the FPS overlay now that something animates. Then the end of M2.1: the full device suite, the release and trace builds, and the manual check that playback looks right. The 1.x player files still in `legacy/main` (`animation_player.c`, its headers) hold pause, SD export and UI-mode code for M2.4 and Phase 3 |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -41,7 +41,7 @@ reopened (why).
 | M1.3 storage | done 2026-11-18. Tiers: host tests (8 programs, under ASan and UBSan too), device tests (62 cases), release and test builds, the configuration guard. The repair paths of `sd_repair` cannot be exercised on a healthy card and are carried over on trust |
 | M1.4 settings | done 2026-11-18. Tiers: host tests (9 programs, under ASan and UBSan too), generator self-test (15 cases), device tests (76 cases, 14 of them new), release and test builds, the configuration guard. The touch-recovery restart itself is not exercised (the controller works); its counters and rule are |
 | M1.5 net base | done 2026-11-18. Tiers: host tests (12 programs, under ASan and UBSan too), tool self-tests, device tests (119 cases, on the real Wi-Fi), release and test builds, the configuration guard. Awaiting manual check M1.5-a (the portal from a phone). The Wi-Fi recovery ladders are carried over untested |
-| M2.1 Display pipeline and decoders | in progress. Parts 1 and 2 done 2026-11-18 (decoders; the display pipeline and both upscalers): host tests (13 programs), device tests (221 cases), release, test and trace builds, the configuration guard. Part 3 (the player's decode path, frame trace over HTTP, the jitter lab) not started. No jitter measurement has been made on 2.0 yet |
+| M2.1 Display pipeline and decoders | in progress. Parts 1 to 3 done (decoders; the display pipeline; the player: a file becomes frames on the panel). Part 4 (frame trace over HTTP, the jitter lab, a timing baseline) not started. No jitter measurement has been made on 2.0 yet. The full device suite last ran before part 3 |
 | M2.2 Library core | not started |
 | M2.3 Source interface, local source, scheduler | not started |
 | M2.4 Loader pipeline, C and D | not started |
@@ -192,6 +192,16 @@ M0.1, 2026-11-17 (paths relative to the 1.x tree):
 Dead functions inside files that are otherwise live were not hunted down;
 they are simply not moved when their file is.
 
+M2.1 part 3, 2026-11-19:
+
+- `legacy/components/loader_service` (its reader is `player_file.c`).
+- From the 1.x loader and render files: the prefetch flags and semaphore,
+  the directory scan helpers and index stubs that the channel system had
+  already made dead, `animation_player_add_file` (returned "not
+  supported"), the `PERF_DEBUG` blocks, the PICO-8 branch (PICO-8 returns,
+  if at all, as a frame source of its own).
+- Test hook `p3a_test_render.c`, replaced by `p3a_test_player.c`.
+
 M2.1 part 2, 2026-11-18:
 
 - From the display renderer: `display_renderer_deinit`, the display mutex,
@@ -271,6 +281,74 @@ M1.1, 2026-11-17:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-19: M2.1 part 3, the animation player
+
+First checkpoint under D42: the smoke set and the changed areas ran on the
+device, not the whole suite.
+
+- New component `components/animation_player` (layer `player`), from
+  `legacy/main/animation_player_loader.c`, `animation_player_render.c` and
+  `legacy/components/loader_service` (moved with `git mv`, then rewritten
+  around one idea: the player plays what it is told and reports what
+  became of the request).
+- A request is reported `ready` (loaded, first frame decoded), then `shown`
+  (drawn), or `failed`, each once, by token. The previous artwork plays on
+  until the new one is shown, and through any failure. A newer request
+  replaces one still loading. These are the `swap_ready` and `swap_shown`
+  moments of the design; the pipeline that acts on them is M2.4.
+- **The first frame is decoded on the player's task**, not on the display
+  pipeline's producer as in 1.x. The producer only adopts a finished clip
+  (a pointer swap under a lock held for microseconds). This removes the
+  three flags and the semaphore 1.x used to keep the loader from freeing a
+  buffer the render task was decoding into, and it takes a decode of up to
+  hundreds of milliseconds off the frame-producing path. Its effect on
+  timing is unmeasured until part 4.
+- **The previous artwork is freed as soon as the new one is shown** (1.x
+  kept it until the next load began). Two large stills no longer have to
+  fit in memory with a third.
+- **A still is drawn once.** 1.x scaled the same picture to the panel ten
+  times a second for as long as it was up. It is drawn again only when the
+  rotation or the background colour changes.
+- **The format is read from the file's first bytes**, not from its name. A
+  download saved under the wrong extension plays.
+- **Errors say what a caller can do**: `MISSING`, `NOT_PLAYABLE` (not a
+  picture, or over the size or byte limit), `CORRUPT`, no memory, the card
+  could not be read. The decoders now answer `NOT_PLAYABLE` for a picture
+  over 4096 pixels a side instead of the same code as a damaged header; a
+  test caught the GIF decoder calling an oversized (possibly sound) file
+  damaged, which in M2.4 would have had it deleted.
+- **End of animation is the same for every format**: it starts over,
+  whatever loop count the file declares (Fab's standing decision). GIF does
+  it inside its decoder, the others are reset by the player; `loops` counts
+  it the same way for all.
+- Jitter fixes carried: the file is read with POSIX `read()` into a buffer
+  aligned in address and size (fixes 1 and 6), unchanged.
+- The fit and lookup-table code is pure (`player_fit.c`) and host-tested;
+  the test hook that carried its own copy (`p3a_test_render.c`) is gone and
+  its tests now go through the player with real files.
+- `p3a_limits.h` exists now, with its first constant (16 MiB per artwork).
+- Verified, host tests (14 programs): fitting, table bounds, format
+  sniffing with short input.
+- Verified, device tests (smoke, player, decoders: 121 cases, 3 min 42 s):
+  the part 2 pipeline tests through the player; a file of each format
+  reaches the panel, stills compared exactly with an independent decode;
+  GIF, WebP and APNG animations keep their declared pace within 15% over
+  four seconds and loop; a transparent still is recomposed when the
+  background changes; four kinds of unplayable file each report the right
+  error and leave the previous artwork on the panel; a newer request
+  replaces an older one; stop; 25 plays, 5 failures and 5 stops leave
+  no memory behind.
+- Not verified: timing (part 4). A decode failure in the middle of an
+  animation (the latch that holds the last good frame) has no test: the
+  corpus has no file that fails after its first frame through the player.
+  A read error from the card is not provoked.
+- Left in the 1.x files for M2.4, not lost: silent retry with its
+  blocklist, the on-screen load error, deleting a corrupt cached file and
+  dropping it from the index, the LRU touch of a played file, ignoring a
+  swap to the file already playing, and the calls that told the scheduler,
+  the view tracker and the current-post record about a swap. All of them
+  hang off the three reports above.
 
 ### 2026-11-19: testing made faster (D42)
 

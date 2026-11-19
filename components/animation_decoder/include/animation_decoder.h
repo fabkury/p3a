@@ -56,7 +56,11 @@ typedef struct {
     bool source_consumed;
 } animation_decoder_info_t;
 
-// Opens a decoder on `size` bytes at `data`. Unless source_consumed is
+// Opens a decoder on `size` bytes at `data`. Fails with P3A_ERR_NOT_PLAYABLE
+// when the picture is larger than ANIMATION_DECODER_MAX_DIMENSION (the file
+// may be sound; it is not for this player), with ESP_ERR_NO_MEM when it does
+// not fit in memory now, and with other errors when the bytes are damaged or
+// are not the format named. Unless source_consumed is
 // reported, the bytes must stay valid until animation_decoder_unload().
 esp_err_t animation_decoder_init(animation_decoder_t **decoder, animation_decoder_type_t type, const uint8_t *data,
                                  size_t size);

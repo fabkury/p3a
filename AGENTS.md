@@ -140,6 +140,10 @@ All in `components/p3a_util`; each header explains itself at the top.
   framebuffer. Its timing code (from "Vsync setup" to the end of the
   consumer in `display_renderer.c`) is the result of the jitter work and is
   not edited without re-measuring against `docs/jitter/REPORT.md`.
+- **Playing a file goes through `animation_player`**, which reports each
+  request `ready`, `shown` or `failed`. Anything that must happen when an
+  artwork is really on the panel (history, counting a view) hangs off
+  `shown`, never off the request.
 - **HTTP endpoints** are rows in a route table (`p3a_http.h`). A handler
   answers once through `p3a_http_ok`, `p3a_http_accepted` or
   `p3a_http_fail` and never writes an envelope, a status line or a header

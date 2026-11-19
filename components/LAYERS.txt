@@ -18,6 +18,7 @@ p3a_storage    storage
 p3a_settings   storage
 animation_decoder player
 display_renderer player
+animation_player player
 animated_gif   player vendored
 libpng         player vendored
 libwebp_decoder player vendored

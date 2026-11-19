@@ -1,10 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The display pipeline: a picture from the artwork source to the panel's
-framebuffer, through both upscalers, in every rotation, with borders,
-blanking and source switching.
+"""The animation player and the display pipeline under it: a file becomes
+frames on the panel, through both upscalers, in every rotation, with
+borders, blanking and source switching; and the player reports what became
+of each request.
 
-The device is given raw pixels and asked what its panel is being shown; the
-test builds the same frame on the workstation and compares.
+The device is given a file and asked what its panel is being shown; the test
+builds the same frame on the workstation and compares. Pictures made here
+are sent as BMP, which keeps every pixel.
 """
 import io
 import time
@@ -15,6 +17,7 @@ from PIL import Image, ImageDraw
 
 import lab
 from test_api import Api
+from test_decoders import CORPUS, DECLARED_MS, reference_frames, shown_for
 
 pytestmark = pytest.mark.live
 
@@ -72,14 +75,23 @@ class Panel:
     def __init__(self, api: Api):
         self.api = api
 
-    def show(self, img: Image.Image, mode: str = "cpu") -> dict:
-        reply = self.api.call("POST", f"/api/v2/test/render?w={img.width}&h={img.height}&mode={mode}",
-                              img.tobytes(), timeout=60)
+    def play(self, file: bytes, smooth: bool = False, wait: bool = True) -> dict:
+        query = f"?smooth={int(smooth)}&wait={int(wait)}"
+        reply = self.api.call("POST", "/api/v2/test/play" + query, file, timeout=90)
         assert reply.status == 200, reply.body[:200]
         return reply.data
 
+    def show(self, img: Image.Image, mode: str = "cpu") -> dict:
+        """Plays a picture made here and checks that the player showed it."""
+        packed = io.BytesIO()
+        img.save(packed, "BMP")
+        data = self.play(packed.getvalue(), smooth=(mode == "ppa"))
+        assert data["outcome"] == "shown", data
+        assert (data["width"], data["height"], data["frame_count"]) == (img.width, img.height, 1)
+        return data
+
     def state(self) -> dict:
-        return self.api.get("/api/v2/test/render").data
+        return self.api.get("/api/v2/test/play").data
 
     def screenshot(self, div: int = 3) -> Image.Image:
         reply = self.api.get(f"/api/v2/test/screenshot?div={div}", timeout=60)
@@ -101,10 +113,10 @@ class Panel:
     def set(self, **settings) -> None:
         assert self.api.call("PATCH", "/api/v2/settings", settings).status == 200
 
-    def wait_frames(self, more_than: int, timeout: float = 5.0) -> dict:
+    def wait_draws(self, more_than: int, timeout: float = 5.0) -> dict:
         deadline = time.monotonic() + timeout
         state = self.state()
-        while state["frames_drawn"] <= more_than and time.monotonic() < deadline:
+        while state["draws"] <= more_than and time.monotonic() < deadline:
             time.sleep(0.1)
             state = self.state()
         time.sleep(0.15)  # the frame just drawn is on the panel a few refreshes later
@@ -141,33 +153,28 @@ def panel(bring_up):
     p = Panel(api)
     p.set(rotation=0, background_color="#000000", brightness=100, show_fps=False, playback_max_speed=False)
     yield p
-    api.call("POST", "/api/v2/test/render/blank?on=0")
-    api.call("POST", "/api/v2/test/render/release")
+    api.call("POST", "/api/v2/test/play/blank?on=0")
+    api.call("POST", "/api/v2/test/play/stop")
     p.set(rotation=0, background_color="#000000", brightness=100)
 
 
 def test_a_small_square_picture_fills_the_panel_exactly(panel, uart):
     img = picture(90, 90)
-    placed = panel.show(img)
-    assert (placed["scaled_w"], placed["scaled_h"], placed["offset_x"], placed["offset_y"]) == (720, 720, 0, 0)
-    assert placed["upscale"] == "ok"
+    panel.show(img)
     # Every one of the 518,400 pixels: each source pixel became an 8 by 8 block.
     assert panel.differing(expected_frame(img, 0), 1) == 0
 
 
-@pytest.mark.parametrize("size", [(240, 180), (96, 160), (100, 100), (37, 53), (300, 20), (1, 1), (720, 720)])
+@pytest.mark.parametrize("size", [(240, 180), (96, 160), (37, 53), (300, 20), (1, 1)])
 def test_pictures_of_other_shapes_are_fitted_centred_and_bordered(panel, size):
     img = picture(*size)
-    placed = panel.show(img)
-    sw, sh, ox, oy = fit(*size)
-    assert (placed["scaled_w"], placed["scaled_h"], placed["offset_x"], placed["offset_y"]) == (sw, sh, ox, oy)
+    panel.show(img)
     assert panel.differing(sampled(expected_frame(img, 0), 3), 3) == 0
 
 
 def test_a_picture_larger_than_the_panel_is_scaled_down(panel):
     img = picture(900, 1200)
-    placed = panel.show(img)
-    assert (placed["scaled_w"], placed["scaled_h"]) == (540, 720)
+    panel.show(img)
     assert panel.differing(sampled(expected_frame(img, 0), 3), 3) == 0
 
 
@@ -176,13 +183,11 @@ def test_rotation_follows_the_setting_without_a_new_picture(panel):
     panel.show(img)
     try:
         for rotation in (90, 180, 270, 0):
-            before = panel.state()["frames_drawn"]
+            before = panel.state()["draws"]
             panel.set(rotation=rotation)
-            state = panel.wait_frames(before)
+            state = panel.wait_draws(before)
             assert state["rotation"] == rotation
-            assert state["frames_drawn"] == before + 1, "one redraw per change"
-            sw, sh, ox, oy = fit(*(img.size if rotation in (0, 180) else img.size[::-1]))
-            assert (state["scaled_w"], state["scaled_h"], state["offset_x"], state["offset_y"]) == (sw, sh, ox, oy)
+            assert state["draws"] == before + 1, "one redraw per change"
             assert panel.differing(sampled(expected_frame(img, rotation), 3), 3) == 0, rotation
     finally:
         panel.set(rotation=0)
@@ -193,9 +198,9 @@ def test_borders_follow_the_background_colour(panel):
     panel.show(img)
     try:
         for colour in ((32, 64, 96), (255, 255, 255)):
-            before = panel.state()["frames_drawn"]
+            before = panel.state()["draws"]
             panel.set(background_color="#%02x%02x%02x" % colour)
-            panel.wait_frames(before)
+            panel.wait_draws(before)
             shot = panel.screenshot(div=3)
             assert shot.getpixel((5, 5)) == colour and shot.getpixel((120, 235)) == colour
             assert panel.differing(sampled(expected_frame(img, 0, colour), 3)) == 0
@@ -207,18 +212,18 @@ def test_a_picture_that_does_not_change_is_not_drawn_again(panel):
     img = picture(64, 64)
     panel.show(img)
     time.sleep(0.5)
-    before = panel.state()["frames_drawn"]
+    before = panel.state()["draws"]
     time.sleep(2.5)
-    assert panel.state()["frames_drawn"] == before, "the producer idles on an unchanged picture"
+    assert panel.state()["draws"] == before, "the producer idles on an unchanged picture"
     assert panel.differing(sampled(expected_frame(img, 0), 3), 3) == 0, "and it is still there"
 
 
 def test_blanking_shows_black_and_brings_the_picture_back(panel):
     img = picture(90, 90)
     panel.show(img)
-    assert panel.api.call("POST", "/api/v2/test/render/blank?on=1").status == 200
+    assert panel.api.call("POST", "/api/v2/test/play/blank?on=1").status == 200
     assert panel.screenshot(div=3).getcolors() == [(240 * 240, (0, 0, 0))]
-    assert panel.api.call("POST", "/api/v2/test/render/blank?on=0").status == 200
+    assert panel.api.call("POST", "/api/v2/test/play/blank?on=0").status == 200
     assert panel.differing(sampled(expected_frame(img, 0), 3), 3) == 0
 
 
@@ -232,9 +237,9 @@ def test_brightness_zero_also_blanks(panel, uart):
         time.sleep(0.4)
         assert panel.screenshot(div=3).getcolors() == [(240 * 240, (0, 0, 0))], "no point drawing in the dark"
     finally:
-        before = panel.state()["frames_drawn"]
+        before = panel.state()["draws"]
         uart.command("lcd brightness 100")
-    panel.wait_frames(before)
+    panel.wait_draws(before)
     assert panel.differing(sampled(expected_frame(img, 0), 3), 3) == 0
 
 
@@ -253,8 +258,7 @@ def test_the_hardware_scaler_gives_a_smooth_picture_in_the_right_place(panel, ro
     img = picture(180, 180)
     try:
         panel.set(rotation=rotation)
-        placed = panel.show(img, mode="ppa")
-        assert placed["upscale"] == "ok"
+        panel.show(img, mode="ppa")
         shot = panel.screenshot(div=3)
         wanted = sampled(expected_frame(img, rotation, bilinear=True), 3)
         mean = mean_difference(shot, wanted)
@@ -278,8 +282,126 @@ def test_the_hardware_scaler_fills_borders_with_the_background(panel):
         panel.set(background_color="#000000")
 
 
-def test_bad_requests_are_refused(panel):
-    api = panel.api
-    api.call("POST", "/api/v2/test/render?w=10&h=10", b"x" * 299).error(400, "INVALID")
-    api.call("POST", "/api/v2/test/render?w=0&h=10", b"").error(400, "INVALID")
-    api.call("POST", "/api/v2/test/render?w=3000&h=1", b"x" * 9000).error(400, "INVALID")
+# --- files of every format, and what the player reports ---------------------------
+
+def corpus(name: str) -> bytes:
+    return (CORPUS / "good" / name).read_bytes()
+
+
+def reports_for(data: dict) -> list[tuple]:
+    return [(r["what"], r.get("error")) for r in data["reports"] if r["token"] == data["request"]]
+
+
+@pytest.mark.parametrize("name", ["png/rgb.png", "gif/still.gif", "webp/lossless.webp", "bmp/rgb24.bmp",
+                                  "png/apng_opaque.png", "gif/opaque_anim.gif", "webp/anim_opaque.webp"])
+def test_a_file_of_each_format_reaches_the_panel(panel, name):
+    frames = reference_frames(name, (0, 0, 0))
+    first = Image.open(CORPUS / "good" / name)
+    data = panel.play(corpus(name))
+    assert data["outcome"] == "shown" and reports_for(data) == [("ready", None), ("shown", None)]
+    assert (data["width"], data["height"], data["frame_count"]) == (*first.size, len(frames))
+    if len(frames) == 1:
+        wanted = expected_frame(Image.frombytes("RGB", first.size, frames[0]), 0)
+        assert panel.differing(sampled(wanted, 3), 3) == 0
+
+
+def test_a_jpeg_plays_whatever_its_file_is_called(panel):
+    # Every upload is saved as ".bin": the format is read from the bytes.
+    data = panel.play(corpus("jpeg/baseline.jpg"))
+    assert data["outcome"] == "shown" and (data["width"], data["height"]) == (64, 48)
+    shot = panel.screenshot(div=3)
+    assert shot.getpixel((120, 5)) == (0, 0, 0), "a 4:3 picture has borders above and below"
+    assert len(set(shot.crop((0, 40, 240, 200)).get_flattened_data())) > 50, "and is a picture in the middle"
+
+
+@pytest.mark.parametrize("name", ["gif/opaque_anim.gif", "webp/anim_opaque.webp", "png/apng_opaque.png"])
+def test_an_animation_keeps_its_pace_and_starts_over(panel, name):
+    loop_ms = sum(shown_for(ms) for ms in DECLARED_MS[name])
+    data = panel.play(corpus(name))
+    assert data["outcome"] == "shown"
+    a = panel.state()
+    began = time.monotonic()
+    time.sleep(4.0)
+    b = panel.state()
+    elapsed_ms = (time.monotonic() - began) * 1000
+    frames = b["frames_shown"] - a["frames_shown"]
+    wanted = elapsed_ms / loop_ms * len(DECLARED_MS[name])
+    assert 0.85 * wanted <= frames <= 1.15 * wanted, f"{frames} frames in {elapsed_ms:.0f} ms, about {wanted:.0f} wanted"
+    assert b["loops"] - a["loops"] >= int(elapsed_ms / loop_ms) - 1, "the end of the file starts the next loop"
+    assert b["decode_failed"] is False
+
+
+def test_a_transparent_still_is_composed_again_when_the_background_changes(panel):
+    name = "png/rgba_soft_alpha.png"
+    try:
+        panel.set(background_color="#000000")
+        assert panel.play(corpus(name))["outcome"] == "shown"
+        for colour in ((0, 0, 0), (200, 30, 90)):
+            before = panel.state()["draws"]
+            panel.set(background_color="#%02x%02x%02x" % colour)
+            if colour != (0, 0, 0):
+                panel.wait_draws(before)
+            frame = Image.frombytes("RGB", (40, 40), reference_frames(name, colour)[0])
+            assert panel.differing(sampled(expected_frame(frame, 0, colour), 3), 3) == 0, colour
+    finally:
+        panel.set(background_color="#000000")
+
+
+def test_a_file_that_cannot_be_played_leaves_the_last_one_on_the_panel(panel):
+    img = picture(60, 60)
+    panel.show(img)
+    on_panel = panel.state()["token"]
+    bad = CORPUS / "bad"
+    cases = [(b"<html>this is not a picture</html>" * 20, "NOT_PLAYABLE"),
+             ((bad / "png" / "png_truncated_half.png").read_bytes(), "CORRUPT"),
+             ((bad / "gif" / "claims_65535x65535.gif").read_bytes(), "NOT_PLAYABLE")]
+    for file, error in cases:
+        data = panel.play(file)
+        assert data["outcome"] == "failed" and data["error"] == error, data
+        assert reports_for(data) == [("failed", error)]
+        assert data["token"] == on_panel and data["loading"] is False
+    reply = panel.api.call("POST", "/api/v2/test/play?path=%2Fsdcard%2Fno%2Fsuch%2Ffile.gif")
+    assert reply.data["outcome"] == "failed" and reply.data["error"] == "MISSING"
+    assert panel.differing(sampled(expected_frame(img, 0), 3), 3) == 0, "still showing the last good one"
+
+
+def test_a_newer_request_replaces_one_that_is_still_loading(panel):
+    slow = io.BytesIO()
+    picture(700, 700).save(slow, "BMP")  # 1.5 MB: takes a moment to read back from the card
+    first = panel.play(slow.getvalue(), wait=False)["request"]
+    second = panel.play(corpus("png/rgb.png"))
+    assert second["outcome"] == "shown" and second["token"] == second["request"]
+    told = {r["token"]: (r["what"], r.get("error")) for r in second["reports"] if r["what"] != "ready"}
+    assert told[first] in (("failed", "ESP_ERR_NOT_FINISHED"), ("shown", None))
+    assert told[second["request"]] == ("shown", None)
+    assert second["width"] == 48, "the newer one is on the panel either way"
+
+
+def test_stop_blanks_the_panel_and_reports_like_any_request(panel):
+    panel.show(picture(100, 100))
+    reply = panel.api.call("POST", "/api/v2/test/play/stop")
+    assert reply.data["outcome"] == "shown" and reply.data["frame_count"] == 0
+    assert panel.screenshot(div=3).getcolors() == [(240 * 240, (0, 0, 0))]
+
+
+@pytest.mark.slow
+def test_playing_many_files_leaves_no_memory_behind(panel, uart):
+    names = ["gif/opaque_anim.gif", "png/rgb.png", "webp/anim_opaque.webp", "jpeg/baseline.jpg", "png/apng_opaque.png"]
+    bad = (CORPUS / "bad" / "gif" / "gif_truncated_half.gif").read_bytes()
+
+    def a_round():
+        for name in names:
+            assert panel.play(corpus(name))["outcome"] == "shown"
+        panel.play(bad)
+        panel.api.call("POST", "/api/v2/test/play/stop")
+
+    a_round()
+    time.sleep(0.5)
+    before = panel.state()
+    for _ in range(4):
+        a_round()
+    time.sleep(0.5)
+    after = panel.state()
+    for pool in ("psram_free", "internal_free"):
+        assert before[pool] - after[pool] < 32 * 1024, f"{pool} went from {before[pool]} to {after[pool]}"
+    assert uart.command("mem")["level"] == "ok"

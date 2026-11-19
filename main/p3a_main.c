@@ -5,6 +5,7 @@
 // the device carries on with what it has.
 
 #include "animation_decoder.h"
+#include "animation_player.h"
 #include "display_renderer.h"
 #include "esp_app_desc.h"
 #include "esp_chip_info.h"
@@ -74,6 +75,7 @@ void app_main(void)
     // From here on the pipeline owns the framebuffers. It shows black until
     // something registers to draw.
     boot_step("display pipeline", display_renderer_start());
+    boot_step("player", animation_player_start());
 
     // A touch controller that does not answer usually does after a restart,
     // so restart once. If it still does not, play on without touch.

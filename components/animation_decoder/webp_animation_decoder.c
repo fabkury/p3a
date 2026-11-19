@@ -98,7 +98,7 @@ static esp_err_t open_animation(webp_decoder_data_t *d, const uint8_t *data, siz
         d->info.canvas_height > ANIMATION_DECODER_MAX_DIMENSION) {
         ESP_LOGE(TAG, "unusable animation: %u frames, %u x %u", (unsigned)d->info.frame_count,
                  (unsigned)d->info.canvas_width, (unsigned)d->info.canvas_height);
-        return ESP_ERR_INVALID_SIZE;
+        return animation_decoder_size_error(d->info.canvas_width, d->info.canvas_height);
     }
     d->last_timestamp_ms = 0;
     d->current_frame_delay_ms = 1;
@@ -146,7 +146,10 @@ esp_err_t webp_decoder_init(animation_decoder_t **decoder, const uint8_t *data, 
     if (features.width <= 0 || features.height <= 0 || features.width > ANIMATION_DECODER_MAX_DIMENSION ||
         features.height > ANIMATION_DECODER_MAX_DIMENSION) {
         ESP_LOGE(TAG, "unusable dimensions: %d x %d", features.width, features.height);
-        return ESP_ERR_INVALID_SIZE;
+        if (features.width <= 0 || features.height <= 0) {
+            return ESP_ERR_INVALID_SIZE;
+        }
+        return animation_decoder_size_error((uint32_t)features.width, (uint32_t)features.height);
     }
 
     animation_decoder_t *dec = psram_calloc(1, sizeof(*dec));

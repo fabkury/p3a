@@ -46,5 +46,5 @@ void p3a_test_http_start(void);
 // Adds the decoder test route and its worker task.
 void p3a_test_decode_start(void);
 
-// Adds the display-pipeline test routes.
-void p3a_test_render_start(void);
+// Adds the player test routes and listens to the player.
+void p3a_test_player_start(void);

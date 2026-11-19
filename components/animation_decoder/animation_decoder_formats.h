@@ -13,6 +13,18 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "p3a_err.h"
+
+// What to answer for a picture whose declared size cannot be used. Over the
+// limit, the file may be perfectly sound and is simply not for this player
+// (P3A_ERR_NOT_PLAYABLE); a size of zero is damage.
+static inline esp_err_t animation_decoder_size_error(uint32_t width, uint32_t height)
+{
+    return (width > ANIMATION_DECODER_MAX_DIMENSION || height > ANIMATION_DECODER_MAX_DIMENSION)
+               ? (esp_err_t)P3A_ERR_NOT_PLAYABLE
+               : ESP_ERR_INVALID_SIZE;
+}
+
 #ifdef __cplusplus
 extern "C" {
 #endif

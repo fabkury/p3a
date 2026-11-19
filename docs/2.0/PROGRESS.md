@@ -10,7 +10,7 @@ times.
 |---|---|
 | Phase | 2, player and library (Phases 0 and 1 complete) |
 | Current milestone | M2.1 display pipeline and decoders |
-| Next action | M2.3: the source interface, the local source, the scheduler. Read PLAN.md M2.3, `docs/2.0-architecture-review/content-pipeline.md`, and in `legacy/`: `components/play_scheduler` (SWRR, pick, history), `components/playset_store`, `playset_json.c`, `sdcard_channel`, the upload handler in `http_api_upload.c`. Start with the pure parts and their host tests: `source_ops_t` and its registry, the packed playset and its JSON, the channel id, SWRR with credit rollback, the one pick function over `p3a_index_nth_available()`. Then the local source (scan `animations/` into an index, adopt uploads into the blob store or keep them in place: decide, see the M2.2 entry), then the routes |
+| Next action | M2.3 Source interface, local source, scheduler | in progress. Part 1 done: the scheduler's arithmetic (`sched_core`), host-tested. Playsets, sources, the scheduler proper and the routes are not started |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -310,6 +310,36 @@ M1.1, 2026-11-17:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-19: M2.3 part 1, the scheduler's arithmetic
+
+- New component `components/play_scheduler` (layer `player`) with one pure
+  file, `sched_core.c`, written from `legacy/.../play_scheduler_swrr.c` and
+  the six pick functions of `play_scheduler_pick.c`: choose a channel
+  (round robin or weighted random, the two modes of the `channel_select`
+  setting, with 1.x's formulas), choose an artwork in it (random or in
+  channel order, the `pick_mode` setting), and undo a turn.
+- The core knows a channel as a weight and a count of playable artworks,
+  and answers with "the n-th playable artwork", which
+  `p3a_index_nth_available()` turns into a record. So there is one pick
+  for every source, where 1.x had one per record layout.
+- **Undoing a turn** is how a pick that ends with nothing shown (finding 7)
+  costs its channel nothing: the shares are restored exactly, while the
+  channel's cursor and random sequence move on, so the next try is another
+  artwork. 1.x let the charge stand.
+- A channel that gets its first artwork starts level with the others; in
+  1.x it kept whatever credit it had when it ran dry.
+- The legacy files stay in `legacy/` for now: the rest of the scheduler
+  (playsets, refresh, navigation, history) is still to be read out of them.
+- Verified, host tests (16 programs; 9 new cases): exact 3:1 shares and
+  even spacing in round robin; equal shares without weights; the random
+  mode within 3% of the weights over 30,000 turns; channels with nothing
+  to play, arriving and running dry; undo, with every third turn undone
+  and the shares still exact; recency order and wrap; random picks in
+  range and covering everything; same seed, same choices.
+- Verified, build: it compiles for the device in the test build. Nothing
+  on the device uses it yet, so no device test was run for this
+  checkpoint.
 
 ### 2026-11-19: M2.2 done: index files and the blob store
 

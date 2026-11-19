@@ -153,3 +153,9 @@ set(LIBRARY "${P3A_COMPONENTS}/p3a_library")
 p3a_host_test(test_record_index
     SOURCES library/test_record_index.c ${LIBRARY}/p3a_record.c ${LIBRARY}/p3a_index.c ${UTIL}/p3a_err.c
     INCLUDES ${LIBRARY}/include ${P3A_STUBS} ${UTIL}/include)
+
+# --- scheduler --------------------------------------------------------------
+set(SCHEDULER "${P3A_COMPONENTS}/play_scheduler")
+p3a_host_test(test_sched_core
+    SOURCES player/test_sched_core.c ${SCHEDULER}/sched_core.c
+    INCLUDES ${SCHEDULER})

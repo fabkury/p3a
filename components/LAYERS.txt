@@ -20,6 +20,7 @@ p3a_library    library
 animation_decoder player
 display_renderer player
 animation_player player
+play_scheduler player
 animated_gif   player vendored
 libpng         player vendored
 libwebp_decoder player vendored

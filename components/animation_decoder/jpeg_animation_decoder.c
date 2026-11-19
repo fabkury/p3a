@@ -34,6 +34,39 @@ typedef struct {
     jpeg_dec_output_format_t output_format;  // RGB888
 } jpeg_decoder_data_t;
 
+// Converts the hardware decoder's YCbCr output to RGB888, in place.
+//
+// The hardware can produce RGB itself, but its conversion is the one for
+// video: it treats luma as running from 16 to 235 and stretches that to
+// 0..255 (the IDF's DMA2D_COLOR_SPACE_CONV_PARAM_YUV2RGB_BT601 table:
+// 298/256 = 1.164 times (Y - 16)). A JPEG file uses the full 0..255 range, so
+// every picture came out with about 16% too much contrast, everything darker
+// than 16 crushed to black and everything brighter than 235 clipped to white.
+// Measured on the 2.0 branch against libjpeg: a mean error of 8 to 13 levels
+// per channel, down to under 1 with this conversion. The driver has no option
+// for the range, so the hardware is asked for YCbCr (three bytes per pixel,
+// chroma already brought up to full resolution) and the JFIF conversion is
+// done here, with libjpeg's own fixed-point constants.
+//
+// The byte order the hardware delivers was measured, not documented: Cr, Cb, Y.
+static inline uint8_t clamp_u8(int v)
+{
+    return (uint8_t)(v < 0 ? 0 : v > 255 ? 255 : v);
+}
+
+static void ycc_to_rgb_in_place(uint8_t *pixels, size_t pixel_count)
+{
+    for (size_t i = 0; i < pixel_count; i++) {
+        uint8_t *p = pixels + i * 3;
+        const int cr = (int)p[0] - 128;
+        const int cb = (int)p[1] - 128;
+        const int y = p[2];
+        p[0] = clamp_u8(y + ((91881 * cr + 32768) >> 16));                // + 1.40200 Cr
+        p[1] = clamp_u8(y + ((-22554 * cb - 46802 * cr + 32768) >> 16));  // - 0.34414 Cb - 0.71414 Cr
+        p[2] = clamp_u8(y + ((116130 * cb + 32768) >> 16));               // + 1.77200 Cb
+    }
+}
+
 // Decode @p data via the ESP32-P4 HW JPEG peripheral, populating @p jd on
 // success. On error, fully cleans up anything it allocated and returns the
 // error - jd is left in its incoming state. Per-step failure logs are at
@@ -86,8 +119,9 @@ static esp_err_t decode_via_hw(jpeg_decoder_data_t *jd, const uint8_t *data, siz
     }
 
     jpeg_decode_cfg_t decode_cfg = {
-        .output_format = JPEG_DECODE_OUT_FORMAT_RGB888,
-        .rgb_order = JPEG_DEC_RGB_ELEMENT_ORDER_RGB,
+        // Raw YCbCr, converted to RGB below. Asking the hardware for RGB
+        // gives the wrong colours: see ycc_to_rgb_in_place().
+        .output_format = JPEG_DECODE_OUT_FORMAT_YUV444,
     };
     uint32_t out_size = 0;
     err = jpeg_decoder_process(engine, &decode_cfg,
@@ -100,6 +134,8 @@ static esp_err_t decode_via_hw(jpeg_decoder_data_t *jd, const uint8_t *data, siz
         jpeg_del_decoder_engine(engine);
         return err;
     }
+
+    ycc_to_rgb_in_place(rgb_buffer, (size_t)aligned_w * aligned_h);
 
     jd->decoder_engine = engine;
     jd->rgb_buffer = rgb_buffer;

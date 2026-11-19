@@ -48,11 +48,14 @@ static inline uint8_t blend_chan(uint8_t src, uint8_t bg, uint8_t a)
     return div255_u16(x);
 }
 
+// For a colour that already carries its alpha: src + bg * (1 - a). Only the
+// background term is divided by 255. (Dividing the sum threw the pixel's own
+// colour away: soft edges in animated WebP came out as darkened background.)
 static inline uint8_t blend_chan_premul(uint8_t src_premul, uint8_t bg, uint8_t a)
 {
     const uint16_t inv = (uint16_t)(255U - (uint16_t)a);
-    const uint16_t x = (uint16_t)src_premul + (uint16_t)bg * inv;
-    return div255_u16(x);
+    const uint16_t x = (uint16_t)src_premul + div255_u16((uint16_t)((uint16_t)bg * inv));
+    return (uint8_t)(x > 255 ? 255 : x);
 }
 
 esp_err_t animation_decoder_init(animation_decoder_t **decoder, animation_decoder_type_t type, const uint8_t *data, size_t size)

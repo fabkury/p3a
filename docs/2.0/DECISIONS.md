@@ -73,6 +73,7 @@ Set before the architecture review and taken as given by everything since.
 | D44 | 2026-11-19 | Working | A picture over the size limit is `NOT_PLAYABLE`, never `CORRUPT`: only damage may lead to a cached file being deleted | A sound file must not be deleted and downloaded again for ever |
 | D45 | 2026-11-19 | Working | An index stores only its records. The key table and the availability bitmap are rebuilt at load; a record is available when it has a blob reference and is not flagged gone, and the blob store corrects that when a blob turns out to be missing | Less on disk that can disagree with itself; the rebuild is far cheaper than the read |
 | D46 | 2026-11-19 | Working | An identifier that does not fit its field is refused when the record is made, never cut. Fields: 95 characters for a IIIF key, 31 for a Giphy id, 119 for a local filename | A cut identifier names another artwork or none. 1.x skipped long museum keys per adapter and worked around the limit twice |
+| D47 | 2026-11-19 | Fab | The hardware JPEG colour fix and the animated WebP blend fix are ported to `main` for 1.2.5 (was O17) | They are in every unit in the field, they are a few lines each, and they change how pictures look for the better |
 
 ## 1.x decisions that stay in force
 
@@ -146,5 +147,4 @@ are not missed.
 | O13 | How `v2` becomes `main` at release: merge, or replace | M6.4 | |
 | O14 | A second unit for the end-to-end field test (web flasher on a fresh board) | M6.3 | Needs hardware from Fab |
 | O16 | Where a firmware install runs. `esp_ota_end()` verifies the image by memory-mapping flash, which a task with a PSRAM stack cannot do (see the 2026-11-18 ledger entry), and both job runners have PSRAM stacks. Options: a third runner with an internal stack for flash-mapping work, or verification on a dedicated internal-stack task | M5.2 | 1.x installed from the HTTP server's task, whose stack is internal |
-| O17 | Whether the two 1.x picture bugs found by the 2.0 decoder tests (hardware JPEG colour range; animated WebP blending) are ported to `main` for 1.2.5 | 1.2.5 | Both fixes are a few lines in one file each. They change how pictures look, for the better |
 | O15 | Whether Makapix needs any server-side change for 2.0 devices | M4.5 | Ask the Makapix side when Phase 4 starts |

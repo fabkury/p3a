@@ -131,7 +131,7 @@ Open:
   scaler, as museum and Giphy pictures will use). Look for: smooth motion
   with no stutter or tearing; clean, square pixels on pixel art; colours
   that look right, JPEG photographs especially (2.0 fixes the harsh
-  contrast 1.x gave them, see O17); transparent parts filled with the
+  contrast 1.x gave them, D47); transparent parts filled with the
   background colour; the picture centred with even borders. Also once:
   change `rotation` in the settings while a picture is up
   (`python host/p3a-lab/lab.py cmd "settings set" '{"rotation": 90}'`)
@@ -149,7 +149,6 @@ and proposals are in [DECISIONS.md](DECISIONS.md) under "Open decisions".
 | Id | Question | Needed before |
 |---|---|---|
 | Q1 to Q10 | Ten 1.x behaviours that look accidental (brightness not restored at boot, API keys readable over the LAN, no update check for 12 hours, and others). Keep or change each? Listed in [PARITY.md](PARITY.md) under "Behaviours to decide" | M1.3 at the earliest; each row names its milestone |
-| O17 | Two picture-quality bugs found in 1.x while testing the 2.0 decoders are in every unit in the field: hardware-decoded JPEGs have about 16% too much contrast with clipped shadows and highlights, and animated WebP loses the colour of half-transparent pixels. Both fixes are small and self-contained. Port them to `main` for 1.2.5? | 1.2.5 |
 | O2 | Should 1.2.5 carry a notice about 2.0, and with what wording? | 1.2.5 |
 | O4 | Which VEXED font families and sizes? | M3.2 |
 | O3 | Keep uGFX for text, or replace it with a glyph-sheet renderer? | M3.2 |
@@ -177,6 +176,15 @@ reason, or "pending".
 
 Expected: the lock-order fix for finding 25 (D9). In 2.0 the lifecycle lock
 it concerns should not exist; confirm at M4.1 and mark it not applicable.
+
+## Ports to main
+
+Fixes found by the 2.0 work that Fab decided 1.x should have too. Each is
+its own commit on `main`; nothing else of 2.0 goes there.
+
+| Commit on main | What | From | How far it was tested on 1.x |
+|---|---|---|---|
+| `9466c035` | Hardware JPEG colour range; animated WebP soft edges (D47) | `7d1a00f8` | Built only. The three functions are byte-identical to the ones run on the dev unit under 2.0. **Before 1.2.5 is released**, look at a museum JPEG and a WebP animation with soft edges on a 1.x unit |
 
 ## Deletion log
 
@@ -302,6 +310,22 @@ M1.1, 2026-11-17:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-19: the two picture fixes ported to main (D47)
+
+- Fab answered O17: yes. `main` has them as `9466c035`, pushed. A push to
+  `main` starts nothing; only a published release does.
+- Done in a temporary second checkout of `main` outside Dropbox, removed
+  afterwards, so the `v2` tree was never switched.
+- Verified: 1.x builds with them (2.46 MB image). The three functions were
+  compared with `v2`'s and are byte-identical.
+- Not verified: the 1.x build was not flashed. The dev unit carries 2.0,
+  and 1.x has no way for a machine to see its panel, so a flash would only
+  have shown that it does not crash. The check that matters is eyes on a
+  1.x unit before 1.2.5; it is recorded under "Ports to main".
+- A fresh checkout of `main` does not build as it is: the Makapix
+  certificate includes (`components/makapix/certs/`) are untracked. Copies
+  are in this workstation's `legacy/components/makapix/certs/`.
 
 ### 2026-11-19: M2.1 closed; M2.2 begun
 
@@ -605,7 +629,7 @@ device, not the whole suite.
      premultiplied colour before dividing by 255 instead of after, which
      discarded it: soft edges came out as darkened background. Errors of up
      to 160 levels; now within rounding.
-  Whether to port them to 1.2.5 is open question O17.
+  Fab decided on 2026-11-19 to port them to 1.2.5 (D47); see "Ports to main".
 - A behaviour change, D37: a declared frame delay of 10 ms or less plays as
   100 ms, in every format, as in every browser. This also gives a
   single-frame GIF the 100 ms of every other still (it reported 1 ms).

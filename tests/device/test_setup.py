@@ -107,6 +107,7 @@ def test_put_wifi_checks_everything_before_storing_anything(api, uart):
     assert reboot(uart) and lab.wait_online(uart)["ssid"] == before["ssid"], "the stored network is untouched"
 
 
+@pytest.mark.slow
 def test_put_wifi_stores_names_and_restarts(api, uart):
     wifi = lab.load_secrets()["wifi"]
     start = uart.mark()
@@ -127,6 +128,7 @@ def test_put_wifi_stores_names_and_restarts(api, uart):
 
 # --- setup ----------------------------------------------------------------------
 
+@pytest.mark.slow
 def test_delete_wifi_restarts_into_setup_with_a_working_portal(api, uart):
     start = uart.mark()
     assert api.call("DELETE", "/api/v2/wifi").data == {"restarting": True}
@@ -158,6 +160,7 @@ def test_delete_wifi_restarts_into_setup_with_a_working_portal(api, uart):
     assert uart.command("mem")["level"] == "ok"
 
 
+@pytest.mark.slow
 def test_the_setup_network_is_on_the_air(uart):
     uart.command("net forget")
     reboot(uart)
@@ -176,6 +179,7 @@ def test_the_setup_network_is_on_the_air(uart):
     assert seen, "the workstation's Wi-Fi scan should list p3a-setup"
 
 
+@pytest.mark.slow
 def test_a_refused_password_leads_to_setup_quickly(uart):
     wifi = lab.load_secrets()["wifi"]
     uart.command("settings set", {"device_name": lab.DEV_UNIT_NAME})
@@ -192,6 +196,7 @@ def test_a_refused_password_leads_to_setup_quickly(uart):
     assert uart.command("net selfhttp /generate_204")["status"] == 302
 
 
+@pytest.mark.slow
 def test_an_absent_network_is_given_time_before_setup(uart):
     uart.command("net join", {"ssid": "p3a-lab-no-such-network", "password": "not-a-real-password"})
     start = uart.mark()

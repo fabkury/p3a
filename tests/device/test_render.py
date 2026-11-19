@@ -8,6 +8,7 @@ test builds the same frame on the workstation and compares.
 """
 import io
 import time
+import zlib
 
 import pytest
 from PIL import Image, ImageDraw
@@ -85,6 +86,18 @@ class Panel:
         assert reply.status == 200
         return Image.open(io.BytesIO(reply.body)).convert("RGB")
 
+    def differing(self, wanted: Image.Image, div: int = 3) -> int:
+        """How many pixels of the panel differ from `wanted`. The device is asked
+        for a checksum; the picture is downloaded only when that does not match."""
+        b, g, r = wanted.split()[2], wanted.split()[1], wanted.split()[0]
+        crc = zlib.crc32(Image.merge("RGB", (b, g, r)).tobytes())
+        reply = self.api.get(f"/api/v2/test/screenshot?div={div}&crc=1", timeout=30)
+        assert reply.status == 200 and (reply.data["w"], reply.data["h"]) == wanted.size
+        if reply.data["crc"] == crc:
+            return 0
+        count = differing(self.screenshot(div), wanted)
+        return count if count else -1  # the checksum and the picture disagree
+
     def set(self, **settings) -> None:
         assert self.api.call("PATCH", "/api/v2/settings", settings).status == 200
 
@@ -139,7 +152,7 @@ def test_a_small_square_picture_fills_the_panel_exactly(panel, uart):
     assert (placed["scaled_w"], placed["scaled_h"], placed["offset_x"], placed["offset_y"]) == (720, 720, 0, 0)
     assert placed["upscale"] == "ok"
     # Every one of the 518,400 pixels: each source pixel became an 8 by 8 block.
-    assert differing(panel.screenshot(div=1), expected_frame(img, 0)) == 0
+    assert panel.differing(expected_frame(img, 0), 1) == 0
 
 
 @pytest.mark.parametrize("size", [(240, 180), (96, 160), (100, 100), (37, 53), (300, 20), (1, 1), (720, 720)])
@@ -148,14 +161,14 @@ def test_pictures_of_other_shapes_are_fitted_centred_and_bordered(panel, size):
     placed = panel.show(img)
     sw, sh, ox, oy = fit(*size)
     assert (placed["scaled_w"], placed["scaled_h"], placed["offset_x"], placed["offset_y"]) == (sw, sh, ox, oy)
-    assert differing(panel.screenshot(div=3), sampled(expected_frame(img, 0), 3)) == 0
+    assert panel.differing(sampled(expected_frame(img, 0), 3), 3) == 0
 
 
 def test_a_picture_larger_than_the_panel_is_scaled_down(panel):
     img = picture(900, 1200)
     placed = panel.show(img)
     assert (placed["scaled_w"], placed["scaled_h"]) == (540, 720)
-    assert differing(panel.screenshot(div=3), sampled(expected_frame(img, 0), 3)) == 0
+    assert panel.differing(sampled(expected_frame(img, 0), 3), 3) == 0
 
 
 def test_rotation_follows_the_setting_without_a_new_picture(panel):
@@ -170,7 +183,7 @@ def test_rotation_follows_the_setting_without_a_new_picture(panel):
             assert state["frames_drawn"] == before + 1, "one redraw per change"
             sw, sh, ox, oy = fit(*(img.size if rotation in (0, 180) else img.size[::-1]))
             assert (state["scaled_w"], state["scaled_h"], state["offset_x"], state["offset_y"]) == (sw, sh, ox, oy)
-            assert differing(panel.screenshot(div=3), sampled(expected_frame(img, rotation), 3)) == 0, rotation
+            assert panel.differing(sampled(expected_frame(img, rotation), 3), 3) == 0, rotation
     finally:
         panel.set(rotation=0)
 
@@ -185,7 +198,7 @@ def test_borders_follow_the_background_colour(panel):
             panel.wait_frames(before)
             shot = panel.screenshot(div=3)
             assert shot.getpixel((5, 5)) == colour and shot.getpixel((120, 235)) == colour
-            assert differing(shot, sampled(expected_frame(img, 0, colour), 3)) == 0
+            assert panel.differing(sampled(expected_frame(img, 0, colour), 3)) == 0
     finally:
         panel.set(background_color="#000000")
 
@@ -197,7 +210,7 @@ def test_a_picture_that_does_not_change_is_not_drawn_again(panel):
     before = panel.state()["frames_drawn"]
     time.sleep(2.5)
     assert panel.state()["frames_drawn"] == before, "the producer idles on an unchanged picture"
-    assert differing(panel.screenshot(div=3), sampled(expected_frame(img, 0), 3)) == 0, "and it is still there"
+    assert panel.differing(sampled(expected_frame(img, 0), 3), 3) == 0, "and it is still there"
 
 
 def test_blanking_shows_black_and_brings_the_picture_back(panel):
@@ -206,7 +219,7 @@ def test_blanking_shows_black_and_brings_the_picture_back(panel):
     assert panel.api.call("POST", "/api/v2/test/render/blank?on=1").status == 200
     assert panel.screenshot(div=3).getcolors() == [(240 * 240, (0, 0, 0))]
     assert panel.api.call("POST", "/api/v2/test/render/blank?on=0").status == 200
-    assert differing(panel.screenshot(div=3), sampled(expected_frame(img, 0), 3)) == 0
+    assert panel.differing(sampled(expected_frame(img, 0), 3), 3) == 0
 
 
 def test_brightness_zero_also_blanks(panel, uart):
@@ -222,7 +235,7 @@ def test_brightness_zero_also_blanks(panel, uart):
         before = panel.state()["frames_drawn"]
         uart.command("lcd brightness 100")
     panel.wait_frames(before)
-    assert differing(panel.screenshot(div=3), sampled(expected_frame(img, 0), 3)) == 0
+    assert panel.differing(sampled(expected_frame(img, 0), 3), 3) == 0
 
 
 def test_switching_to_another_source_and_back(panel, uart):
@@ -232,7 +245,7 @@ def test_switching_to_another_source_and_back(panel, uart):
     bars = panel.screenshot(div=3)
     assert bars.getpixel((5, 100)) == (255, 255, 255) and bars.getpixel((235, 100)) == (0, 0, 0)
     panel.show(img)
-    assert differing(panel.screenshot(div=3), sampled(expected_frame(img, 0), 3)) == 0
+    assert panel.differing(sampled(expected_frame(img, 0), 3), 3) == 0
 
 
 @pytest.mark.parametrize("rotation", [0, 90])

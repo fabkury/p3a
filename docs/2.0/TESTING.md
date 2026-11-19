@@ -15,7 +15,7 @@ here is the specification for it.
 |---|---|---|---|---|
 | T1 | Host unit tests | Workstation and CI | Agent, CI | Every change to logic |
 | T2 | Build checks and lints | CI, and locally before a push | Agent, CI | Every push |
-| T3 | Device tests | The dev unit | Agent | Every milestone, and after any change to code that runs on hardware |
+| T3 | Device tests | The dev unit | Agent | The smoke set and the changed area at every checkpoint; all of them at the end of every milestone |
 | T4 | Web UI tests | Node, and a browser against the dev unit | Agent | Phase 5, and after any web UI change |
 | T5 | Soaks | The dev unit, for hours | Agent | Phase 6, and after changes to the display pipeline, memory or SD I/O |
 | T6 | Manual checks | The dev unit, a phone, a second board | Fab | Batched (D10) |
@@ -23,6 +23,42 @@ here is the specification for it.
 "Verified" always names its tier. A change is reported as, for example,
 "host tests pass, device tests pass, awaiting manual check M1.2-a", never as
 plainly done.
+
+## What runs when
+
+Decided 2026-11-19 (D42), after the suite had grown to 18 minutes and every
+checkpoint ran all of it and waited.
+
+| When | What runs | Waited for? |
+|---|---|---|
+| Every checkpoint | The tree checks, the host tests, the test build, and on the dev unit the smoke set plus the test files of the area that changed, slow tests included | Yes |
+| A checkpoint whose change is cross-cutting (`p3a_util`, the boot sequence, the lab, a dependency) | The above, and every device test not marked `slow` | Yes |
+| The end of every milestone | Everything: all device tests, the release, test and trace builds with the build checks | Yes |
+| Every push | CI: host tests under the sanitizers, both builds, the tree checks | No. The result is read before the next commit, and a failure is fixed first |
+
+- The trace build is also made at any checkpoint that touches
+  `display_renderer`.
+- The device is one unit: while a long run has it, the next step's reading
+  and writing go on, and nothing is flashed.
+- A regression in an area a change did not touch is therefore found at the
+  end of the milestone, not in the same hour. That is the price, and it is
+  why a cross-cutting change runs more.
+
+### How deep a test goes
+
+Deep tests (every case that can be thought of, compared with an independent
+reference where one exists) are kept for where a bug is likely and costly:
+
+- bytes from a file or the network that nothing has checked yet (decoders,
+  parsers);
+- what is on the panel;
+- boot, and anything that recovers from a failure;
+- anything that writes to the SD card or to NVS.
+
+Everything else gets one or two tests that it works and one or two that it
+fails properly. No validation matrix for every field of every endpoint, no
+parameter sweep without a reason. Logic that can be a host test is a host
+test, which runs in seconds.
 
 ### T1 Host unit tests
 
@@ -78,6 +114,13 @@ the serial log.
   marked `live` and can be deselected. A `live` failure is checked against
   the service before it is blamed on the firmware.
 - Tests leave the unit as they found it, or say what they changed.
+- A test that takes 20 seconds or more is marked `slow`. Most of them wait
+  on a timer the firmware really uses (two minutes for an absent network)
+  or restart the unit several times. The timers are not shortened for
+  tests: a test on a shortened timer checks something that does not ship.
+- A picture on the panel is compared by checksum
+  (`/api/v2/test/screenshot?crc=1`); it is downloaded only on a mismatch,
+  to show what differs.
 - Screenshot tests compare against reference images in
   `tests/device/references/` with a small tolerance. A reference is added or
   replaced only after the agent has looked at the image, and replaced

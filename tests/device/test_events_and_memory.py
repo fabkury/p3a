@@ -71,6 +71,7 @@ def test_bad_arguments(uart):
         uart.command("mem nonsense")
 
 
+@pytest.mark.slow
 def test_first_failed_allocation_prints_one_heap_report(uart):
     # With the Wi-Fi station off: it allocates and frees in the same pool, so
     # with it running neither "who failed first" nor "what is left" is fixed.

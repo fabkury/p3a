@@ -239,6 +239,7 @@ def test_factory_reset_needs_the_confirmation(api, uart):
     api.call("PATCH", "/api/v2/settings", {"dwell_s": 30})
 
 
+@pytest.mark.slow
 def test_factory_reset_over_http(api, uart):
     api.call("PATCH", "/api/v2/settings", {"dwell_s": 77})
     start = uart.mark()
@@ -253,6 +254,7 @@ def test_factory_reset_over_http(api, uart):
 
 # --- crash dumps ----------------------------------------------------------------
 
+@pytest.mark.slow
 @pytest.mark.expects_crash
 def test_a_crash_dump_can_be_seen_downloaded_and_erased(api, uart):
     api.get("/api/v2/system/coredump").error(404, "NOT_FOUND")
@@ -292,6 +294,7 @@ def test_a_crash_dump_can_be_seen_downloaded_and_erased(api, uart):
 
 # --- behaviour under use --------------------------------------------------------
 
+@pytest.mark.slow
 def test_many_requests_leave_no_sockets_or_memory_behind(api, uart):
     before = uart.command("mem")
     for i in range(120):

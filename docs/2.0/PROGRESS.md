@@ -272,6 +272,26 @@ M1.1, 2026-11-17:
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
 
+### 2026-11-19: testing made faster (D42)
+
+- Fab asked for less time spent testing. Decided with him: what runs at a
+  checkpoint, what waits for the end of the milestone, how deep tests go,
+  and that CI is no longer waited for. The rule is in `TESTING.md` under
+  "What runs when", and in `AGENTS.md`.
+- Measured first (`--durations`): the 221 device tests take 16 min 38 s.
+  Twelve tests take 20 s or more each and about 7 minutes together; one
+  (the two-minute wait for an absent network) takes 2 min 25 s alone. They
+  are marked `slow`; `-m "not slow"` runs the other 209.
+- The screenshot hook answers a checksum (`?crc=1`); the render tests
+  download a picture only when the checksum differs.
+- Provisioning was looked at and left alone: when the unit is already named
+  and online it costs one status query. The time goes to tests that restart
+  the unit or forget the network, which is what they test.
+- Verified: the checkpoint set for this change (smoke, render, HTTP hooks,
+  board display: 43 tests) passes in 3 min 40 s, the flash included. The
+  full suite passed before the markers and the checksum went in and has not
+  been rerun after; it runs at the end of M2.1.
+
 ### 2026-11-18: M2.1 part 2, the display pipeline
 
 - New component `components/display_renderer` (layer `player`). Moved from

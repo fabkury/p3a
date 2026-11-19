@@ -1,9 +1,14 @@
 # SPDX-License-Identifier: Apache-2.0
 """Fixtures for the device tests (tier T3 in docs/2.0/TESTING.md).
 
-    python -m pytest tests/device                 build the test config, flash, run
+    python -m pytest tests/device                 build the test config, flash, run everything
+    python -m pytest tests/device/test_smoke.py tests/device/test_<area>.py
+                                                  a checkpoint: the smoke set and the area changed
+    python -m pytest tests/device -m "not slow"   everything but the slow tests (a cross-cutting change)
     python -m pytest tests/device --no-flash      run against what the unit already has
     python -m pytest tests/device -m "not live"   skip tests that need the internet
+
+Which of these runs when is in docs/2.0/TESTING.md under "What runs when".
 
 Every test gets the serial log watched: a panic, an assert, a watchdog report
 or an unexpected reset during a test fails it, whatever else it asserted.
@@ -27,6 +32,7 @@ def pytest_addoption(parser):
 def pytest_configure(config):
     config.addinivalue_line("markers", "live: needs the internet or a third-party service")
     config.addinivalue_line("markers", "expects_crash: the test crashes the firmware on purpose")
+    config.addinivalue_line("markers", "slow: takes 20 s or more, mostly waiting on a real timer or a restart")
 
 
 @pytest.fixture(scope="session")

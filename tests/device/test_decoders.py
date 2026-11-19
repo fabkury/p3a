@@ -263,6 +263,7 @@ def test_bad_file_is_refused_or_stops_cleanly(decoder, uart, name):
     assert uart.command("mem")["level"] == "ok"
 
 
+@pytest.mark.slow
 def test_decoding_everything_again_leaves_no_memory_behind(decoder, uart):
     def psram_free() -> int:
         return decoder.describe("good", "png/one_pixel.png").data["psram_free"]

@@ -41,7 +41,9 @@ tracks progress and does not repeat the design.
 A checkpoint closes one coherent step: a module moved, a test tier added, a
 milestone finished. There is at least one per milestone and usually several.
 
-1. The step's tests pass at the tiers its milestone names.
+1. The step's tests pass. What runs at a checkpoint and what waits for the
+   end of the milestone is in [TESTING.md](TESTING.md) under "What runs
+   when"; the ledger line says which was run.
 2. [PROGRESS.md](PROGRESS.md) is updated: "Now", the milestone table, a line
    in the session log, any new manual checks, any new open questions.
 3. Every decision made along the way is in [DECISIONS.md](DECISIONS.md).

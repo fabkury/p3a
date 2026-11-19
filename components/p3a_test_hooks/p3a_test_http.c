@@ -4,6 +4,9 @@
 //
 //   GET  /api/v2/test/screenshot[?div=N]  what the test hooks last put on the
 //                                         panel, as a BMP; N keeps every Nth pixel
+//        ...&crc=1                        the CRC-32 of those pixels instead (blue,
+//                                         green, red; top row first), so that a test
+//                                         downloads the picture only on a mismatch
 //   GET  /api/v2/test/log[?since=N]       log lines captured since line N
 //   GET  /api/v2/test/clock               the clock
 //   POST /api/v2/test/clock               {"unix": seconds}: set the clock
@@ -19,6 +22,7 @@
 #include "freertos/semphr.h"
 #include "p3a_board.h"
 #include "p3a_clock.h"
+#include "p3a_crc32.h"
 #include "p3a_http.h"
 #include "p3a_test_internal.h"
 #include "psram_alloc.h"
@@ -47,6 +51,26 @@ static void get_screenshot(p3a_http_request_t *req)
         return;
     }
     const int w = P3A_DISPLAY_WIDTH / div, h = P3A_DISPLAY_HEIGHT / div;
+    if (p3a_http_query(req, "crc", text, sizeof(text))) {
+        const size_t line = p3a_board_get_row_stride();
+        uint32_t crc = 0;
+        for (int y = 0; y < h; y++) {
+            const uint8_t *src = buffer + (size_t)(y * div + div / 2) * line;
+            if (div == 1) {
+                crc = p3a_crc32(crc, src, (size_t)w * 3);
+            } else {
+                for (int x = 0; x < w; x++) {
+                    crc = p3a_crc32(crc, src + (size_t)(x * div + div / 2) * 3, 3);
+                }
+            }
+        }
+        cJSON *data = cJSON_CreateObject();
+        cJSON_AddNumberToObject(data, "crc", crc);
+        cJSON_AddNumberToObject(data, "w", w);
+        cJSON_AddNumberToObject(data, "h", h);
+        p3a_http_ok(req, data);
+        return;
+    }
     const size_t row_bytes = ((size_t)w * 3 + 3) & ~(size_t)3;  // BMP rows are padded to 4 bytes
     // Rows are sent a batch at a time: one small send per row made the full
     // frame take over ten seconds.

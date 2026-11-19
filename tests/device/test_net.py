@@ -125,6 +125,7 @@ def test_it_rejoins_by_itself_after_a_drop(online):
     assert after["ip"] != ""
 
 
+@pytest.mark.slow
 def test_the_device_name_setting_becomes_the_hostname(online):
     # The bare name "p3a" is never tried on this LAN: another device owns it.
     online.command('settings set {"device_name":"lab"}')

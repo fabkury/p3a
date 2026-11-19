@@ -71,6 +71,7 @@ def test_log_lines_are_captured_and_paged(api, uart):
     assert api.get(f"/api/v2/test/log?since={more['next'] + 100000}").data["lines"] == []
 
 
+@pytest.mark.slow
 def test_the_log_keeps_only_the_most_recent_lines(api, uart):
     # Each change logs one line; enough of them to wrap the buffer whatever was in it.
     for i in range(270):

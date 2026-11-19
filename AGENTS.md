@@ -210,7 +210,8 @@ ledger's deletion log with the reason.
 python host/p3a-lab/lab.py build release   # or: build test. Builds and runs the build checks
 python host/p3a-lab/lab.py up              # test build, flash, wait for the console
 python host/p3a-lab/lab.py provision       # name the dev unit and put it on the test rig's Wi-Fi
-python -m pytest tests/device              # flash the test build, run the device tests
+python -m pytest tests/device              # flash the test build, run every device test (18 minutes)
+python -m pytest tests/device/test_smoke.py tests/device/test_<area>.py   # a checkpoint
 cmake -S tests/host -B build-host -G Ninja; cmake --build build-host; ctest --test-dir build-host --output-on-failure
 python tools/check_tree.py                 # layer rule and forbidden patterns
 
@@ -225,8 +226,13 @@ idf.py fullclean
 - `idf.py` refuses to run under an MSYS environment (Git Bash) and still
   exits 0. Run it from PowerShell, or through the lab, which strips the
   `MSYSTEM` variables.
-- Before a checkpoint: the tree checks, the host tests, both builds, and the
-  device tests. CI repeats all but the last on every push to `v2`.
+- Before a checkpoint: the tree checks, the host tests, the test build, and
+  on the device the smoke set plus the tests of the area changed. The whole
+  device suite and the release and trace builds run at the end of each
+  milestone. CI runs on every push and is not waited for: read its result
+  before the next commit. Do not wait idle on a long run; read and write
+  the next step meanwhile. The full table and how deep tests should go are
+  in `docs/2.0/TESTING.md` under "What runs when".
 - **A dependency change needs a from-scratch configure in the CI container**
   before it is pushed. The workstation keeps downloaded components and a
   resolver cache, so it can pass where a clean machine fails. Docker runs

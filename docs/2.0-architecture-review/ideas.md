@@ -143,9 +143,11 @@ uGFX was dropped (D60) and has not decided whether it is wanted.
 change: a font file holds any character up to U+FFFF, found by binary
 search.
 
-**What it depends on.** The font. Everyday Ample also has Cyrillic and the
-extra letters of Polish and Turkish, so those are a change of one list and
-a few kilobytes. Greek, Hebrew, Arabic or CJK need a second pixel font
-with those glyphs, a way to fall back from one font to the other, and for
-Arabic and Hebrew right-to-left layout, which the renderer does not do.
+**What it depends on.** The font. Everyday Ample has Latin-1 and nothing
+beyond it (checked in the TTF: 164 characters, none Cyrillic or Greek), so
+every other script needs a second pixel font with those glyphs and a way to
+fall back from one font to the other. Everyday Standard, of the same
+series, has Cyrillic and the extra letters of Polish and Turkish and would
+be the first candidate. Arabic and Hebrew also need right-to-left layout,
+which the renderer does not do.
 

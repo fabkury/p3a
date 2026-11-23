@@ -42,8 +42,8 @@ production.
 
 - `main` is the 1.x line and is production. It takes critical fixes only. One
   more release is planned, 1.2.5: what is already on `main` (which includes
-  the JPEG colour and animated WebP blend fixes ported from `v2`, built but
-  not yet run on a device) plus the lock-order fix from the 2.0 review
+  the JPEG colour and animated WebP blend fixes ported from `v2`, checked by
+  eye on the dev unit on 2026-11-23) plus the lock-order fix from the 2.0 review
   (finding 25). No new 1.x features.
 - `v2` is p3a 2.0, a clean break with no OTA path from 1.x (2.0 is installed
   over USB). All 2.0 work happens on that branch, and its work-stream

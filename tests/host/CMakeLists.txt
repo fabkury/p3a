@@ -159,3 +159,7 @@ set(SCHEDULER "${P3A_COMPONENTS}/play_scheduler")
 p3a_host_test(test_sched_core
     SOURCES player/test_sched_core.c ${SCHEDULER}/sched_core.c
     INCLUDES ${SCHEDULER})
+p3a_host_test(test_playset
+    SOURCES player/test_playset.c ${SCHEDULER}/playset.c ${UTIL}/p3a_err.c
+    INCLUDES ${SCHEDULER}/include ${P3A_STUBS} ${UTIL}/include
+    LIBS cjson)

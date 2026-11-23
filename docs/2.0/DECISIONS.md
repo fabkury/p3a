@@ -76,6 +76,7 @@ Set before the architecture review and taken as given by everything since.
 | D47 | 2026-11-19 | Fab | The hardware JPEG colour fix and the animated WebP blend fix are ported to `main` for 1.2.5 (was O17) | They are in every unit in the field, they are a few lines each, and they change how pictures look for the better |
 | D48 | 2026-11-19 | Working | The blob store keeps no table of reference counts. Blobs are evicted by age; the only blobs that must never be evicted are the pinned ones, and that set comes from the pin lists when they are built. A record whose blob is gone is discovered on play and marked | The design's count had no reader. A table with one entry per file on the card costs PSRAM and is one more file that can disagree with the truth |
 | D49 | 2026-11-23 | Fab | p3a never drops frames. An animation that cannot be decoded as fast as its file asks shows every frame and runs slower, in 2.0 as in 1.x | A design choice of the product: the artwork is shown whole. Nothing in the pipeline may skip frames to keep pace |
+| D50 | 2026-11-23 | Working | A playset channel is `source` + `kind` + `identifier` + `offset` (which make its id) with a weight and a display name; one 224-byte packed form everywhere. Its JSON is strict: anything unknown or oversized is refused with a reason. This is a new JSON shape, not 1.x's | Findings 5 and 20, audit M21. A cut identifier names another channel; a silently dropped typo is a setting the user believes they made |
 
 ## 1.x decisions that stay in force
 

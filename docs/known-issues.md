@@ -175,7 +175,7 @@ commits can cite them.
 | M18 | `schedulePollSoon` does not track its timeout; overlapping calls stack pollers | `webui/index.html` |
 | M19 | Rijks browse fires all set fetches at once, and its cursor loop does not stop on an empty page | `webui/museum/rijksmuseum.js` |
 | M20 | NVS namespaces are an undocumented contract; `ota` keys are macros in one file and literals in another | `ota_manager_webui.c`, `p3a_board_ep44b/p3a_board_fs.c` |
-| M21 | Partial: both playset stores now keep files on version mismatch, but the two formats are not documented together | `playset_store.c`, `active_playset_store.c` |
+| M21 | Partial: both playset stores now keep files on version mismatch, but the two formats are not documented together | `playset_store.c`, `active_playset_store.c` **Fixed in 2.0** (`v2`, M2.3): one format for both, files kept on any failed check; still open in 1.x |
 | M22 | Config "atomic" write: `cfg_new` is never consulted on boot, so it only doubles flash writes; header still says atomic | `config_store/config_store.c`, `config_store.h` |
 | M23 | Partial: app rollback is enabled, but there is no anti-rollback, no real post-boot self-test, no minimum-version gate | `ota_manager/ota_manager_install.c`, `sdkconfig` |
 | M24 | Task WDT posture is undocumented: PANIC off, libwebp does not yield (see "Slow software JPEG decodes") | `sdkconfig` |

@@ -10,7 +10,7 @@ times.
 |---|---|
 | Phase | 2, player and library (Phases 0 and 1 complete) |
 | Current milestone | M2.1 display pipeline and decoders |
-| Next action | M2.3 part 2: playsets. Read in `legacy/components/play_scheduler`: `playset_store.h` and `.c` (the packed 144-byte entry), `playset_json.c`, `active_playset_store.c`, and how `channel_id` is computed in `play_scheduler_playsets.c`. Build, pure and host-tested: the canonical packed playset entry with 96-byte identifiers and no `artwork` sub-struct, its JSON form (refusing, not cutting, what does not fit), and the channel id over a canonical form. Then the playset store and the active playset as `p3a_frame` containers (audit M21), `source_ops_t` with its registry, and the local source: the user's files in `animations/` are indexed where they are, not moved into the blob store (working decision, see the M2.2 entry). Then the scheduler proper over `sched_core` and `p3a_index`, `player_commands`, the routes (playsets, actions, upload; audit M7) and their device tests |
+| Next action | M2.3 part 3: sources and the scheduler proper. Define `source_ops_t` and its registry (keyed by `playset_source_t`), then the local source: scan `animations/` into a `p3a_index_t` of local records (files stay where they are; available means the file exists), saved as a rebuildable index named by the channel id. Then the scheduler over `sched_core`, `p3a_index` and the active playset: load the playset's channels (at most 16 indices resident), pick a record, hand its path to `animation_player`, undo the turn on `failed`, and keep a history for back. Read `legacy/components/play_scheduler/play_scheduler.c`, `play_scheduler_navigation.c` and `sdcard_channel` for what history and navigation did. Then `player_commands` and the routes (playsets, actions, upload; audit M7) with device tests |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -43,7 +43,7 @@ reopened (why).
 | M1.5 net base | done 2026-11-18. Tiers: host tests (12 programs, under ASan and UBSan too), tool self-tests, device tests (119 cases, on the real Wi-Fi), release and test builds, the configuration guard. Awaiting manual check M1.5-a (the portal from a phone). The Wi-Fi recovery ladders are carried over untested |
 | M2.1 Display pipeline and decoders | done 2026-11-19; manual check M2.1-a cleared 2026-11-23. Tiers: host tests (15 programs), the whole device suite (235 cases on the test build; 6 timing cases on the trace-test build), release, test, trace and trace-test builds, the configuration guard. Timing has a baseline of minutes only; the jitter pass bar waits for the soak (M6.1) |
 | M2.2 Library core | done 2026-11-19. Tiers: host tests (15 programs), the whole device suite (240 cases), release, test and trace builds, the configuration guard. The `refs` table of the plan was not built (D48) |
-| M2.3 Source interface, local source, scheduler | in progress. Part 1 done: the scheduler's arithmetic (`sched_core`), host-tested. Playsets, sources, the scheduler proper and the routes are not started |
+| M2.3 Source interface, local source, scheduler | in progress. Done: the scheduler's arithmetic (`sched_core`), and playsets (format, JSON, channel id, the store on the card). Not started: sources, the scheduler proper, commands, routes |
 | M2.4 Loader pipeline, C and D | not started |
 | M3.1 Screen model and hook table | not started |
 | M3.2 Text and fonts | not started |
@@ -202,6 +202,12 @@ M0.1, 2026-11-17 (paths relative to the 1.x tree):
 Dead functions inside files that are otherwise live were not hunted down;
 they are simply not moved when their file is.
 
+M2.3, 2026-11-23 (the legacy files stay until the rest of the scheduler is read out of them):
+
+- From the playset: the `artwork` sub-struct of a channel, the legacy
+  `pick_mode` and exposure bytes of the header, the default `name` per
+  channel type, and the silent truncation of long fields.
+
 M2.1 part 4, 2026-11-19:
 
 - From the 1.x frame-trace endpoints: `POST /api/debug/provoke` and its
@@ -298,6 +304,43 @@ M1.1, 2026-11-17:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-23: M2.3 part 2, playsets
+
+- `playset.c` (pure): the playset has one form. A 224-byte packed channel
+  (source, kind, identifier of up to 95 characters, display name, weight,
+  offset) is what is held in memory and written to the card; JSON is its
+  form over the API. 1.x had three forms, one of them a raw dump of an
+  860-byte in-memory struct, and 32-character identifiers.
+- **JSON is checked strictly**: unknown keys, wrong types, fractions,
+  negative numbers and text that does not fit are refused with a sentence
+  saying which. 1.x cut long text silently and ignored typos. The reason
+  goes back to the caller for the API to show.
+- The 1.x channel "type" (named, user, hashtag, reactions, sdcard, ...)
+  becomes `source` plus `kind`: Makapix's four types are four kinds of one
+  source. This is a new JSON shape; the web UI is rewritten for it in
+  Phase 5, and commands arriving from Makapix are translated in M4.5.
+- The single "show this artwork" pseudo-channel and its 716-byte
+  sub-struct are gone from the playset; it returns as a command of its own.
+- The channel id is 16 hex digits of FNV-1a over source, kind, identifier
+  and offset in a canonical byte form; weight and display name do not
+  change it. One value is pinned in a test, since ids name files.
+- `playset_store.c`: saved playsets and the active playset are framed
+  containers (schema 3) flagged as user data, in `playsets/`. Files are
+  named by a hash of the playset's name, so names may differ by case or
+  hold characters FAT refuses. A file that cannot be read is counted in
+  the listing and never overwritten by a save; only the user's delete
+  removes it. At most 32 are saved. Closes audit M21.
+- Verified, host tests (17 programs, also under the sanitizers in WSL; 6
+  new cases): layout, JSON round trip, the exact length limits, 19 wrong
+  shapes each refused with a reason, the channel id, and every single-byte
+  change to a packed playset either reading as sound or being refused.
+- Verified, device tests (smoke and playsets: 11 cases): save, list,
+  replace, names differing by case, delete; a damaged file reported, not
+  listed, not overwritten; the limit of 32; the active playset across a
+  restart.
+- Not verified: a playset as large as 64 channels on the device (the test
+  console's line limit is 1 KB; the HTTP route will carry large ones).
 
 ### 2026-11-23: manual check M2.1-a cleared
 

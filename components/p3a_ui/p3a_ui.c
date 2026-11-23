@@ -1,0 +1,297 @@
+// SPDX-License-Identifier: Apache-2.0
+// The on-device UI. See p3a_ui.h.
+//
+// This file is the wiring around the model (ui_model.c): a lock, a timer
+// for notices that expire, the events and the scheduler's state turned into
+// facts, and the one consequence the model has so far: playback is held
+// while a screen covers the artwork.
+
+#include "p3a_ui.h"
+
+#include <stdatomic.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "esp_log.h"
+#include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
+#include "p3a_err.h"
+#include "p3a_event.h"
+#include "p3a_job.h"
+#include "play_scheduler.h"
+#include "psram_alloc.h"
+#include "sd_health.h"
+#include "ui_model.h"
+#include "ui_player.h"
+
+static const char *TAG = "ui";
+
+#define TICK_MS 250
+
+static SemaphoreHandle_t s_lock;
+static ui_model_t s_model;  // guarded by s_lock
+static bool s_holding;      // whether this file's hold on playback is in force; guarded by s_lock
+static uint32_t s_problems_seen;
+static int64_t s_dark_since_ms = -1;  // since when nothing has been on the panel; -1 while something is
+static atomic_bool s_look_again;      // the "getting ready" notice is being held back; see player_job()
+static atomic_bool s_player_job_queued;
+static esp_timer_handle_t s_tick;
+
+#define LOCK()   xSemaphoreTake(s_lock, portMAX_DELAY)
+#define UNLOCK() xSemaphoreGive(s_lock)
+
+static int64_t now_ms(void)
+{
+    return esp_timer_get_time() / 1000;
+}
+
+// Acts on what the model now says. Called with the lock held, after any
+// change; the scheduler is called after the lock is let go.
+static void settle_and_unlock(bool changed)
+{
+    ui_view_t view;
+    ui_model_view(&s_model, &view);
+    const bool hold = view.holds_playback;
+    const bool flip = hold != s_holding;
+    s_holding = hold;
+    if (changed) {
+        const p3a_ui_content_t *content = ui_model_content(&s_model);
+        ESP_LOGI(TAG, "on screen: %s%s%s%s%s", ui_screen_name(view.screen),
+                 (view.banner || view.screen == P3A_SCREEN_NOTICE) ? ", notice " : "",
+                 (view.banner || view.screen == P3A_SCREEN_NOTICE) ? ui_notice_name(view.notice) : "",
+                 content && content->text[0] ? ": " : "", content ? content->text : "");
+    }
+    UNLOCK();
+    if (flip) {
+        hold ? play_scheduler_hold() : play_scheduler_release();
+    }
+}
+
+// --- the hook table -------------------------------------------------------------
+
+static void hook_screen_show(p3a_screen_t screen, const p3a_ui_content_t *content)
+{
+    LOCK();
+    settle_and_unlock(ui_model_screen_show(&s_model, screen, content));
+}
+
+static void hook_screen_hide(p3a_screen_t screen)
+{
+    LOCK();
+    settle_and_unlock(ui_model_screen_hide(&s_model, screen));
+}
+
+static void hook_notice_show(p3a_notice_t notice, const p3a_ui_content_t *content, uint32_t ttl_ms, uint32_t max_per_boot)
+{
+    LOCK();
+    settle_and_unlock(ui_model_notice_show(&s_model, notice, content, ttl_ms, max_per_boot, now_ms()));
+}
+
+static void hook_notice_hide(p3a_notice_t notice)
+{
+    LOCK();
+    settle_and_unlock(ui_model_notice_hide(&s_model, notice));
+}
+
+const p3a_ui_hooks_t *p3a_ui_hook_table(void)
+{
+    static const p3a_ui_hooks_t table = {
+        .screen_show = hook_screen_show,
+        .screen_hide = hook_screen_hide,
+        .notice_show = hook_notice_show,
+        .notice_hide = hook_notice_hide,
+    };
+    return &table;
+}
+
+// --- playback -------------------------------------------------------------------
+
+static void facts_from(const play_scheduler_status_t *st, ui_player_facts_t *f)
+{
+    memset(f, 0, sizeof(*f));
+    f->playing = st->playing || st->foreign;  // whoever put it there, a picture is on the panel
+    f->loading = st->loading;
+    f->channels = st->channel_count;
+    for (uint32_t i = 0; i < st->channel_count; i++) {
+        const play_channel_status_t *c = &st->channels[i];
+        f->playable += c->available;
+        switch (c->state) {
+        case PLAY_CHANNEL_WAITING:
+        case PLAY_CHANNEL_LISTING:
+            f->listing++;
+            break;
+        case PLAY_CHANNEL_FAILED:
+            f->failed++;
+            break;
+        case PLAY_CHANNEL_NO_SOURCE:
+            f->no_source++;
+            break;
+        default:
+            break;
+        }
+        if (c->error == (esp_err_t)P3A_ERR_SD_FAILED) {
+            f->card_failed = true;
+        }
+    }
+    f->problem = st->problem;
+    f->problems = st->problems;
+}
+
+// A job: reads the player's state and brings the notices about playback in
+// line with it.
+static esp_err_t player_job(void *arg)
+{
+    (void)arg;
+    atomic_store(&s_player_job_queued, false);
+    play_scheduler_status_t *st = psram_calloc(1, sizeof(*st));
+    if (st == NULL) {
+        return ESP_ERR_NO_MEM;
+    }
+    play_scheduler_get_status(st);
+    ui_player_facts_t facts;
+    facts_from(st, &facts);
+    free(st);
+
+    p3a_ui_content_t words;
+    ui_player_standing_t standing = ui_player_standing(&facts, &words);
+    LOCK();
+    // "Getting ready" is for a wait a person would notice. At an ordinary
+    // boot the first artwork is up in well under a second, and a notice
+    // that flashes by is worse than a dark panel.
+    if (facts.playing) {
+        s_dark_since_ms = -1;
+    } else if (s_dark_since_ms < 0) {
+        s_dark_since_ms = now_ms();
+    }
+    atomic_store(&s_look_again, false);
+    if (standing == UI_PLAYER_LOADING && now_ms() - s_dark_since_ms < UI_PLAYER_LOADING_AFTER_MS) {
+        standing = UI_PLAYER_NONE;
+        atomic_store(&s_look_again, true);  // the tick asks again
+    }
+    bool changed = ui_model_set_playing(&s_model, facts.playing);
+    changed |= standing == UI_PLAYER_LOADING ? ui_model_notice_show(&s_model, P3A_NOTICE_LOADING, &words, 0, 0, now_ms())
+                                             : ui_model_notice_hide(&s_model, P3A_NOTICE_LOADING);
+    changed |= standing == UI_PLAYER_NOTHING
+                   ? ui_model_notice_show(&s_model, P3A_NOTICE_NOTHING_TO_PLAY, &words, 0, 0, now_ms())
+                   : ui_model_notice_hide(&s_model, P3A_NOTICE_NOTHING_TO_PLAY);
+    if (facts.problem == 0) {
+        changed |= ui_model_notice_hide(&s_model, P3A_NOTICE_PLAY_PROBLEM);
+    } else if (facts.problems != s_problems_seen) {
+        ui_player_problem(facts.problem, &words);
+        changed |= ui_model_notice_show(&s_model, P3A_NOTICE_PLAY_PROBLEM, &words, UI_PLAYER_PROBLEM_TTL_MS, 0, now_ms());
+    }
+    s_problems_seen = facts.problems;
+    settle_and_unlock(changed);
+    return ESP_OK;
+}
+
+static void on_player_changed(const p3a_event_t *event, void *ctx)
+{
+    (void)event;
+    (void)ctx;
+    // Several changes in a row need one look.
+    if (!atomic_exchange(&s_player_job_queued, true) &&
+        p3a_job_submit(P3A_JOBS_UI, "ui: playback", player_job, NULL, NULL) != ESP_OK) {
+        atomic_store(&s_player_job_queued, false);
+    }
+}
+
+// --- the network and the card ---------------------------------------------------
+
+static void on_setup_started(const p3a_event_t *event, void *ctx)
+{
+    (void)event;
+    (void)ctx;
+    p3a_ui_content_t words;
+    p3a_ui_content(&words, "Wi-Fi setup", -1, "Join the Wi-Fi network p3a-setup with a phone or a computer");
+    hook_screen_show(P3A_SCREEN_SETUP, &words);
+}
+
+static void on_card_failed(const p3a_event_t *event, void *ctx)
+{
+    (void)event;
+    (void)ctx;
+    p3a_ui_content_t words;
+    p3a_ui_content(&words, "SD card", -1, "The SD card stopped working. Restart the device; if this returns, replace the card");
+    hook_notice_show(P3A_NOTICE_CARD_FAILED, &words, 0, 0);
+}
+
+// --- the rest -------------------------------------------------------------------
+
+static void tick(void *arg)
+{
+    (void)arg;
+    if (xSemaphoreTake(s_lock, 0) != pdTRUE) {
+        return;
+    }
+    settle_and_unlock(ui_model_tick(&s_model, now_ms()));
+    if (atomic_load(&s_look_again)) {
+        on_player_changed(NULL, NULL);
+    }
+}
+
+void p3a_ui_get_state(p3a_ui_state_t *out)
+{
+    memset(out, 0, sizeof(*out));
+    if (s_lock == NULL) {
+        return;
+    }
+    LOCK();
+    ui_view_t view;
+    ui_model_view(&s_model, &view);
+    out->screen = view.screen;
+    out->notice = view.notice;
+    out->banner = view.banner;
+    out->covers_artwork = view.covers_artwork;
+    const p3a_ui_content_t *content = ui_model_content(&s_model);
+    out->has_content = content != NULL;
+    if (content != NULL) {
+        out->content = *content;
+    }
+    out->revision = s_model.revision;
+    UNLOCK();
+}
+
+const char *p3a_ui_screen_name(p3a_screen_t screen)
+{
+    return ui_screen_name(screen);
+}
+
+const char *p3a_ui_notice_name(p3a_notice_t notice)
+{
+    return ui_notice_name(notice);
+}
+
+esp_err_t p3a_ui_start(void)
+{
+    if (s_lock != NULL) {
+        return ESP_OK;
+    }
+    s_lock = xSemaphoreCreateMutex();
+    if (s_lock == NULL) {
+        return ESP_ERR_NO_MEM;
+    }
+    ui_model_init(&s_model);
+    esp_err_t err = p3a_event_subscribe(P3A_EVENT_PLAYER_CHANGED, on_player_changed, NULL);
+    if (err == ESP_OK) {
+        err = p3a_event_subscribe(P3A_EVENT_NET_SETUP_STARTED, on_setup_started, NULL);
+    }
+    if (err == ESP_OK) {
+        err = p3a_event_subscribe(P3A_EVENT_SD_HEALTH_FAILED, on_card_failed, NULL);
+    }
+    const esp_timer_create_args_t timer = {.callback = tick, .name = "ui_tick"};
+    if (err == ESP_OK) {
+        err = esp_timer_create(&timer, &s_tick);
+    }
+    if (err == ESP_OK) {
+        err = esp_timer_start_periodic(s_tick, TICK_MS * 1000);
+    }
+    // What is true already: the card may have failed its probe before the
+    // UI existed to hear of it.
+    if (sd_health_is_failed()) {
+        on_card_failed(NULL, NULL);
+    }
+    on_player_changed(NULL, NULL);
+    return err;
+}

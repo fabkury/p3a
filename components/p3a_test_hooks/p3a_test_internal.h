@@ -26,6 +26,8 @@ extern const p3a_test_command_t p3a_test_storage_commands[];
 extern const size_t p3a_test_storage_command_count;
 extern const p3a_test_command_t p3a_test_sched_commands[];
 extern const size_t p3a_test_sched_command_count;
+extern const p3a_test_command_t p3a_test_ui_commands[];
+extern const size_t p3a_test_ui_command_count;
 // Adds the route that writes a file into the user's folder.
 void p3a_test_sched_start(void);
 extern const p3a_test_command_t p3a_test_playset_commands[];

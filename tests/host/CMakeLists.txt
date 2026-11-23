@@ -173,3 +173,12 @@ p3a_host_test(test_sched_pick
 p3a_host_test(test_sched_history
     SOURCES player/test_sched_history.c ${SCHEDULER}/sched_history.c ${LIBRARY}/p3a_record.c ${UTIL}/p3a_err.c
     INCLUDES ${SCHEDULER} ${LIBRARY}/include ${P3A_STUBS} ${UTIL}/include)
+
+# --- ui ---------------------------------------------------------------------
+set(UI "${P3A_COMPONENTS}/p3a_ui")
+p3a_host_test(test_ui_model
+    SOURCES ui/test_ui_model.c ${UI}/ui_model.c ${UTIL}/p3a_ui_hooks.c
+    INCLUDES ${UI} ${UTIL}/include)
+p3a_host_test(test_ui_player
+    SOURCES ui/test_ui_player.c ${UI}/ui_player.c ${UTIL}/p3a_ui_hooks.c ${UTIL}/p3a_err.c
+    INCLUDES ${UI} ${UTIL}/include ${P3A_STUBS})

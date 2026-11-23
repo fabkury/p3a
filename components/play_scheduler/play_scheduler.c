@@ -81,6 +81,8 @@ typedef struct {
 
     bool playing;
     p3a_record_t current;
+    bool foreign_shown;      // a picture that is not the scheduler's is on the panel
+    uint32_t foreign_token;  // the foreign request last reported ready with a picture
     uint32_t next_token;
     uint32_t picks, shown, failed;
     esp_err_t last_error;
@@ -102,6 +104,12 @@ static esp_timer_handle_t s_tick;
 static int64_t now_ms(void)
 {
     return esp_timer_get_time() / 1000;
+}
+
+// Tells whoever shows or reports the player's state that it changed.
+static void changed(void)
+{
+    p3a_event_emit(P3A_EVENT_PLAYER_CHANGED);
 }
 
 // --- playing a record -----------------------------------------------------------
@@ -313,6 +321,9 @@ static bool on_ready(uint32_t token, const animation_player_loaded_t *loaded, vo
 {
     (void)ctx;
     if (!(token & OUR_TOKENS)) {
+        LOCK();
+        s->foreign_token = loaded->width != 0 ? token : 0;  // 0: a request to play nothing
+        UNLOCK();
         return s->foreign.ready ? s->foreign.ready(token, loaded, s->foreign_ctx) : true;
     }
     bool wanted = true;
@@ -352,8 +363,10 @@ static void on_shown(uint32_t token, void *ctx)
         // leaves it there until it is asked for something.
         LOCK();
         s->playing = false;
+        s->foreign_shown = token == s->foreign_token;
         sched_turn_stopped(&s->turn);
         UNLOCK();
+        changed();
         if (s->foreign.shown) {
             s->foreign.shown(token, s->foreign_ctx);
         }
@@ -364,6 +377,7 @@ static void on_shown(uint32_t token, void *ctx)
         s->pending_token = 0;
         s->current = s->pending_record;
         s->playing = true;
+        s->foreign_shown = false;
         s->shown++;
         s->problem = ESP_OK;
         if (s->pending_kind == TURN_NEW || s->pending_kind == TURN_SHOW) {
@@ -374,6 +388,7 @@ static void on_shown(uint32_t token, void *ctx)
         sched_turn_shown(&s->turn, now_ms());
     }
     UNLOCK();
+    changed();
 }
 
 static sched_fail_t classify(esp_err_t err)
@@ -448,6 +463,7 @@ static void on_failed(uint32_t token, esp_err_t err, void *ctx)
         ESP_LOGW(TAG, "nothing was shown: %s", p3a_err_to_name(err));
     }
     UNLOCK();
+    changed();
 }
 
 void play_scheduler_set_foreign_listener(const animation_player_listener_t *listener, void *ctx)
@@ -488,6 +504,7 @@ static esp_err_t list_job(void *arg)
         const playset_channel_t spec = s->playset.channels[at];
         s->channels[at].state = PLAY_CHANNEL_LISTING;
         UNLOCK();
+        changed();
 
         const p3a_source_ops_t *ops = p3a_source_get(spec.source);  // checked when the playset was activated
         const p3a_channel_ref_t ref = {.kind = spec.kind, .identifier = spec.identifier, .offset = spec.offset};
@@ -523,6 +540,7 @@ static esp_err_t list_job(void *arg)
             }
         }
         UNLOCK();
+        changed();
     }
 }
 
@@ -579,6 +597,7 @@ esp_err_t play_scheduler_activate(const playset_t *playset)
     install(playset);
     esp_err_t err = queue_listing();
     UNLOCK();
+    changed();
     // Saved after it is in force: a card that cannot be written does not
     // stop the device from playing what it was asked to.
     const esp_err_t saved = playset_store_save_active(playset);
@@ -637,6 +656,7 @@ void play_scheduler_get_status(play_scheduler_status_t *out)
     out->failed = s->failed;
     out->last_error = s->last_error;
     out->paused = s->paused;
+    out->foreign = s->foreign_shown;
     out->advance_in_s = sched_turn_remaining_s(&s->turn, now_ms());
     out->problem = s->problem;
     out->problems = s->problems;
@@ -712,6 +732,7 @@ esp_err_t play_scheduler_set_paused(bool paused)
         ESP_LOGI(TAG, "%s", paused ? "paused" : "resumed");
     }
     UNLOCK();
+    changed();
     return ESP_OK;
 }
 

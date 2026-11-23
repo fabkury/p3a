@@ -23,6 +23,7 @@
 #include "p3a_recovery.h"
 #include "p3a_settings.h"
 #include "p3a_storage.h"
+#include "p3a_ui.h"
 #include "sdio_bus.h"
 #include "slave_ota.h"
 #include "sdkconfig.h"
@@ -45,6 +46,30 @@ static void boot_step(const char *what, esp_err_t err)
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "boot: %s failed: %s", what, p3a_err_to_name(err));
     }
+}
+
+// The co-processor update on the screen: it knows nothing of the UI and is
+// given these three.
+static void on_update_begin(const char *version_from, const char *version_to, void *ctx)
+{
+    (void)ctx;
+    p3a_ui_content_t words;
+    p3a_ui_content(&words, "Updating Wi-Fi", 0, "%s to %s. Do not unplug", version_from, version_to);
+    p3a_ui_screen_show(P3A_SCREEN_UPDATE, &words);
+}
+
+static void on_update_progress(int percent, const char *status, void *ctx)
+{
+    (void)ctx;
+    p3a_ui_content_t words;
+    p3a_ui_content(&words, "Updating Wi-Fi", percent, "%s", status ? status : "");
+    p3a_ui_screen_show(P3A_SCREEN_UPDATE, &words);
+}
+
+static void on_update_end(void *ctx)
+{
+    (void)ctx;
+    p3a_ui_screen_hide(P3A_SCREEN_UPDATE);
 }
 
 static esp_err_t toggle_pause_job(void *arg)
@@ -110,6 +135,12 @@ void app_main(void)
     boot_step("storage", p3a_storage_start(s_settings.sd_root));
     boot_step("local source", source_local_start());
     boot_step("scheduler", play_scheduler_start());
+    // The UI's model of what is on the screen, and the way for every layer
+    // to ask it for something. The co-processor update reports through it.
+    boot_step("ui", p3a_ui_start());
+    p3a_ui_hooks_set(p3a_ui_hook_table());
+    static const slave_ota_ui_t update_ui = {.begin = on_update_begin, .progress = on_update_progress, .end = on_update_end};
+    slave_ota_set_ui(&update_ui);
 
     // The Wi-Fi co-processor: bring its link up and update its firmware if the
     // image in the slave_fw partition is newer. An update takes over the

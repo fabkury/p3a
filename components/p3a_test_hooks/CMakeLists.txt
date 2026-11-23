@@ -3,7 +3,7 @@
 # is set, which only sdkconfig.test.defaults does.
 set(srcs "")
 if(CONFIG_P3A_TEST_HOOKS)
-    list(APPEND srcs "p3a_test_board.c" "p3a_test_console.c" "p3a_test_decode.c" "p3a_test_http.c" "p3a_test_library.c" "p3a_test_net.c" "p3a_test_player.c" "p3a_test_playset.c" "p3a_test_sched.c" "p3a_test_settings.c" "p3a_test_storage.c" "p3a_test_util.c")
+    list(APPEND srcs "p3a_test_board.c" "p3a_test_console.c" "p3a_test_decode.c" "p3a_test_http.c" "p3a_test_library.c" "p3a_test_net.c" "p3a_test_player.c" "p3a_test_playset.c" "p3a_test_sched.c" "p3a_test_settings.c" "p3a_test_storage.c" "p3a_test_ui.c" "p3a_test_util.c")
 endif()
 
 idf_component_register(

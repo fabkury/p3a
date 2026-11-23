@@ -100,6 +100,7 @@ typedef struct {
     uint32_t picks, shown, failed;  // since boot
     esp_err_t last_error;   // of the last failed request
     bool paused;
+    bool foreign;           // a picture is on the panel that the scheduler did not put there (a test's)
     int32_t advance_in_s;   // seconds until it moves on by itself; -1 when it will not
     esp_err_t problem;      // why the last thing a person asked for was not shown; ESP_OK when it was
     uint32_t problems;      // how many such, since boot

@@ -160,6 +160,12 @@ All in `components/p3a_util`; each header explains itself at the top.
   move on and what a failure leads to; `sched_history.c`; `playset.c`);
   change behaviour there, not in the wiring. A screen that covers the
   artwork stops the dwell timer with `play_scheduler_hold()`.
+- **What is on the screen is the UI's model** (`components/p3a_ui`,
+  `ui_model.c`, pure). Nothing switches screens: a screen or a notice is
+  put up or taken down, and what is seen follows by precedence. Code
+  outside the UI asks through `p3a_ui_hooks.h` (in `p3a_util`, callable
+  from any layer), and only for what nothing but the caller knows; the UI
+  finds out the rest by itself from events and the scheduler's state.
 - **HTTP endpoints** are rows in a route table (`p3a_http.h`). A handler
   answers once through `p3a_http_ok`, `p3a_http_accepted` or
   `p3a_http_fail` and never writes an envelope, a status line or a header

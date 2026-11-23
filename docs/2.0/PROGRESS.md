@@ -9,8 +9,8 @@ times.
 | | |
 |---|---|
 | Phase | 3, on-device UI (Phases 0, 1 and 2 complete) |
-| Current milestone | M3.1 screen model and hook table |
-| Next action | M3.1. Read PLAN.md Phase 3, `docs/2.0-architecture-review/firmware-internals.md` on the seven copies of screen state (finding 11) and decide O7; in `legacy/`: `p3a_core/p3a_state*.c`, `p3a_render.c`, `main/ugfx_ui.c`, `display_processing_notification.c`. Build one pure model of what is on screen with host tests, the hook table `main` fills, and the channel-message surface; the scheduler's `problem` and channel states are its first inputs, and `play_scheduler_hold()` is how a screen stops the dwell timer |
+| Current milestone | M3.2 text and fonts |
+| Next action | M3.2: bring in the text path written beside M3.1 (a canvas addressed as the viewer sees the screen, a glyph renderer for pixel fonts at whole multiples, `tools/gen_font.py`), draw the model as the display pipeline's UI source and a banner overlay, with screenshot tests. The font family is Fab's choice (O4); a provisional one is used until he picks from the specimen sheet. Then M3.4's gesture recogniser and touch table, then M3.3's remaining screens |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -45,7 +45,7 @@ reopened (why).
 | M2.2 Library core | done 2026-11-19. Tiers: host tests (15 programs), the whole device suite (240 cases), release, test and trace builds, the configuration guard. The `refs` table of the plan was not built (D48) |
 | M2.3 Source interface, local source, scheduler | done 2026-11-23. Tiers: host tests (18 programs, under the sanitizers too), the whole device suite (255 cases; one needed its own bound updated for the larger JSON body limit), release, test and trace builds, the configuration guard. Left for later milestones and noted in the entries: uploads do not play at once (M2.4), more than 16 channels (M4.x), weighted shares on the device (needs a second source) |
 | M2.4 Loader pipeline, C and D | done 2026-11-23. Tiers: host tests (20 programs, under the sanitizers too), the whole device suite (260 cases pass; the 6 timing cases need the trace build and were not run), release, test and trace builds, the configuration guard. Not seen on the device because nothing produces them yet: deleting a damaged blob (M4.1), the aspect filter (M4.3). Manual check M2.4-a pending |
-| M3.1 Screen model and hook table | not started |
+| M3.1 Screen model and hook table | done 2026-11-23. Tiers: host tests (22 programs, under the sanitizers too), device tests (smoke, UI, pipeline and player: 48 cases), test build. Nothing is drawn yet |
 | M3.2 Text and fonts | not started |
 | M3.3 Screens | not started |
 | M3.4 Touch router and gestures | not started |
@@ -153,7 +153,7 @@ and proposals are in [DECISIONS.md](DECISIONS.md) under "Open decisions".
 | O14 | A second board for the field test | M6.3 |
 | O13 | How `v2` becomes `main` | M6.4 |
 
-The remaining open decisions (O7, O9) may be taken as working decisions
+The remaining open decision (O9) may be taken as working decisions
 by the agent and are reported when taken.
 
 ## Ports from main
@@ -309,6 +309,46 @@ M1.1, 2026-11-17:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-23: M3.1, the screen model and the hook table
+
+- **O7 decided (D59): one model in the UI, and no `p3a_state`.** New
+  component `p3a_ui` (layer `ui`). `ui_model.c` (pure) holds every screen
+  and notice that is up; what is seen follows by fixed precedence, so a
+  screen coming down uncovers what is beneath it and writers cannot fight.
+  The 1.x state machine, its render state with the four-writer
+  arbitration, the UI mode and the display's mode flags are not carried
+  over; playback's own state is the scheduler's.
+- **Notices follow the facts.** `ui_player.c` (pure) works out "getting
+  ready" and "nothing to play, and why" from the scheduler's state, and
+  puts a failed request in plain words. Nobody calls "show loading". The
+  scheduler emits one new event, `P3A_EVENT_PLAYER_CHANGED`, and the UI
+  looks. "Getting ready" is held back for 1.5 seconds so that it does not
+  flash by at an ordinary boot.
+- **A notice is a banner while an artwork plays**, and the whole screen
+  only when nothing does. In 1.x every channel message took the screen
+  from the artwork.
+- **The hook table** is `p3a_ui_hooks.h` in `p3a_util`: four calls any
+  layer may make, which do nothing until `app_main` hands over the UI's
+  functions. The co-processor update reports through it. The UI learns
+  about the network's setup mode and a failed card from their events.
+- A screen over the artwork holds the dwell timer; a banner does not.
+- Notices may expire and may be capped per boot (the 1.x rule for
+  rate-limit messages: 20 seconds, twice per boot).
+- `GET /api/v2/ui` says what is on the screen. `!ui` puts screens and
+  notices up for tests.
+- Audit M25 (a message type passed as a bare `int`) and M27 (fields
+  written and never read) are gone with the code that had them.
+- Verified, host tests: 22 programs pass, also under ASan and UBSan in
+  WSL; new are `test_ui_model` (10 cases) and `test_ui_player` (4).
+- Verified, device tests (4 new cases in `test_ui.py`): the notices
+  following the player from an empty folder to a playing file to a failed
+  request, precedence and uncovering, a screen holding playback while a
+  banner does not, the per-boot cap. With them the smoke, pipeline and
+  player tests: 48 cases pass.
+- Not verified: anything on the panel (nothing is drawn until M3.2); the
+  setup screen and the failed-card notice through their real events; the
+  co-processor update's progress through the hooks.
 
 ### 2026-11-23: M2.4, the loader pipeline, changes C and D. Phase 2 complete
 

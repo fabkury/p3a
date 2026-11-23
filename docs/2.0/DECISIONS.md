@@ -85,6 +85,7 @@ Set before the architecture review and taken as given by everything since.
 | D56 | 2026-11-23 | Working | Change C: repetition is measured in artworks shown, not in time; the last 256 are remembered; the chance of accepting a candidate grows with the square of how long ago it was shown, floor 1 in 16; the artwork shown last is never picked while the channel has another | Counting plays is indifferent to the dwell setting and to pauses. Rejection sampling needs no list of the channel in memory |
 | D57 | 2026-11-23 | Working | Change D: a source asks for the aspect filter in its table; the player reports "ready" with the picture's size before staging it and its listener may refuse. Tall counts like wide. Settings `aspect_filter` and `aspect_max_tenths` (25 to 100, default 40) | The scheduler names no source. Refusing before staging is the only point at which an unmeasured artwork can be kept off the panel |
 | D58 | 2026-11-23 | Working | While paused, next, back and "show this" are refused (409 `PAUSED`); an upload is saved and listed but does not play | A dark panel that lights up because of a command is a surprise. Revisit for Makapix commands at M4.5 |
+| D59 | 2026-11-23 | Working | O7: one model of what is on screen, in the UI (`ui_model.c`); `p3a_state` is not carried over. Screens and notices are facts that are up or down, and what is seen follows by fixed precedence. Notices about playback are worked out from the scheduler's state. A notice is a banner while an artwork plays | Finding 11. Precedence instead of "last writer wins" removes the arbitration rules 1.x needed, and a banner does not take the artwork away to say something minor |
 
 ## 1.x decisions that stay in force
 
@@ -151,7 +152,6 @@ are not missed.
 | O4 | Which VEXED families and sizes for large status text, body text and small labels; whether the clock shares them. Licence check of the chosen families | M3.2 | Fab picks; the agent can render candidates on the device for comparison |
 | O5 | Clock overlay: 12 or 24 hour, seconds or not, visible during channel messages and the info screen or not | M3.5 | See idea 1 |
 | O6 | Branding overlay: minimum band height and clear space from the Giphy and Klipy terms; bottom band only, or side bands too | M3.5 | See idea 2 |
-| O7 | The screen model: `p3a_state` becomes the single owner, or it is deleted in favour of one UI model plus a small playback struct | M3.1 | Working decision allowed; the review offers both |
 | O9 | The internal-RAM measures from `docs/known-issues.md`: packet mode, refresh concurrency, the Option E items, load shedding thresholds | M4.1 | Needs measurements on the 2.0 build, then a soak |
 | O10 | A wall-clock budget for slow software JPEG decodes, and what a timed-out image becomes | M4.3 | Moved from M2.4: in the new pipeline a slow decode delays only the next artwork, and sizing a budget needs the museum JPEGs. `NOT_PLAYABLE` is its home |
 | O12 | OTA hardening from audit item M23: post-boot self-test before marking an image valid, anti-rollback, minimum-version gate | M5.2 | |

@@ -1,0 +1,49 @@
+// SPDX-License-Identifier: Apache-2.0
+// The on-device UI: what is on the screen besides the artwork.
+//
+// One model holds every screen and notice that is up, and what is seen
+// follows from it (ui_model.h). The UI learns most things by itself: it
+// subscribes to the events of the network and the card and asks the
+// scheduler about playback. The few callers that must tell it something
+// use p3a_ui_hooks.h, from any layer.
+//
+// Drawing arrives with the text path (M3.2) and the screens (M3.3); until
+// then the model is kept, reported over the API, and holds playback while
+// a screen is up.
+#pragma once
+
+#include <stdbool.h>
+#include <stdint.h>
+
+#include "esp_err.h"
+#include "p3a_ui_hooks.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// Starts the UI. Call once at boot, after the scheduler. app_main then
+// hands p3a_ui_hook_table() to p3a_ui_hooks_set().
+esp_err_t p3a_ui_start(void);
+
+// The UI's own functions behind p3a_ui_hooks.h.
+const p3a_ui_hooks_t *p3a_ui_hook_table(void);
+
+typedef struct {
+    p3a_screen_t screen;      // the screen on top; P3A_SCREEN_ARTWORK when none is
+    p3a_notice_t notice;      // which notice, when `screen` is P3A_SCREEN_NOTICE or `banner` is set
+    bool banner;              // a notice is shown as a banner over the playing artwork
+    bool covers_artwork;
+    bool has_content;
+    p3a_ui_content_t content; // the words of what is seen, when `has_content`
+    uint32_t revision;        // changes whenever any of the above does
+} p3a_ui_state_t;
+
+void p3a_ui_get_state(p3a_ui_state_t *out);
+
+const char *p3a_ui_screen_name(p3a_screen_t screen);
+const char *p3a_ui_notice_name(p3a_notice_t notice);
+
+#ifdef __cplusplus
+}
+#endif

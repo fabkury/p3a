@@ -30,7 +30,15 @@ typedef enum {
     // payload.i32: its p3a_setting_id_t. Read the value with p3a_settings_get().
     P3A_EVENT_SETTING_CHANGED,
 
-    // --- sources 0x0400, library 0x0500, player 0x0600, ui 0x0700: none yet ---
+    // --- sources 0x0400, library 0x0500: none yet ---
+
+    // --- player (0x0600) ---
+    // Something about playback that others show or report has changed: what
+    // is playing, a channel's state, pause, a request that failed. No
+    // payload: ask play_scheduler_get_status().
+    P3A_EVENT_PLAYER_CHANGED = 0x0600,
+
+    // --- ui 0x0700: none yet ---
 
     // --- net (0x0800) ---
     // The device has joined Wi-Fi and has an address. No payload.

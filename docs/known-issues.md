@@ -179,9 +179,9 @@ commits can cite them.
 | M22 | Config "atomic" write: `cfg_new` is never consulted on boot, so it only doubles flash writes; header still says atomic | `config_store/config_store.c`, `config_store.h` |
 | M23 | Partial: app rollback is enabled, but there is no anti-rollback, no real post-boot self-test, no minimum-version gate | `ota_manager/ota_manager_install.c`, `sdkconfig` |
 | M24 | Task WDT posture is undocumented: PANIC off, libwebp does not yield (see "Slow software JPEG decodes") | `sdkconfig` |
-| M25 | `p3a_render_set_channel_message` takes an `int`; several callers pass bare literals | `p3a_core/include/p3a_render.h` and callers |
+| M25 | `p3a_render_set_channel_message` takes an `int`; several callers pass bare literals | `p3a_core/include/p3a_render.h` and callers **Gone in 2.0** (`v2`, M3.1): the UI is one typed model; still open in 1.x |
 | M26 | OPC `set_rotation` reconfigures the framebuffer on the MQTT event task | `makapix/makapix_mqtt.c`, `makapix_opc.c` |
-| M27 | Provisioning and OTA fields in `s_render` are written and never read | `p3a_core/p3a_render.c` |
+| M27 | Provisioning and OTA fields in `s_render` are written and never read | `p3a_core/p3a_render.c` **Gone in 2.0** (`v2`, M3.1): the UI is one typed model; still open in 1.x |
 | M28 | Board header `#define`/`#undef`s `CONFIG_LCD_PIXEL_FORMAT_*` symbols Kconfig owns | `p3a_board_ep44b/include/p3a_board.h` |
 | M29 | Web UI helpers (`showToast`, `escapeHtml`/`escHtml`) are copied per page; no shared `common.js` | `webui/*.html` |
 

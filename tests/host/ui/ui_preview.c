@@ -2,7 +2,7 @@
 // Draws one of the UI's screens into a file on the workstation, with the
 // code the device runs.
 //
-//   ui_preview <font.p3afont> <rotation> screen <out.bgr> <progress> <title> <text>
+//   ui_preview <font.p3afont> <rotation> screen <out.bgr> <progress> <title> <text> [hint]
 //   ui_preview <font.p3afont> <rotation> banner <out.bgr> <progress> <title> <text> [under.bgr]
 //
 // The output is the 720 x 720 framebuffer as the panel has it: three bytes
@@ -36,7 +36,7 @@ static size_t read_file(const char *path, uint8_t *into, size_t room)
 int main(int argc, char **argv)
 {
     if (argc < 8) {
-        fprintf(stderr, "usage: ui_preview <font> <rotation> screen|banner <out.bgr> <progress> <title> <text> [under.bgr]\n");
+        fprintf(stderr, "usage: ui_preview <font> <rotation> screen|banner <out.bgr> <progress> <title> <text> [hint | under.bgr]\n");
         return 2;
     }
     ui_font_t font;
@@ -56,6 +56,9 @@ int main(int argc, char **argv)
         }
         ui_draw_banner(&canvas, &style, &content);
     } else {
+        if (argc > 8) {
+            snprintf(content.hint, sizeof(content.hint), "%s", argv[8]);
+        }
         ui_draw_screen(&canvas, &style, &content);
     }
     FILE *out = fopen(argv[4], "wb");

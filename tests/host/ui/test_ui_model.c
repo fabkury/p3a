@@ -181,6 +181,14 @@ static void test_words_too_long_are_cut_and_stay_terminated(void)
     const p3a_ui_content_t *got = ui_model_content(&m);
     TEST_ASSERT_EQUAL(P3A_UI_TITLE_LEN - 1, strlen(got->title));
     TEST_ASSERT_EQUAL(P3A_UI_TEXT_LEN - 1, strlen(got->text));
+    TEST_ASSERT_EQUAL(P3A_UI_HINT_LEN - 1, strlen(got->hint));
+
+    // A new hint alone is a change to what is seen.
+    p3a_ui_content_t a = words("Info", "p3a", -1), b = a;
+    snprintf(b.hint, sizeof(b.hint), "Long press to close");
+    ui_model_screen_show(&m, P3A_SCREEN_FATAL, &a);
+    TEST_ASSERT_TRUE(ui_model_screen_show(&m, P3A_SCREEN_FATAL, &b));
+    TEST_ASSERT_FALSE(ui_model_screen_show(&m, P3A_SCREEN_FATAL, &b));
 }
 
 static void test_every_screen_and_notice_has_a_name(void)

@@ -45,8 +45,9 @@ void p3a_ui_get_state(p3a_ui_state_t *out);
 // --- touch ----------------------------------------------------------------------
 
 // What the information screen says (the device's name, its address, the
-// firmware): filled by app_main's function each time the screen is opened,
-// because most of it is known only above the UI.
+// firmware): filled by app_main's function when the screen is opened and
+// every two seconds while it is up, because most of it is known only above
+// the UI. Called on a job.
 typedef void (*p3a_ui_info_fn)(p3a_ui_content_t *out);
 void p3a_ui_set_info_source(p3a_ui_info_fn fill);
 

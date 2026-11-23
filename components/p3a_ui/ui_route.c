@@ -10,6 +10,7 @@ ui_action_t ui_route(p3a_screen_t screen, bool paused, const ui_gesture_t *gestu
         return UI_ACTION_NONE;
     }
     switch (screen) {
+    case P3A_SCREEN_INTRO:
     case P3A_SCREEN_UPDATE:
     case P3A_SCREEN_USB:
     case P3A_SCREEN_FATAL:

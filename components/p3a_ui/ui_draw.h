@@ -3,9 +3,10 @@
 // nothing of the display; host-tested (tests/host/ui/test_ui_draw.c).
 // Private to the UI.
 //
-// Every screen that is words (a notice, setup, an update in progress, a
-// fatal error) is one layout: a title, a paragraph and, when there is one,
-// a progress bar, centred as a group. A notice over a playing artwork is a
+// Every screen that is words (a notice, setup, information, an update in
+// progress, a fatal error) is one layout: a title, the text (paragraphs and
+// rows of label and value, see p3a_ui_content_t) and, when there is one, a
+// progress bar, centred as a group; and a hint at the bottom edge. A notice over a playing artwork is a
 // band along the bottom edge. The look is set by the few numbers in
 // ui_style_t, so that it can be tuned in one place.
 #pragma once
@@ -27,6 +28,7 @@ typedef struct {
     int32_t margin;          // from the screen's edges to the text column
     ui_colour_t background;  // of a screen that covers the artwork
     ui_colour_t title, text, accent;  // accent: the progress bar's fill and a banner's edge
+    ui_colour_t label;                // a row's label, and the hint
 } ui_style_t;
 
 // A style for a screen of the given size (as the viewer sees it) with the

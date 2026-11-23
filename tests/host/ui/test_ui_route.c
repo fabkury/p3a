@@ -52,8 +52,8 @@ static void test_a_long_press_closes_the_screens_a_person_may_close_and_nothing_
 
 static void test_an_update_a_shared_card_and_a_fatal_error_are_not_interrupted(void)
 {
-    const p3a_screen_t deaf[] = {P3A_SCREEN_UPDATE, P3A_SCREEN_USB, P3A_SCREEN_FATAL};
-    for (unsigned s = 0; s < 3; s++) {
+    const p3a_screen_t deaf[] = {P3A_SCREEN_INTRO, P3A_SCREEN_UPDATE, P3A_SCREEN_USB, P3A_SCREEN_FATAL};
+    for (unsigned s = 0; s < 4; s++) {
         for (unsigned i = 0; i < 6; i++) {
             TEST_ASSERT_EQUAL(UI_ACTION_NONE, route(deaf[s], false, all[i], 500));
         }

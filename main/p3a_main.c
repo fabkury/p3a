@@ -5,6 +5,7 @@
 // the device carries on with what it has.
 
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "animation_decoder.h"
 #include "animation_player.h"
@@ -12,6 +13,8 @@
 #include "esp_app_desc.h"
 #include "esp_chip_info.h"
 #include "esp_log.h"
+#include "psram_alloc.h"
+#include "esp_timer.h"
 #include "frame_trace.h"
 #include "p3a_board.h"
 #include "play_scheduler.h"
@@ -56,18 +59,45 @@ static void fill_info(p3a_ui_content_t *out)
 {
     p3a_net_status_t net;
     p3a_net_status(&net);
-    const p3a_storage_space_t space = p3a_storage_space();
-    char card[40] = "no SD card";
-    if (space.valid) {
-        snprintf(card, sizeof(card), "%u MB free on the card", (unsigned)(space.free_bytes / (1024 * 1024)));
-    }
     const esp_app_desc_t *app = esp_app_get_description();
-    if (net.state == P3A_NET_UP) {
-        p3a_ui_content(out, net.hostname, -1, "http://%s.local\n%s\nFirmware %s\n%s", net.hostname, net.ip, app->version, card);
+    const int64_t minutes = esp_timer_get_time() / 60000000;
+    char uptime[24], signal[32] = "", card[48] = "Not usable";
+    if (minutes >= 1440) {
+        snprintf(uptime, sizeof(uptime), "%dd %dh %dm", (int)(minutes / 1440), (int)(minutes % 1440 / 60), (int)(minutes % 60));
+    } else if (minutes >= 60) {
+        snprintf(uptime, sizeof(uptime), "%dh %dm", (int)(minutes / 60), (int)(minutes % 60));
     } else {
-        p3a_ui_content(out, net.hostname[0] ? net.hostname : "p3a", -1, "Not on Wi-Fi (%s)\nFirmware %s\n%s",
-                       p3a_net_state_name(net.state), app->version, card);
+        snprintf(uptime, sizeof(uptime), "%dm", (int)minutes);
     }
+    const p3a_storage_space_t space = p3a_storage_space();
+    if (space.valid) {
+        snprintf(card, sizeof(card), "%.1f GB free", (double)space.free_bytes / 1e9);
+    }
+    const bool up = net.state == P3A_NET_UP;
+    if (up) {
+        snprintf(signal, sizeof(signal), "%d dBm (%s)", net.rssi,
+                 net.rssi >= -60 ? "good" : net.rssi >= -70 ? "fair" : "weak");
+    }
+    play_scheduler_status_t *player = psram_calloc(1, sizeof(*player));
+    uint32_t playable = 0, channels = 0;
+    if (player != NULL) {
+        play_scheduler_get_status(player);
+        channels = player->channel_count;
+        for (uint32_t c = 0; c < channels; c++) {
+            playable += player->channels[c].available;
+        }
+        free(player);
+    }
+    const char *name = net.hostname[0] ? net.hostname : "p3a";
+    snprintf(out->title, sizeof(out->title), "%s", name);
+    out->progress = -1;
+    snprintf(out->text, sizeof(out->text),
+             "Firmware\t%s\nUptime\t%s\nWi-Fi\t%s\nSignal\t%s\nAddress\t%s\nWeb page\thttp://%s.local\n"
+             "SD card\t%s\nPlayset\t%u artworks, %u channel%s",
+             app->version, uptime, net.ssid[0] ? net.ssid : "Not set up", up ? signal : p3a_net_state_name(net.state),
+             up ? net.ip : "None", name, card, (unsigned)playable, (unsigned)channels,
+             channels == 1 ? "" : "s");
+    snprintf(out->hint, sizeof(out->hint), "Long press to close");
 }
 
 // The co-processor update on the screen: it knows nothing of the UI and is
@@ -141,6 +171,14 @@ void app_main(void)
     boot_step("display pipeline", display_renderer_start());
     boot_step("player", animation_player_start());
 
+    // The UI comes up with the display: its boot animation covers the rest
+    // of the boot, and the steps below can already say things on the screen.
+    boot_step("ui", p3a_ui_start());
+    p3a_ui_hooks_set(p3a_ui_hook_table());
+    p3a_ui_set_info_source(fill_info);
+    static const slave_ota_ui_t update_ui = {.begin = on_update_begin, .progress = on_update_progress, .end = on_update_end};
+    slave_ota_set_ui(&update_ui);
+
     // A touch controller that does not answer usually does after a restart,
     // so restart once. If it still does not, play on without touch.
     esp_err_t touch = p3a_board_touch_init(3000);
@@ -157,13 +195,6 @@ void app_main(void)
     boot_step("storage", p3a_storage_start(s_settings.sd_root));
     boot_step("local source", source_local_start());
     boot_step("scheduler", play_scheduler_start());
-    // The UI's model of what is on the screen, and the way for every layer
-    // to ask it for something. The co-processor update reports through it.
-    boot_step("ui", p3a_ui_start());
-    p3a_ui_hooks_set(p3a_ui_hook_table());
-    p3a_ui_set_info_source(fill_info);
-    static const slave_ota_ui_t update_ui = {.begin = on_update_begin, .progress = on_update_progress, .end = on_update_end};
-    slave_ota_set_ui(&update_ui);
 
     // The Wi-Fi co-processor: bring its link up and update its firmware if the
     // image in the slave_fw partition is newer. An update takes over the

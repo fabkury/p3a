@@ -108,7 +108,7 @@ describe what a client can do, not the 1.x URL.
 
 | | Capability | 2.0 | M | Note |
 |---|---|---|---|---|
-| [ ] | Boot: background painted before the backlight, then one of 22 intro animations (random or chosen, 1 to 7.5 s) | keep | M3.3 | |
+| [x] | Boot: background painted before the backlight, then one of 22 intro animations (random or chosen, 1 to 7.5 s) | keep | M3.3 | |
 | [ ] | Info screen: name and version, uptime, Wi-Fi and signal, Makapix state, Giphy key state, card space, playset counts, web UI address, IP, reboot counters, format button when the card has failed | keep | M3.3 | |
 | [ ] | Setup screen: network name, both addresses, connected clients; appears when setup mode starts | keep | M3.3 | |
 | [ ] | Registration: status, the 6-character code with a colour-coded countdown, success notice for 10 s; expiry leaves the mode | keep | M3.3, M4.5 | |
@@ -158,7 +158,7 @@ Same pages and look, new internals (D11).
 | [ ] | Actions: show URL, swap to, react, pin, unpin (checked against what is on screen) | keep | M4.4, M4.5 | |
 | [ ] | Actions: start or cancel registration, unregister, reset the Giphy analytics id | keep | M4.2, M4.5 | |
 | [ ] | Rotation read and set | keep | M2.4 | Sets; never toggles |
-| [ ] | Intro animation list and choice | keep | M3.3 | |
+| [ ] | Intro animation list and choice | keep | M3.3 | The choice is the `intro_animation` setting (M3.3); listing the names over the API is to do |
 | [ ] | Device name read and set | keep | M1.5 | Through settings |
 | [ ] | Memory breakdown | keep | M1.5 | |
 | [ ] | Museum cooldown table and browser 429 report | keep | M4.3 | |

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // The screens' layout, drawn with the built-in font: everything stays on
 // the screen and in its place, whatever the words and the rotation.
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -166,6 +167,64 @@ static void test_a_banner_is_a_band_at_the_viewers_bottom_and_leaves_the_rest(vo
     TEST_ASSERT_TRUE(ui_draw_banner(&canvas, &style, &c) > 0);
 }
 
+static void test_rows_line_up_in_two_columns_and_the_hint_sits_at_the_bottom(void)
+{
+    p3a_ui_content_t c;
+    p3a_ui_content(&c, "p3a-fab", -1, "Firmware\t2.0.0\nAddress\t192.168.4.42\nSD card\t29.1 of 29.7 GB free");
+    snprintf(c.hint, sizeof(c.hint), "Long press to close");
+    fresh(0);
+    ui_draw_screen(&canvas, &style, &c);
+    guard_intact();
+    // Labels are in the label colour and all start at the left margin;
+    // values are in the title's colour and all start at the same column.
+    const int column = W - 2 * style.margin;
+    const int value_x = style.margin + column * 2 / 5 + style.text_scale * 4;
+    int label_left = W, value_left = W, label_rows = 0;
+    for (int y = 0; y < H - H / 8; y++) {  // above the hint
+        bool any_label = false;
+        for (int x = 0; x < W; x++) {
+            if (at(x, y) == style.label) {
+                any_label = true;
+                if (x < label_left) {
+                    label_left = x;
+                }
+                TEST_ASSERT_TRUE(x < value_x);
+            }
+        }
+        label_rows += any_label;
+    }
+    TEST_ASSERT_INT_WITHIN((unsigned)(style.text_scale * 2), style.margin, label_left);
+    TEST_ASSERT_TRUE(label_rows > 3 * 6 * style.text_scale);  // three lines of them
+    int t0, t1;
+    rows_with(style.title, &t0, &t1);
+    for (int y = t0 + font.height * style.title_scale; y <= t1; y++) {  // below the title: the values
+        for (int x = 0; x < W; x++) {
+            if (at(x, y) == style.title && x < value_left) {
+                value_left = x;
+            }
+        }
+    }
+    TEST_ASSERT_INT_WITHIN((unsigned)(style.text_scale * 2), value_x, value_left);
+    // The hint: label-coloured ink in the bottom eighth, and nothing else there.
+    int hint = 0;
+    for (int y = H - H / 8; y < H; y++) {
+        for (int x = 0; x < W; x++) {
+            hint += at(x, y) == style.label;
+            TEST_ASSERT_TRUE(at(x, y) == style.label || at(x, y) == style.background);
+        }
+    }
+    TEST_ASSERT_TRUE(hint > 100);
+
+    // A paragraph and rows together, and an empty line between, at every rotation.
+    p3a_ui_content(&c, "Wi-Fi setup", -1, "Join this network with a phone.\n\nNetwork\tp3a-setup\nOr open\thttp://192.168.4.1");
+    for (int r = 0; r < 360; r += 90) {
+        fresh(r);
+        ui_draw_screen(&canvas, &style, &c);
+        guard_intact();
+        TEST_ASSERT_TRUE(count(style.text) > 100 && count(style.label) > 100 && count(style.title) > 100);
+    }
+}
+
 int main(void)
 {
     FILE *f = fopen(UI_FONT_FILE, "rb");
@@ -185,6 +244,7 @@ int main(void)
     RUN_TEST(test_a_screen_is_title_then_text_then_bar_centred_on_the_background);
     RUN_TEST(test_no_words_can_push_anything_off_the_screen);
     RUN_TEST(test_a_banner_is_a_band_at_the_viewers_bottom_and_leaves_the_rest);
+    RUN_TEST(test_rows_line_up_in_two_columns_and_the_hint_sits_at_the_bottom);
     const int failed = UNITY_END();
     free(pixels);
     return failed;

@@ -76,7 +76,7 @@ The firmware is public (Apache 2.0). 1.x runs on real users' devices from
 | `legacy/` | The 1.x sources, kept as the quarry 2.0 is built from. Never compiled, never included, never linked. See `legacy/README.md`. |
 | `docs/2.0/` | The work stream: protocol, plan, ledger, decisions, testing, parity. |
 | `docs/2.0-architecture-review/` | The design of 2.0. |
-| `host/` | Host tooling. `intro-anim-lab` builds from `legacy/` until M3.3. In `jitter-lab` the puller and the analyzer work against 2.0; the rest still targets 1.x and is adapted with the soak (M6.1). |
+| `host/` | Host tooling. `intro-anim-lab` builds the boot animations from `components/p3a_ui/intro/` and checks their contract (`--check`); run it after touching one. In `jitter-lab` the puller and the analyzer work against 2.0; the rest still targets 1.x and is adapted with the soak (M6.1). |
 | `docs/` (the rest), `README.md` | Still describe 1.x. They are rewritten in one pass at M5.4; do not patch them piecemeal. |
 
 ### Layers

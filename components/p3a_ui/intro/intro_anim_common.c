@@ -5,6 +5,16 @@
 #include "p3a_logo.h"
 #include <stdlib.h>
 
+/* On the device the scratch is PSRAM (the project's default; it is a few
+ * kilobytes used for four seconds). The workstation harness has no such
+ * heap. psram_alloc.h has no realloc on purpose, hence heap_caps. */
+#ifdef ESP_PLATFORM
+#include "esp_heap_caps.h"
+#define SCRATCH_REALLOC(p, n) heap_caps_realloc((p), (n), MALLOC_CAP_SPIRAM)
+#else
+#define SCRATCH_REALLOC(p, n) realloc((p), (n))
+#endif
+
 /* Single grow-only scratch buffer shared by the animation modules. Only one
  * animation runs per boot, so one buffer suffices; it is freed after the boot
  * animation ends via intro_anim_scratch_release(). Single-threaded render path,
@@ -15,7 +25,7 @@ static size_t s_scratch_bytes = 0;
 void *intro_anim_scratch(size_t bytes)
 {
     if (bytes > s_scratch_bytes) {
-        void *p = realloc(s_scratch, bytes);
+        void *p = SCRATCH_REALLOC(s_scratch, bytes);
         if (!p) return NULL;          /* old buffer left intact on failure */
         s_scratch = p;
         s_scratch_bytes = bytes;

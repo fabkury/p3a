@@ -13,6 +13,7 @@
 
 #include "play_scheduler.h"
 
+#include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -763,22 +764,33 @@ bool play_scheduler_is_paused(void)
     return paused;
 }
 
+// Holds taken before the scheduler started (the UI's boot animation is up
+// first). They are applied when it starts, so that a hold and its release
+// always pair up whichever side of the start they fall on.
+static _Atomic int s_early_holds;
+
 void play_scheduler_hold(void)
 {
-    if (s != NULL) {
-        LOCK();
-        sched_turn_hold(&s->turn);
-        UNLOCK();
+    if (s == NULL) {
+        atomic_fetch_add(&s_early_holds, 1);
+        return;
     }
+    LOCK();
+    sched_turn_hold(&s->turn);
+    UNLOCK();
 }
 
 void play_scheduler_release(void)
 {
-    if (s != NULL) {
-        LOCK();
-        sched_turn_release(&s->turn, now_ms());
-        UNLOCK();
+    if (s == NULL) {
+        if (atomic_load(&s_early_holds) > 0) {
+            atomic_fetch_sub(&s_early_holds, 1);
+        }
+        return;
     }
+    LOCK();
+    sched_turn_release(&s->turn, now_ms());
+    UNLOCK();
 }
 
 static void on_setting_changed(const p3a_event_t *event, void *ctx)
@@ -812,6 +824,9 @@ esp_err_t play_scheduler_start(void)
     s = state;
     p3a_settings_get(&s->settings);
     sched_turn_init(&s->turn, (uint32_t)s->settings.dwell_s);
+    for (int early = atomic_exchange(&s_early_holds, 0); early > 0; early--) {
+        sched_turn_hold(&s->turn);
+    }
     p3a_event_subscribe(P3A_EVENT_SETTING_CHANGED, on_setting_changed, NULL);
     const esp_timer_create_args_t timer = {.callback = tick, .name = "sched_tick"};
     if (esp_timer_create(&timer, &s_tick) == ESP_OK) {

@@ -213,7 +213,7 @@ def test_the_schema_is_served_as_written(api):
 def test_jobs_are_readable_by_id(api):
     job = api.get("/api/v2/jobs/1").data
     assert job["id"] == 1 and job["state"] == "done" and job["succeeded"] is True and job["progress"] == 100
-    assert job["name"] == "storage_space", "the first job of every boot measures free space"
+    assert job["name"], "every job has a name; which one is first depends on the boot order"
     for missing in ("999999", "0", "abc", "1x", "-1", "4294967297"):
         api.get(f"/api/v2/jobs/{missing}").error(404, "NOT_FOUND")
 

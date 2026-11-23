@@ -21,7 +21,6 @@
 #include "p3a_job.h"
 #include "play_scheduler.h"
 #include "psram_alloc.h"
-#include "sd_health.h"
 #include "ui_internal.h"
 #include "ui_model.h"
 #include "ui_player.h"
@@ -38,6 +37,9 @@ static int64_t s_dark_since_ms = -1;  // since when nothing has been on the pane
 static atomic_bool s_look_again;      // the "getting ready" notice is being held back; see player_job()
 static atomic_bool s_player_job_queued;
 static esp_timer_handle_t s_tick;
+static p3a_ui_info_fn s_info;
+static atomic_bool s_info_job_queued;
+static uint32_t s_ticks;
 
 #define LOCK()   xSemaphoreTake(s_lock, portMAX_DELAY)
 #define UNLOCK() xSemaphoreGive(s_lock)
@@ -204,16 +206,43 @@ static void on_player_changed(const p3a_event_t *event, void *ctx)
     }
 }
 
-// --- the network and the card ---------------------------------------------------
+// --- the information screen -----------------------------------------------------
 
-static void on_setup_started(const p3a_event_t *event, void *ctx)
+void p3a_ui_set_info_source(p3a_ui_info_fn fill)
 {
-    (void)event;
-    (void)ctx;
-    p3a_ui_content_t words;
-    p3a_ui_content(&words, "Wi-Fi setup", -1, "Join the Wi-Fi network p3a-setup with a phone or a computer");
-    hook_screen_show(P3A_SCREEN_SETUP, &words);
+    s_info = fill;
 }
+
+// A job: asks for the screen's words and shows them. Used to open the
+// screen and, while it is up, to keep what it says current (the uptime, the
+// signal).
+static esp_err_t info_job(void *arg)
+{
+    const bool open = arg != NULL;
+    atomic_store(&s_info_job_queued, false);
+    p3a_ui_content_t words;
+    p3a_ui_content(&words, "p3a", -1, "%s", "");
+    if (s_info != NULL) {
+        s_info(&words);
+    }
+    LOCK();
+    if (!open && !s_model.screens[P3A_SCREEN_INFO].up) {
+        UNLOCK();  // closed meanwhile: a refresh must not open it again
+        return ESP_OK;
+    }
+    settle_and_unlock(ui_model_screen_show(&s_model, P3A_SCREEN_INFO, &words));
+    return ESP_OK;
+}
+
+void ui_info_open(void)
+{
+    if (!atomic_exchange(&s_info_job_queued, true) &&
+        p3a_job_submit(P3A_JOBS_UI, "ui: information", info_job, (void *)1, NULL) != ESP_OK) {
+        atomic_store(&s_info_job_queued, false);
+    }
+}
+
+// --- the card -------------------------------------------------------------------
 
 static void on_card_failed(const p3a_event_t *event, void *ctx)
 {
@@ -232,9 +261,15 @@ static void tick(void *arg)
     if (xSemaphoreTake(s_lock, 0) != pdTRUE) {
         return;
     }
+    const bool info_up = s_model.screens[P3A_SCREEN_INFO].up;
     settle_and_unlock(ui_model_tick(&s_model, now_ms()));
     if (atomic_load(&s_look_again)) {
         on_player_changed(NULL, NULL);
+    }
+    // Every two seconds while the information screen is up.
+    if (info_up && ++s_ticks % 8 == 0 && !atomic_exchange(&s_info_job_queued, true) &&
+        p3a_job_submit(P3A_JOBS_UI, "ui: information", info_job, NULL, NULL) != ESP_OK) {
+        atomic_store(&s_info_job_queued, false);
     }
 }
 
@@ -281,10 +316,12 @@ esp_err_t p3a_ui_start(void)
     }
     ui_model_init(&s_model);
     ui_display_start();
-    esp_err_t err = p3a_event_subscribe(P3A_EVENT_PLAYER_CHANGED, on_player_changed, NULL);
-    if (err == ESP_OK) {
-        err = p3a_event_subscribe(P3A_EVENT_NET_SETUP_STARTED, on_setup_started, NULL);
+    // The boot animation is the first thing on the panel. Whatever else
+    // comes up meanwhile (the first artwork, a notice) waits under it.
+    if (ui_intro_arm()) {
+        hook_screen_show(P3A_SCREEN_INTRO, NULL);
     }
+    esp_err_t err = p3a_event_subscribe(P3A_EVENT_PLAYER_CHANGED, on_player_changed, NULL);
     if (err == ESP_OK) {
         err = p3a_event_subscribe(P3A_EVENT_SD_HEALTH_FAILED, on_card_failed, NULL);
     }
@@ -294,11 +331,6 @@ esp_err_t p3a_ui_start(void)
     }
     if (err == ESP_OK) {
         err = esp_timer_start_periodic(s_tick, TICK_MS * 1000);
-    }
-    // What is true already: the card may have failed its probe before the
-    // UI existed to hear of it.
-    if (sd_health_is_failed()) {
-        on_card_failed(NULL, NULL);
     }
     on_player_changed(NULL, NULL);
     if (err == ESP_OK) {

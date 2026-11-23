@@ -45,6 +45,17 @@ static int draw_screen(uint8_t *buffer, bool must_redraw, void *ctx)
     (void)ctx;
     p3a_ui_state_t state;
     p3a_ui_get_state(&state);
+    if (state.screen == P3A_SCREEN_INTRO) {
+        const int frame_ms = ui_intro_render(buffer);
+        if (frame_ms > 0) {
+            s_drawn_rotation = -1;  // whatever is drawn after this is drawn afresh
+            return frame_ms;
+        }
+        // Over: the screen comes down, and what was waiting under it shows.
+        // Until the model has followed, the last frame stays.
+        p3a_ui_screen_hide(P3A_SCREEN_INTRO);
+        return must_redraw ? -1 : DISPLAY_FRAME_UNCHANGED;
+    }
     ui_canvas_t canvas;
     canvas_for(buffer, &canvas);
     if (!must_redraw && state.revision == s_drawn_revision && canvas.rotation == s_drawn_rotation) {
@@ -52,6 +63,9 @@ static int draw_screen(uint8_t *buffer, bool must_redraw, void *ctx)
     }
     ui_style_t style;
     ui_style_default(&style, &s_font, ui_canvas_view_width(&canvas));
+    if (state.screen == P3A_SCREEN_FATAL) {
+        style.title = 0xFF5050;
+    }
     ui_draw_screen(&canvas, &style, state.has_content ? &state.content : NULL);
     s_drawn_revision = state.revision;
     s_drawn_rotation = canvas.rotation;

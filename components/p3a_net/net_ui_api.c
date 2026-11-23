@@ -24,6 +24,9 @@ static void get_ui(p3a_http_request_t *req)
     if (state.has_content) {
         cJSON_AddStringToObject(data, "title", state.content.title);
         cJSON_AddStringToObject(data, "text", state.content.text);
+        if (state.content.hint[0] != '\0') {
+            cJSON_AddStringToObject(data, "hint", state.content.hint);
+        }
         if (state.content.progress >= 0) {
             cJSON_AddNumberToObject(data, "progress", state.content.progress);
         }

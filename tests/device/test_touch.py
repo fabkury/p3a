@@ -19,7 +19,7 @@ pytestmark = pytest.mark.live
 
 FILES = {"zz-touch-a.gif": "gif/opaque_anim.gif", "zz-touch-b.png": "png/rgb.png", "zz-touch-c.jpg": "jpeg/baseline.jpg"}
 LOCAL_ONLY = {"name": "", "channels": [{"source": "local"}]}
-UPDATE = 6
+UPDATE = 7
 LIFT = [0, 0, 0, 0, 0, 60]
 
 
@@ -77,7 +77,7 @@ def rig(bring_up):
     r = Rig(uart, Api(lab.provision(uart)["ip"]))
 
     def clean():
-        for screen in (2, UPDATE):
+        for screen in (3, UPDATE):
             uart.command("ui screen", {"screen": screen, "up": False})
         uart.command("sched pause off")
         uart.command("settings set", {"rotation": 0})
@@ -127,7 +127,10 @@ def test_a_long_press_opens_the_information_screen_and_another_closes_it(rig):
     assert (got["new"], got["last_gesture"], got["last_action"]) == (1, "long_press", "open_info")
     ui = rig.api.get("/api/v2/ui").data
     assert ui["screen"] == "info" and ui["title"] == "p3a-fab"
-    assert "http://p3a-fab.local" in ui["text"] and "Firmware 2.0.0" in ui["text"] and "free on the card" in ui["text"]
+    rows = dict(line.split("\t") for line in ui["text"].split("\n"))
+    assert rows["Web page"] == "http://p3a-fab.local" and rows["Firmware"].startswith("2.0.0")
+    assert rows["Address"] == rig.api.base.removeprefix("http://") and "GB free" in rows["SD card"] and "artworks" in rows["Playset"]
+    assert ui["hint"] == "Long press to close"
     # Under the screen a tap does nothing.
     shown = rig.player()["counters"]["shown"]
     assert rig.fingers(tap(600, 300))["last_action"] == "none"

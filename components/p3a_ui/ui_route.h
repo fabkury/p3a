@@ -11,7 +11,7 @@
 //   the information screen            long press closes it
 //   setup, registration               long press closes them (the device stays in that state)
 //   a notice that fills the screen    as on the artwork, except next and back (there is nothing to step through)
-//   an update, the card shared over USB, a fatal error
+//   an update, the card shared over USB, a fatal error, the boot animation
 //                                     nothing: these screens are not to be interrupted
 //
 // 1.x spread this over a router with 27 weak references into other

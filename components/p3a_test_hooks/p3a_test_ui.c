@@ -3,7 +3,7 @@
 // through the same calls every layer uses (p3a_ui_hooks.h). Arguments are
 // JSON.
 //
-// !ui screen {"screen": n, "up": true, "title": "...", "text": "...", "progress": 40}
+// !ui screen {"screen": n, "up": true, "title": "...", "text": "...", "hint": "...", "progress": 40}
 // !ui notice {"notice": n, "up": true, "text": "...", "ttl_ms": 0, "max_per_boot": 0}
 //
 // !ui touch [[fingers, x0, y0, x1, y1, hold_ms], ...]   fingers for the touch task, in
@@ -95,6 +95,7 @@ static void cmd_ui(const char *args)
     }
     p3a_ui_content_t words;
     p3a_ui_content(&words, string(json, "title"), number(json, "progress", -1), "%s", string(json, "text"));
+    snprintf(words.hint, sizeof(words.hint), "%s", string(json, "hint"));
     const bool up = cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(json, "up"));
     if (screen) {
         const p3a_screen_t which = (p3a_screen_t)number(json, "screen", -1);

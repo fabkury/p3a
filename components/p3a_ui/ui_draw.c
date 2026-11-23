@@ -3,7 +3,48 @@
 
 #include "ui_draw.h"
 
+#include <string.h>
+
 #define MAX_LINES 8
+
+// Draws (or, with no canvas, measures) a screen's text: each line a centred
+// paragraph, or a row of label and value when it has a tab. Returns the
+// height used.
+static int32_t body(const ui_canvas_t *canvas, const ui_style_t *style, int32_t x, int32_t y, int32_t column,
+                    const char *text)
+{
+    const int32_t scale = style->text_scale, line_gap = scale * 2;
+    const int32_t label_w = column * 2 / 5, value_x = x + label_w + scale * 4, value_w = column - label_w - scale * 4;
+    int32_t used = 0;
+    const char *line = text;
+    while (*line != '\0') {
+        const char *end = strchr(line, '\n');
+        const size_t len = end ? (size_t)(end - line) : strlen(line);
+        char piece[P3A_UI_TEXT_LEN];
+        const size_t take = len < sizeof(piece) - 1 ? len : sizeof(piece) - 1;
+        memcpy(piece, line, take);
+        piece[take] = '\0';
+        if (used > 0) {
+            used += line_gap;
+        }
+        char *tab = strchr(piece, '\t');
+        if (tab != NULL) {
+            *tab = '\0';
+            const int32_t a = ui_text_block(canvas, style->font, x, y + used, label_w, scale, line_gap, UI_ALIGN_LEFT,
+                                            style->label, piece, 1);
+            const int32_t b = ui_text_block(canvas, style->font, value_x, y + used, value_w, scale, line_gap,
+                                            UI_ALIGN_LEFT, style->title, tab + 1, 2);
+            used += a > b ? a : b;
+        } else if (piece[0] == '\0') {
+            used += style->font->height * scale / 2;  // an empty line is half a line of space
+        } else {
+            used += ui_text_block(canvas, style->font, x, y + used, column, scale, line_gap, UI_ALIGN_CENTRE,
+                                  style->text, piece, MAX_LINES);
+        }
+        line = end ? end + 1 : line + len;
+    }
+    return used;
+}
 
 void ui_style_default(ui_style_t *style, const ui_font_t *font, int32_t view_width)
 {
@@ -22,6 +63,7 @@ void ui_style_default(ui_style_t *style, const ui_font_t *font, int32_t view_wid
     style->background = 0x000000;
     style->title = 0xFFFFFF;
     style->text = 0xC8C8C8;
+    style->label = 0x8C8C8C;
     style->accent = 0xFFBE3C;
 }
 
@@ -43,9 +85,7 @@ void ui_draw_screen(const ui_canvas_t *canvas, const ui_style_t *style, const p3
     const int32_t title_h = has_title ? ui_text_block(NULL, style->font, 0, 0, column, style->title_scale, line_gap,
                                                       UI_ALIGN_CENTRE, 0, content->title, 2)
                                       : 0;
-    const int32_t text_h = has_text ? ui_text_block(NULL, style->font, 0, 0, column, style->text_scale, line_gap,
-                                                    UI_ALIGN_CENTRE, 0, content->text, MAX_LINES)
-                                    : 0;
+    const int32_t text_h = has_text ? body(NULL, style, style->margin, 0, column, content->text) : 0;
     int32_t total = title_h + text_h + (has_bar ? bar_h : 0);
     const int32_t parts = (has_title ? 1 : 0) + (has_text ? 1 : 0) + (has_bar ? 1 : 0);
     if (parts > 1) {
@@ -61,8 +101,7 @@ void ui_draw_screen(const ui_canvas_t *canvas, const ui_style_t *style, const p3
         y += title_h + gap;
     }
     if (has_text) {
-        ui_text_block(canvas, style->font, style->margin, y, column, style->text_scale, line_gap, UI_ALIGN_CENTRE,
-                      style->text, content->text, MAX_LINES);
+        body(canvas, style, style->margin, y, column, content->text);
         y += text_h + gap;
     }
     if (has_bar) {
@@ -72,6 +111,12 @@ void ui_draw_screen(const ui_canvas_t *canvas, const ui_style_t *style, const p3
         const int32_t inner = column - 4 * edge;
         ui_canvas_fill(canvas, style->margin + 2 * edge, y + 2 * edge, inner * progress / 100, bar_h - 4 * edge,
                        style->accent);
+    }
+    if (content->hint[0] != '\0') {
+        // What a person can do here, small, at the bottom edge.
+        const int32_t hint_h = style->font->height * style->banner_scale;
+        ui_text_block(canvas, style->font, style->margin, vh - style->margin / 2 - hint_h, column, style->banner_scale, 0,
+                      UI_ALIGN_CENTRE, style->label, content->hint, 1);
     }
 }
 

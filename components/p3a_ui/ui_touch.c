@@ -35,13 +35,6 @@ static p3a_ui_touch_step_t s_script[SCRIPT_STEPS];
 static size_t s_script_len, s_script_at;
 static int64_t s_step_ends_ms;
 static p3a_ui_touch_status_t s_status;
-static p3a_ui_info_fn s_info;
-
-void p3a_ui_set_info_source(p3a_ui_info_fn fill)
-{
-    s_info = fill;
-}
-
 esp_err_t p3a_ui_touch_script(const p3a_ui_touch_step_t *steps, size_t count)
 {
     if (s_lock == NULL) {
@@ -128,7 +121,6 @@ static void turn(int by)
 
 static void act(ui_action_t action, p3a_screen_t screen)
 {
-    p3a_ui_content_t words;
     switch (action) {
     case UI_ACTION_NEXT:
         play_scheduler_next();
@@ -143,11 +135,7 @@ static void act(ui_action_t action, p3a_screen_t screen)
         turn(-90);
         break;
     case UI_ACTION_OPEN_INFO:
-        p3a_ui_content(&words, "p3a", -1, "%s", "");
-        if (s_info != NULL) {
-            s_info(&words);
-        }
-        p3a_ui_screen_show(P3A_SCREEN_INFO, &words);
+        ui_info_open();
         break;
     case UI_ACTION_CLOSE_SCREEN:
         p3a_ui_screen_hide(screen);

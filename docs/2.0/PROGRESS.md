@@ -10,7 +10,7 @@ times.
 |---|---|
 | Phase | 3, on-device UI (Phases 0, 1 and 2 complete) |
 | Current milestone | M3.3 screens (M3.4 awaits real fingers) |
-| Next action | M3.3: the remaining screens on the model and the text path. From `legacy/`: the information screen's full content (`main/ugfx_ui.c`), the registration code (with M4.5), the SD error and format flow (`main/sd_format.c`, taps through `ui_route`), the repair notice (`sd_repair_fat_stats()`), the fatal error, the boot logo and the 22 intro animations (`p3a_core/intro_anims`, `host/intro-anim-lab` must keep working), the touch-failure countdown. Then M3.5 overlays and M3.6 USB. |
+| Next action | M3.3, the rest: the fatal error screen's callers and its SD-format offer, the SD error and format flow (`legacy/main/sd_format.c`; taps go through `ui_route`, which needs a way to say where a screen's controls are), the repair notice (`sd_repair_fat_stats()`), the touch-failure countdown (PARITY "Touch and buttons"), an API to list the boot animations for the settings page. The registration code comes with M4.5 and the USB screen with M3.6. Then M3.5 overlays and M3.6 USB |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -47,7 +47,7 @@ reopened (why).
 | M2.4 Loader pipeline, C and D | done 2026-11-23. Tiers: host tests (20 programs, under the sanitizers too), the whole device suite (260 cases pass; the 6 timing cases need the trace build and were not run), release, test and trace builds, the configuration guard. Not seen on the device because nothing produces them yet: deleting a damaged blob (M4.1), the aspect filter (M4.3). Manual check M2.4-a pending |
 | M3.1 Screen model and hook table | done 2026-11-23. Tiers: host tests (22 programs, under the sanitizers too), device tests (smoke, UI, pipeline and player: 48 cases), test build. Nothing is drawn yet |
 | M3.2 Text and fonts | done 2026-11-23: the font is Everyday Ample, Fab's choice (D61). Tiers: host tests, device tests (the panel equals the workstation's rendering pixel for pixel). Manual check M3.2-a (the look on the panel itself) pending; image assets arrive with the screens that need them |
-| M3.3 Screens | not started |
+| M3.3 Screens | in progress: the boot animation, the information screen and the setup screen are in (2026-11-23). The fatal error with its format offer, the SD flow, the repair notice and the touch-failure countdown are to do |
 | M3.4 Touch router and gestures | built 2026-11-23; open for manual check M3.4-a (real fingers), swipe actions (Phase 4) and the SD-format taps (M3.3). Tiers: host tests (26 programs, under the sanitizers too), device tests with scripted fingers (71 cases with the areas around it) |
 | M3.5 Overlays | not started |
 | M3.6 USB mass storage | not started |
@@ -130,7 +130,7 @@ Open:
   check that taps do nothing and a long press resumes.
 - **M3.2-a, the look of the screens.** The font is chosen (Everyday
   Ample). Look at a screen on the device itself:
-  `python host/p3a-lab/lab.py cmd "ui screen {\"screen\":6,\"up\":true,\"title\":\"Updating Wi-Fi\",\"text\":\"2.9.1 to 2.9.3. Do not unplug\",\"progress\":64}"`
+  `python host/p3a-lab/lab.py cmd "ui screen {\"screen\":7,\"up\":true,\"title\":\"Updating Wi-Fi\",\"text\":\"2.9.1 to 2.9.3. Do not unplug\",\"progress\":64}"`
   (take it down with `\"up\":false`). Sizes, colours and the banner's
   height are the numbers in `ui_style_default()`.
 - **M2.4-a, the BOOT button pauses.** With something playing, press the
@@ -314,10 +314,60 @@ M1.1, 2026-11-17:
   of 1.x are not carried over; each returns only if its emitter arrives and
   it is a real fan-out (D22).
 
+M3.3, 2026-11-23:
+
+- `components/p3a_core/p3a_boot_logo.c` and its header: rewritten as
+  `components/p3a_ui/ui_intro.c` on the settings store and the UI's model;
+  the phases and timings are the same.
+
 ## Session log
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-23: M3.3 parts 1 and 2, the boot animation, information and setup
+
+- **The 22 boot animations and the logo moved** from
+  `legacy/components/p3a_core` to `components/p3a_ui/intro/` unchanged
+  but for one thing: their scratch buffer is PSRAM on the device. The
+  logo stays a C array, because the workstation harness compiles the same
+  files; finding 24 (hex image arrays) is about the icons, which arrive
+  with their overlays.
+- `ui_intro.c` is 1.x's `p3a_boot_logo.c` on 2.0's settings
+  (`intro_animation`, `intro_duration_ms`): 250 ms of background, the
+  animation, the logo held for a second, timed from the first frame drawn.
+- **The boot animation is a screen of the model** (`P3A_SCREEN_INTRO`,
+  just above a notice). The UI now starts with the display, so the
+  animation covers the rest of the boot; the first artwork loads under it
+  and is shown when it ends. Gestures do nothing meanwhile.
+- `host/intro-anim-lab` builds from the new place; its `--check` passes.
+- **The information screen** is rows of label and value: firmware,
+  uptime, Wi-Fi, signal, address, web page, card, playset. `app_main`
+  fills it (the network is above the UI) and it is refreshed every two
+  seconds while up. Makapix and Giphy rows come with those sources.
+- **The setup screen** is put up by the network when it opens its access
+  point, with the network's name and the address to open.
+- A screen's text may now mix paragraphs and rows (a line with a tab is a
+  row) and has a hint line at the bottom ("Long press to close"). The
+  fatal screen's title is red.
+- **A fault found by the wider run and fixed:** the UI took its hold on
+  playback before the scheduler existed and released it afterwards, which
+  released the test build's hold instead. Holds taken before the
+  scheduler starts are now applied when it starts.
+- Verified, host tests: 26 programs, also under the sanitizers; the lab's
+  contract checks for all 22 animations.
+- Verified, device tests: 3 new cases (the chosen animation plays, ends
+  on the logo with every frame inside its 33 ms budget and hands over to
+  the artwork; an unknown name falls back to a random one; rows and a
+  hint equal the workstation's rendering). With the smoke, API, pipeline,
+  UI, drawing and touch tests: 45 cases on the final firmware. Before the
+  information screen and the hold fix, every test not marked slow ran:
+  260 passed and 2 failed, both since fixed (the hold, and a test that
+  named the first job of a boot).
+- Not verified: each of the 22 animations by eye on the panel in 2.0
+  (they are unchanged, and were device-verified in 1.x); the setup screen
+  through a real setup (it needs the unit taken off Wi-Fi: part of manual
+  check M1.5-a).
 
 ### 2026-11-23: uGFX is dropped (O3 decided)
 

@@ -17,7 +17,7 @@ from test_decoders import CORPUS
 pytestmark = pytest.mark.live
 
 # p3a_screen_t and p3a_notice_t (p3a_ui_hooks.h)
-INFO, SETUP, UPDATE = 2, 4, 6
+INFO, SETUP, UPDATE = 3, 5, 7
 LOADING, SOURCE_PROBLEM, CARD_REPAIRED = 0, 3, 5
 FILES = {"zz-ui-a.gif": "gif/opaque_anim.gif", "zz-ui-b.png": "png/rgb.png"}
 LOCAL_ONLY = {"name": "", "channels": [{"source": "local"}]}
@@ -47,7 +47,7 @@ def rig(bring_up):
     api = Api(lab.provision(uart)["ip"])
 
     def clean():
-        for screen in range(2, 7):
+        for screen in range(3, 8):
             uart.command("ui screen", {"screen": screen, "up": False})
         for notice in range(7):
             uart.command("ui notice", {"notice": notice, "up": False})

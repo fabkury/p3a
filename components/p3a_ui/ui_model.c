@@ -19,7 +19,7 @@ void ui_model_init(ui_model_t *model)
 static bool same_content(const p3a_ui_content_t *a, const p3a_ui_content_t *b)
 {
     return a->progress == b->progress && strncmp(a->title, b->title, sizeof(a->title)) == 0 &&
-           strncmp(a->text, b->text, sizeof(a->text)) == 0;
+           strncmp(a->text, b->text, sizeof(a->text)) == 0 && strncmp(a->hint, b->hint, sizeof(a->hint)) == 0;
 }
 
 static void copy_content(p3a_ui_content_t *to, const p3a_ui_content_t *from)
@@ -27,6 +27,7 @@ static void copy_content(p3a_ui_content_t *to, const p3a_ui_content_t *from)
     *to = *from;
     to->title[sizeof(to->title) - 1] = '\0';
     to->text[sizeof(to->text) - 1] = '\0';
+    to->hint[sizeof(to->hint) - 1] = '\0';
 }
 
 // The slot whose words are seen, or NULL.
@@ -193,7 +194,7 @@ bool ui_model_tick(ui_model_t *model, int64_t now_ms)
 
 const char *ui_screen_name(p3a_screen_t screen)
 {
-    static const char *const names[P3A_SCREEN_COUNT] = {"artwork", "notice", "info", "registration",
+    static const char *const names[P3A_SCREEN_COUNT] = {"artwork", "notice", "intro",  "info", "registration",
                                                          "setup",   "usb",    "update", "fatal"};
     return (unsigned)screen < P3A_SCREEN_COUNT ? names[screen] : "unknown";
 }

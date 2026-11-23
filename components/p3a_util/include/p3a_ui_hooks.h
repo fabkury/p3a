@@ -27,6 +27,7 @@ extern "C" {
 typedef enum {
     P3A_SCREEN_ARTWORK = 0,   // nothing covers the artwork
     P3A_SCREEN_NOTICE,        // a notice about playback or the card; a banner while an artwork plays
+    P3A_SCREEN_INTRO,         // the boot animation; put up and taken down by the UI itself
     P3A_SCREEN_INFO,          // the information screen the user opened
     P3A_SCREEN_REGISTRATION,  // the Makapix registration code
     P3A_SCREEN_SETUP,         // how to put the device on Wi-Fi
@@ -50,11 +51,18 @@ typedef enum {
 } p3a_notice_t;
 
 #define P3A_UI_TITLE_LEN 48
-#define P3A_UI_TEXT_LEN  160
+#define P3A_UI_TEXT_LEN  400
+#define P3A_UI_HINT_LEN  48
 
+// What a screen or a notice says. `text` is lines separated by newlines. A
+// line is a paragraph, wrapped and centred, unless it has a tab in it: then
+// it is a row, "label<tab>value", and the rows of a screen line up in two
+// columns. `hint` is one small line at the bottom of a screen, for what a
+// person can do there ("Long press to close").
 typedef struct {
     char title[P3A_UI_TITLE_LEN];
     char text[P3A_UI_TEXT_LEN];
+    char hint[P3A_UI_HINT_LEN];
     int16_t progress;  // 0 to 100, or -1 for none
 } p3a_ui_content_t;
 
@@ -80,7 +88,7 @@ void p3a_ui_screen_hide(p3a_screen_t screen);
 void p3a_ui_notice_show(p3a_notice_t notice, const p3a_ui_content_t *content, uint32_t ttl_ms, uint32_t max_per_boot);
 void p3a_ui_notice_hide(p3a_notice_t notice);
 
-// Fills a content from a title, a printf-style text and a progress.
+// Fills a content from a title, a printf-style text and a progress; no hint.
 void p3a_ui_content(p3a_ui_content_t *out, const char *title, int progress, const char *format, ...)
     __attribute__((format(printf, 4, 5)));
 

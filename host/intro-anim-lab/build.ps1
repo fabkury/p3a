@@ -19,8 +19,8 @@ $buildDir   = Join-Path $labDir 'build'
 $outExe     = Join-Path $buildDir 'intro-anim-lab.exe'
 New-Item -ItemType Directory -Force $buildDir | Out-Null
 
-$introAnims = Join-Path $repoRoot 'legacy\components\p3a_core\intro_anims'
-$includeP3a = Join-Path $repoRoot 'legacy\components\p3a_core\include'
+$introAnims = Join-Path $repoRoot 'components\p3a_ui\intro'
+$includeP3a = Join-Path $repoRoot 'components\p3a_ui\intro'
 
 $sources = @(
     (Join-Path $labDir 'main.c'),
@@ -28,7 +28,7 @@ $sources = @(
     (Join-Path $labDir 'viewer_win32.c'),
     (Join-Path $labDir 'dump.c'),
     (Join-Path $labDir 'checks.c'),
-    (Join-Path $repoRoot 'legacy\components\p3a_core\p3a_logo.c'),
+    (Join-Path $introAnims 'p3a_logo.c'),
     (Join-Path $introAnims 'intro_anim_common.c'),
     (Join-Path $introAnims 'intro_anim_registry.c'),
     (Join-Path $introAnims 'ia_smoothstep_fade.c'),

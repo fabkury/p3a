@@ -29,12 +29,12 @@ pytestmark = pytest.mark.live
 REPO = Path(__file__).resolve().parents[2]
 PREVIEW = REPO / "build-host" / ("ui_preview.exe" if sys.platform == "win32" else "ui_preview")
 FONT = REPO / "components" / "p3a_ui" / "fonts" / "ui.p3afont"
-UPDATE = 6         # p3a_screen_t
+UPDATE = 7         # p3a_screen_t
 CARD_REPAIRED = 5  # p3a_notice_t
 
 
 def preview(tmp_path, rotation: int, mode: str, progress: int, title: str, text: str,
-            under: Image.Image | None = None) -> Image.Image:
+            under: Image.Image | None = None, hint: str | None = None) -> Image.Image:
     """The frame the drawing code makes for these words, from the workstation."""
     out = tmp_path / "expected.bgr"
     args = [str(PREVIEW), str(FONT), str(rotation), mode, str(out), str(progress), title, text]
@@ -42,6 +42,8 @@ def preview(tmp_path, rotation: int, mode: str, progress: int, title: str, text:
         base = tmp_path / "under.bgr"
         base.write_bytes(under.tobytes("raw", "BGR"))
         args.append(str(base))
+    elif hint is not None:
+        args.append(hint)
     subprocess.run(args, check=True)
     return Image.frombytes("RGB", (PANEL, PANEL), out.read_bytes(), "raw", "BGR")
 
@@ -99,6 +101,19 @@ def test_a_screen_is_upright_however_the_device_is_turned(rig, tmp_path, rotatio
     finally:
         uart.command("ui screen", {"screen": UPDATE, "up": False})
         panel.set(rotation=0)
+
+
+def test_rows_and_a_hint_are_drawn_as_on_the_workstation(rig, tmp_path):
+    uart, api, panel = rig
+    text = "Join this network with a phone.\n\nNetwork\tp3a-setup\nOr open\thttp://192.168.4.1"
+    uart.command("ui screen", {"screen": UPDATE, "up": True, "title": "Wi-Fi setup", "text": text,
+                               "hint": "Long press to hide"})
+    try:
+        settle()
+        wanted = preview(tmp_path, 0, "screen", -1, "Wi-Fi setup", text, hint="Long press to hide")
+        assert panel.differing(wanted, 1) == 0
+    finally:
+        uart.command("ui screen", {"screen": UPDATE, "up": False})
 
 
 def test_a_notice_is_a_band_over_a_still_artwork_and_leaves_no_trace(rig, tmp_path):

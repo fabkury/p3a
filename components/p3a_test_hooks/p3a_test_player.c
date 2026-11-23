@@ -20,6 +20,7 @@
 #include <string.h>
 
 #include "animation_player.h"
+#include "play_scheduler.h"
 #include "display_renderer.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
@@ -250,6 +251,7 @@ void p3a_test_player_start(void)
         return;
     }
     static const animation_player_listener_t listener = {.ready = on_ready, .shown = on_shown, .failed = on_failed};
-    animation_player_set_listener(&listener, NULL);
+    // The scheduler is the player's listener; it passes on reports about these requests.
+    play_scheduler_set_foreign_listener(&listener, NULL);
     p3a_http_add_routes(s_routes, sizeof(s_routes) / sizeof(s_routes[0]));
 }

@@ -79,6 +79,7 @@ Set before the architecture review and taken as given by everything since.
 | D50 | 2026-11-23 | Working | A playset channel is `source` + `kind` + `identifier` + `offset` (which make its id) with a weight and a display name; one 224-byte packed form everywhere. Its JSON is strict: anything unknown or oversized is refused with a reason. This is a new JSON shape, not 1.x's | Findings 5 and 20, audit M21. A cut identifier names another channel; a silently dropped typo is a setting the user believes they made |
 | D51 | 2026-11-23 | Working | Layer order: `library` below `sources`. The library defines the source interface and registry; sources implement it from above and register at boot | A source must produce the library's records. With the interface in the library, every arrow still points down |
 | D52 | 2026-11-23 | Working | The user's files in `animations/` are listed in place and never moved into the blob store. Their records carry the file name and the `IN_PLACE` flag | Someone browsing the card over USB must find their files under their names |
+| D53 | 2026-11-23 | Working | A device with no active playset plays the user's own files. History holds whole records, is written only when the player reports an artwork shown, and survives a change of playset | A fresh device should do something sensible with a card of pictures; finding 7 |
 
 ## 1.x decisions that stay in force
 

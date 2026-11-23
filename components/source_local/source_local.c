@@ -122,6 +122,11 @@ static esp_err_t local_path(const p3a_record_t *record, char *out, size_t len)
     return (n > 0 && (size_t)n < len) ? ESP_OK : ESP_ERR_INVALID_SIZE;
 }
 
+static uint32_t local_index_capacity(void)
+{
+    return P3A_INDEX_MAX_RECORDS;
+}
+
 static uint32_t local_refresh_interval_s(void)
 {
     return 0;  // listed again only when something says the folder changed
@@ -142,6 +147,7 @@ esp_err_t source_local_start(void)
         .refresh = local_refresh,
         .path = local_path,
         .refresh_interval_s = local_refresh_interval_s,
+        .index_capacity = local_index_capacity,
         .smooth = false,  // the user's files are shown as they are, pixel for pixel
     };
     if (s_lock == NULL) {

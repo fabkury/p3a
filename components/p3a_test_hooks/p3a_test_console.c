@@ -114,6 +114,7 @@ static void dispatch(char *line)
         run_from(p3a_test_storage_commands, p3a_test_storage_command_count, name, args) ||
         run_from(p3a_test_library_commands, p3a_test_library_command_count, name, args) ||
         run_from(p3a_test_playset_commands, p3a_test_playset_command_count, name, args) ||
+        run_from(p3a_test_sched_commands, p3a_test_sched_command_count, name, args) ||
         run_from(p3a_test_settings_commands, p3a_test_settings_command_count, name, args) ||
         run_from(p3a_test_net_commands, p3a_test_net_command_count, name, args)) {
         return;
@@ -173,6 +174,7 @@ void p3a_test_console_start(void)
     p3a_test_http_start();
     p3a_test_decode_start();
     p3a_test_player_start();
+    p3a_test_sched_start();
     p3a_task_config_t task = P3A_TASK_CONFIG("p3a_test_con", console_task, NULL, 6144, P3A_TASK_BACKGROUND);
     err = p3a_task_create(&task, NULL);
     if (err != ESP_OK) {

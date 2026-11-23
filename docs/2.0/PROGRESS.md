@@ -10,7 +10,7 @@ times.
 |---|---|
 | Phase | 2, player and library (Phases 0 and 1 complete) |
 | Current milestone | M2.1 display pipeline and decoders |
-| Next action | M2.3 part 4: the scheduler proper, in `components/play_scheduler`. Over `sched_core`, `p3a_index`, `p3a_source_get()` and the active playset: load the playset's channels (list each through its source's `refresh` in a job; at most 16 indices resident), pick a record, find its bytes (the source's `path` for records in place, else `p3a_blob_path`), hand them to `animation_player` with the source's `smooth`, undo the turn on `failed`, and keep a history for back. Read `legacy/components/play_scheduler/play_scheduler.c` and `play_scheduler_navigation.c` for what history and navigation did. Keep the decisions pure where possible (a host-tested history ring). The dwell timer, failure routing and pause are M2.4; here a test hook or command asks for next and back. Then `player_commands` and the routes (playsets, actions, upload; audit M7) with device tests |
+| Next action | M2.3 part 5, the last: `player_commands` and the routes. One module that both HTTP and (in M4.5) Makapix call: next, back, activate a playset, save, delete, list. Routes under `/api/v2/`: `GET /playsets`, `GET|PUT|DELETE /playsets/{name}`, `GET|PUT /playsets/active`, `POST /player/next`, `POST /player/back`, `GET /player` (status), and `POST /files` (upload into `animations/`, then `play_scheduler_refresh_source`; audit M7: the file name goes through the JSON builder, never into a string by hand). The upload streams to a temporary file and is renamed into place; read `legacy/components/http_api/http_api_upload.c` for the multipart parsing, or take a raw body with the name in the query, which the new web UI can send just as well (decide). Device tests for each route, then the end of M2.3: the whole device suite and the release and trace builds |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -43,7 +43,7 @@ reopened (why).
 | M1.5 net base | done 2026-11-18. Tiers: host tests (12 programs, under ASan and UBSan too), tool self-tests, device tests (119 cases, on the real Wi-Fi), release and test builds, the configuration guard. Awaiting manual check M1.5-a (the portal from a phone). The Wi-Fi recovery ladders are carried over untested |
 | M2.1 Display pipeline and decoders | done 2026-11-19; manual check M2.1-a cleared 2026-11-23. Tiers: host tests (15 programs), the whole device suite (235 cases on the test build; 6 timing cases on the trace-test build), release, test, trace and trace-test builds, the configuration guard. Timing has a baseline of minutes only; the jitter pass bar waits for the soak (M6.1) |
 | M2.2 Library core | done 2026-11-19. Tiers: host tests (15 programs), the whole device suite (240 cases), release, test and trace builds, the configuration guard. The `refs` table of the plan was not built (D48) |
-| M2.3 Source interface, local source, scheduler | in progress. Done: the scheduler's arithmetic (`sched_core`), playsets, the source interface and the local source. Not started: the scheduler proper, commands, routes |
+| M2.3 Source interface, local source, scheduler | in progress. Done: the scheduler's arithmetic, playsets, the source interface, the local source, and the scheduler proper (it plays the active playset at boot). Not started: `player_commands` and the routes |
 | M2.4 Loader pipeline, C and D | not started |
 | M3.1 Screen model and hook table | not started |
 | M3.2 Text and fonts | not started |
@@ -305,6 +305,52 @@ M1.1, 2026-11-17:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-23: M2.3 part 4, the scheduler proper
+
+- `play_scheduler.c`: the active playset's channels are listed through
+  their sources in one background job, into an index each; "next" chooses
+  a channel and an artwork (`sched_core`), finds its bytes (the source's
+  `path` for a record in place, the blob store otherwise) and hands them
+  to the animation player; the player's reports close the turn.
+- **History is written on "shown" only** (finding 7). A request that fails
+  takes its channel's turn back, enters no history, and leaves the artwork
+  that was playing on the panel. A file that turns out to be missing is no
+  longer offered until its channel is listed again. 1.x committed history
+  at pick time.
+- `sched_history.c` (pure): the last 32 artworks shown, as whole records,
+  so "back" still works after the playset changes. "Next" after "back"
+  walks forward again before anything new is picked.
+- **The device now plays by itself at boot**: the active playset is read
+  from the card and its first artwork is chosen when its first channel is
+  listed. With no playset saved, the device plays the user's own files
+  (D53). Nothing moves on by itself yet: the dwell timer is M2.4.
+- A channel whose source this firmware does not have is passed over, not
+  an error: a playset saved with Giphy channels plays its other channels
+  until M4.2 brings Giphy.
+- Limits, for now: at most 16 of a playset's channels are loaded (the
+  rest are marked "not loaded" and never chosen; loading on demand comes
+  with the remote sources), and a listing replaces the channel's index
+  whole.
+- The scheduler is the animation player's listener. The test hook that
+  plays files directly gets its reports passed on
+  (`play_scheduler_set_foreign_listener`): tokens with the top bit set are
+  the scheduler's.
+- Learned from a test: a GIF cut off half way loads and shows its first
+  frame; it fails only when the missing frames are reached, and is then
+  held on its last good frame. That is the player's intended latch, seen
+  on the device for the first time, though still without a test that
+  asserts it.
+- Verified, host tests (18 programs, also under the sanitizers in WSL; 3
+  new cases for the history).
+- Verified, device tests: the scheduler's 4 cases (listing, a full round
+  in channel order, back and forward, three vanished files and a damaged
+  one, a playset with an absent source, resuming after a restart), and
+  every device test not marked slow, since the boot sequence changed.
+- Not verified: two or more channels with weights on the device (only the
+  local source exists; the shares are host-tested); a playset of more than
+  16 channels; what happens when a listing and a "next" race (the lock
+  covers it by design, no test provokes it).
 
 ### 2026-11-23: M2.3 part 3, the source interface and the local source
 

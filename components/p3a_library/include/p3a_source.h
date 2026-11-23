@@ -59,6 +59,10 @@ typedef struct {
     // that is listed only when something says it changed.
     uint32_t (*refresh_interval_s)(void);
 
+    // How many records one of its channels may hold (a setting, for most
+    // sources). NULL for 1024.
+    uint32_t (*index_capacity)(void);
+
     // Whether this source's pictures are scaled smoothly (photographs,
     // paintings) or with sharp pixels (pixel art).
     bool smooth;

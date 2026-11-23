@@ -12,6 +12,7 @@
 #include "esp_log.h"
 #include "frame_trace.h"
 #include "p3a_board.h"
+#include "play_scheduler.h"
 #include "source_local.h"
 #include "p3a_err.h"
 #include "p3a_event.h"
@@ -95,6 +96,7 @@ void app_main(void)
     // An sd_root setting that is no longer acceptable falls back to the default.
     boot_step("storage", p3a_storage_start(s_settings.sd_root));
     boot_step("local source", source_local_start());
+    boot_step("scheduler", play_scheduler_start());
 
     // The Wi-Fi co-processor: bring its link up and update its firmware if the
     // image in the slave_fw partition is newer. An update takes over the

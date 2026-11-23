@@ -10,7 +10,7 @@ times.
 |---|---|
 | Phase | 4, remote sources (Phases 0 to 3 complete but for their manual checks) |
 | Current milestone | M4.1 fetch, download, refresh, eviction |
-| Next action | M4.1 part 2: the content task. One long-lived task (class `NETWORK`) beside the scheduler that lists due channels through `ops->refresh` and downloads wanted artworks through `http_fetch` (with `hash_file`) and `p3a_blob_adopt_hashed()`, one transfer at a time (D63). Needed first: `url` in `p3a_source_ops_t`; a pure merge of a fresh listing into a kept index (blob references, sizes and fail counters carried over by identity) in `p3a_library`, host-tested; index files per channel saved after a refresh and loaded at activation, so a known channel plays at boot without the network; a pure refresh schedule (`sched_refresh.c`: due, running, backing off, and why) with back-off on `RATE_LIMITED`, `AUTH`, `NO_KEY`, no network, `p3a_mem_level()` and a full card. Then eviction (`legacy/components/storage_eviction` over `blobs/`). Device tests need a source: a test-only one registered by the hooks, serving a listing the test sets, is the way to test before Giphy (M4.2) |
+| Next action | First finish M4.1 (paused 2026-11-23 before its milestone-end runs): flash the test build and run the whole device suite (`python -m pytest tests/device`), then `lab.py build release` and `lab.py build trace`; the last edits (URLs logged without their query in `http_fetch.c`, `wait_on_sdio` and `treat_empty_as_not_found` on the content task's downloads) were compiled but have not run on the device. Read CI for this commit. Mark M4.1 done with the results. Then M4.2. Read PLAN.md M4.2, O6, idea 2, `docs/2.0-architecture-review/content-pipeline.md` section 1, `memory`-worthy quirks in `docs/known-issues.md` for Giphy and Klipy, and in `legacy/components`: `giphy` and `klipy` (listing, the parsers, the cooldown, the 401 and no-key states, rendition choice). Build each as a component in the `sources` layer with a `p3a_source_ops_t` (`remote`, `refresh`, `url`, `refresh_interval_s`, `index_capacity`, `filter_aspect`), its settings in `settings.json` (keys flagged `secret`), the listing parser pure and host-tested on recorded responses, and one registration in `app_main`. The content task (M4.1) does the listing schedule, the downloads and the back-off: a source only lists and says where the bytes are. `refresh()` cannot yet hand back a server's Retry-After (the schedule takes it); add that to the ops if Giphy's 429 carries one. Branding on the device (O6). O9's measurements are taken here, with real traffic |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -51,7 +51,7 @@ reopened (why).
 | M3.4 Touch router and gestures | built 2026-11-23; open for manual check M3.4-a (real fingers), swipe actions (Phase 4) and the SD-format taps (M3.3). Tiers: host tests (26 programs, under the sanitizers too), device tests with scripted fingers (71 cases with the areas around it) |
 | M3.5 Overlays | done 2026-11-23 except source branding, which moves to M4.2 where its sources and their terms are (O6). Tiers: host tests (29 programs, under the sanitizers too), device tests (the overlays equal the workstation's rendering). Manual check M3.5-a pending |
 | M3.6 USB mass storage | built 2026-11-23; open for manual check M3.6-a (a real computer). Tiers: host tests (30 programs, under the sanitizers too), device tests with the bus's reports injected (with it every test not marked slow passes: 267 cases), release, test and trace builds, the configuration guard, a from-scratch configure in the CI container |
-| M4.1 Fetch, download, refresh, eviction | in progress: the fetcher is in (2026-11-23). The content task, index merge and files, the refresh schedule and eviction are to do |
+| M4.1 Fetch, download, refresh, eviction | built 2026-11-23; the milestone-end runs are owed. Tiers so far: host tests (32 programs), device tests (the suite without its slow tests on an earlier build of this work: 278 of 279 passed, the failure being the test hooks' screenshot, since fixed; on the later build the smoke, content, overlay, UI drawing, library and scheduler tests pass), test build. Owed: the whole device suite on the last build, the release and trace builds. Not verified: listed in the log entry; O9's measurements moved to M4.2 |
 | M4.2 Giphy and Klipy | not started |
 | M4.3 Museums | not started |
 | M4.4 Pinned lists and "show this" | not started |
@@ -200,8 +200,10 @@ reason, or "pending".
 |---|---|---|
 | (none yet) | | |
 
-Expected: the lock-order fix for finding 25 (D9). In 2.0 the lifecycle lock
-it concerns should not exist; confirm at M4.1 and mark it not applicable.
+Expected: the lock-order fix for finding 25 (D9). Confirmed at M4.1
+(2026-11-23): not applicable. 2.0 has no lifecycle lock. The scheduler has
+one lock, and the content task never holds it across the card or the
+network.
 
 ## Ports to main
 
@@ -370,6 +372,98 @@ M4.1, 2026-11-23:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-23: M4.1 parts 2 and 3, the content task and eviction
+
+- **The content task** (`sched_content.c`, class `NETWORK`): the one task
+  that fills the scheduler's channels. One pass does one thing, in this
+  order: load a channel's index from the card, list a channel, save an
+  index, make room on the card, download an artwork. One transfer at a
+  time (D63). The listing job on the I/O runner is gone: local channels
+  are listed here too.
+- **Listing.** A source's `refresh()` now fills an empty index with what
+  the channel holds; `p3a_index_carry_over()` (pure) brings over what the
+  device knew about those artworks: the blob, the format, the size, the
+  failure counts. One implementation, where 1.x had three.
+- **When** (`sched_refresh.c`, pure): at the source's interval; after a
+  rate limit, what the server asked for and at least 15 minutes; with no
+  key or a refused key, an hour or until a setting changes; after any other
+  failure one minute, doubling to an hour; never again once the card has
+  failed. A remote channel is not listed without a network, and what
+  failed for want of one is tried when it returns (D66).
+- **Indices on the card**: `{root}/channels/{channel id}.idx`, saved at
+  once after a listing and half a minute after a download changes one. A
+  channel the device has seen before plays at boot from that file, before
+  the network is up, and is not listed again until the file is as old as
+  the source's interval (D64). Indices of channels no playset has played
+  for 60 days are dropped once per boot.
+- **Downloads**: round robin over the channels, the next record without a
+  blob. The source says where (`ops->url`), `http_fetch` writes and hashes,
+  the first bytes say what it is (a page served with 200 is refused), the
+  blob store takes it. A 404 marks the record gone for good; a refusal
+  (rate limit, key) stops that source's downloads for 15 minutes; anything
+  else counts against the artwork (three and it is left until the restart)
+  and pauses downloads for 10 seconds, doubling to 5 minutes. Nothing is
+  downloaded without a network, while internal memory is short
+  (`p3a_mem_level()`), onto a failed card, or with less than 16 MB free.
+- **Eviction** (`p3a_evict.c` pure, `p3a_blob_evict.c`): when free space
+  falls below the start mark the oldest blobs go until the stop mark is
+  reached. The marks are 1.x's. One walk and a sort, where 1.x walked up
+  to eight times with a halving age (D65). Spared: blobs younger than four
+  hours, and what the caller keeps (the artwork on the panel and the one
+  being loaded; pins join at M4.4). The free space is measured again every
+  32 downloads.
+- **A record whose blob is gone** (evicted, or removed by hand) is found
+  when it is played: the reference is cleared and the artwork is fetched
+  again. Found by the device suite: such a record was set aside and never
+  fetched.
+- **The scheduler shuts down cleanly under a download**: a transfer gives
+  up at its next chunk when the playset changes or the card is handed to a
+  computer, and `play_scheduler_shutdown()` waits for the task to be idle.
+- `POST /api/v2/player/refresh` lists every channel of the active playset
+  now. The player's state reports `downloading`, per channel `listings`,
+  `refresh_in_s` and `to_download`, and the counters `downloads` and
+  `download_failures`.
+- **The screen** says "Downloading artworks", "Waiting for the network",
+  "A source needs its key" or "A source asked to wait" when nothing can
+  play for one of those reasons (`ui_player.c`, pure).
+- A source for tests (`p3a_test_content.c`, channel source `test`, D67):
+  the test sets what it lists and how a listing ends.
+- The scheduler's wiring is two files now, with the state in
+  `sched_state.h`.
+- Verified, host tests (3 new programs, 32 in all): the refresh schedule
+  (7 cases), eviction (5: the marks, oldest first, young and kept spared,
+  wrong dates, file names), the carry-over, the new words on the screen.
+- Verified, device tests (9 new cases in `test_content.py`, against real
+  files on a public server): a remote channel listed, both artworks
+  downloaded, one playing, listed once; a fresh listing keeps what was
+  fetched; a 404 and an artwork with no address are final; a rate-limited
+  listing keeps the channel playing and waits 15 minutes, a missing key an
+  hour, and a settings change lists again by itself; a web page is not
+  kept; nothing is listed or downloaded while internal memory is low, and
+  both resume; fresh listings on request through the API; eviction deletes
+  the oldest, spares the kept and the young, and an artwork that went is
+  fetched again when played; after a restart the channel plays from its
+  index with nothing downloaded, and plays on when the listing fails.
+  Suite: the suite without its slow tests on an earlier build of this work: 278 of 279 passed, the failure being the test hooks' screenshot, since fixed; on the later build the smoke, content, overlay, UI drawing, library and scheduler tests pass.
+- Not verified on the device: eviction starting by itself on a full card
+  (the dev card is 32 GB and nearly empty; the marks are host-tested and
+  the walk is tested through a hook); a download given up for a playset
+  change or a USB session; the 15-minute stop after a source refuses a
+  download; the half-minute save after downloads (the restart test lists
+  again to force a save); the network going away and coming back; stale
+  indices dropped after 60 days; the new words on the screen (host-tested
+  only). Frame timing while downloading is measured at the soak (M6.1).
+- The test hooks' screenshot now copies the framebuffer before sending
+  it. It used to read rows as it sent them, over seconds, so the bottom of
+  the picture was a later frame than the top; `test_overlays.py`'s red
+  mark (three seconds long) was missed whenever an animated artwork was on
+  the panel. After the fix that test passed 11 runs of 12; the one failure
+  was not caught and is not diagnosed.
+- `http_fetch` logs a URL only up to its query: Giphy's and Klipy's keys
+  are query parameters. Compiled, not run.
+- O9 is half answered: transfers are serial by design. Packet mode, the
+  Option E items and the thresholds need real traffic and move to M4.2.
 
 ### 2026-11-23: M4.1 part 1, the fetcher
 

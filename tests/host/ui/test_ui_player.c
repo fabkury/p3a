@@ -53,6 +53,36 @@ static void test_nothing_to_play_says_why(void)
     TEST_ASSERT_NOT_NULL(strstr(c.text, "SD card"));
 }
 
+static void test_a_remote_channel_says_what_it_is_waiting_for(void)
+{
+    // Listed, nothing on the card yet, the network is there: it is coming.
+    ui_player_facts_t f = {.channels = 1, .wanted = 12, .online = true};
+    TEST_ASSERT_EQUAL(UI_PLAYER_LOADING, ui_player_standing(&f, &c));
+    TEST_ASSERT_EQUAL_STRING("Downloading artworks", c.text);
+    // The same without a network, and a channel that could not even be listed for want of one.
+    f.online = false;
+    TEST_ASSERT_EQUAL(UI_PLAYER_NOTHING, ui_player_standing(&f, &c));
+    TEST_ASSERT_EQUAL_STRING("Waiting for the network", c.text);
+    f = (ui_player_facts_t){.channels = 1, .offline = 1};
+    TEST_ASSERT_EQUAL(UI_PLAYER_NOTHING, ui_player_standing(&f, &c));
+    TEST_ASSERT_EQUAL_STRING("Nothing to play yet", c.title);
+    TEST_ASSERT_EQUAL_STRING("Waiting for the network", c.text);
+    // A source without its key, and one that asked to wait.
+    f = (ui_player_facts_t){.channels = 1, .failed = 1, .need_key = true, .online = true};
+    TEST_ASSERT_EQUAL(UI_PLAYER_NOTHING, ui_player_standing(&f, &c));
+    TEST_ASSERT_NOT_NULL(strstr(c.text, "needs its key"));
+    f = (ui_player_facts_t){.channels = 1, .failed = 1, .rate_limited = true, .online = true};
+    TEST_ASSERT_EQUAL(UI_PLAYER_NOTHING, ui_player_standing(&f, &c));
+    TEST_ASSERT_NOT_NULL(strstr(c.text, "asked to wait"));
+    // A failed card outranks them all: nothing can be downloaded onto it.
+    f = (ui_player_facts_t){.channels = 1, .wanted = 3, .online = true, .card_failed = true};
+    TEST_ASSERT_EQUAL(UI_PLAYER_NOTHING, ui_player_standing(&f, &c));
+    TEST_ASSERT_NOT_NULL(strstr(c.text, "SD card"));
+    // And anything playable outranks every one of these words.
+    f = (ui_player_facts_t){.channels = 2, .offline = 1, .playable = 1};
+    TEST_ASSERT_EQUAL(UI_PLAYER_NONE, ui_player_standing(&f, &c));
+}
+
 static void test_a_failed_request_is_put_in_plain_words(void)
 {
     ui_player_problem(P3A_ERR_MISSING, &c);
@@ -108,6 +138,7 @@ int main(void)
     RUN_TEST(test_while_something_plays_there_is_no_standing_notice);
     RUN_TEST(test_loading_until_every_channel_is_listed_and_the_first_artwork_is_up);
     RUN_TEST(test_nothing_to_play_says_why);
+    RUN_TEST(test_a_remote_channel_says_what_it_is_waiting_for);
     RUN_TEST(test_a_failed_request_is_put_in_plain_words);
     RUN_TEST(test_the_indicator_is_busy_while_a_person_waits_and_red_briefly_after_a_failure);
     return UNITY_END();

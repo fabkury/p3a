@@ -7,6 +7,7 @@
 //   POST   /api/v2/player/back            play the one before
 //   POST   /api/v2/player/pause           black panel, backlight off, no moving on
 //   POST   /api/v2/player/resume
+//   POST   /api/v2/player/refresh         list every channel of the active playset again, now
 //   GET    /api/v2/player/playset         the active playset
 //   PUT    /api/v2/player/playset         make a playset active: a whole playset, or {"saved": "<name>"}
 //   GET    /api/v2/playsets               the saved playsets
@@ -86,6 +87,7 @@ static void get_player(p3a_http_request_t *req)
     cJSON_AddBoolToObject(data, "playing", st->playing);
     cJSON_AddBoolToObject(data, "loading", st->loading);
     cJSON_AddBoolToObject(data, "paused", st->paused);
+    cJSON_AddBoolToObject(data, "downloading", st->downloading);
     if (st->advance_in_s >= 0) {
         cJSON_AddNumberToObject(data, "advance_in_s", st->advance_in_s);  // absent: it will not move on by itself
     }
@@ -106,6 +108,11 @@ static void get_player(p3a_http_request_t *req)
         cJSON_AddStringToObject(item, "state", c->state < 6 ? s_channel_states[c->state] : "unknown");
         cJSON_AddNumberToObject(item, "records", c->records);
         cJSON_AddNumberToObject(item, "available", c->available);
+        cJSON_AddNumberToObject(item, "listings", c->listings);
+        cJSON_AddNumberToObject(item, "refresh_in_s", c->refresh_in_s);
+        if (c->remote) {
+            cJSON_AddNumberToObject(item, "to_download", c->wanted);
+        }
         if (c->error != ESP_OK) {
             cJSON_AddStringToObject(item, "error", p3a_err_to_name(c->error));
         }
@@ -119,6 +126,8 @@ static void get_player(p3a_http_request_t *req)
     cJSON_AddNumberToObject(counters, "shown", st->shown);
     cJSON_AddNumberToObject(counters, "failed", st->failed);
     cJSON_AddNumberToObject(counters, "problems", st->problems);
+    cJSON_AddNumberToObject(counters, "downloads", st->downloads);
+    cJSON_AddNumberToObject(counters, "download_failures", st->download_failures);
     if (st->last_error != ESP_OK) {
         cJSON_AddStringToObject(data, "last_error", p3a_err_to_name(st->last_error));
     }
@@ -161,6 +170,12 @@ static void post_resume(p3a_http_request_t *req)
 {
     const esp_err_t err = play_scheduler_set_paused(false);
     err == ESP_OK ? p3a_http_ok(req, NULL) : p3a_http_fail_err(req, err, "resuming");
+}
+
+static void post_refresh(p3a_http_request_t *req)
+{
+    const esp_err_t err = play_scheduler_refresh_all();
+    err == ESP_OK ? p3a_http_ok(req, NULL) : p3a_http_fail_err(req, err, "asking for fresh listings");
 }
 
 // --- playsets -------------------------------------------------------------------
@@ -440,6 +455,7 @@ static const p3a_http_route_t s_routes[] = {
     {P3A_HTTP_POST, 0, "/api/v2/player/back", post_back},
     {P3A_HTTP_POST, 0, "/api/v2/player/pause", post_pause},
     {P3A_HTTP_POST, 0, "/api/v2/player/resume", post_resume},
+    {P3A_HTTP_POST, 0, "/api/v2/player/refresh", post_refresh},
     {P3A_HTTP_GET, 0, "/api/v2/player/playset", get_active_playset},
     {P3A_HTTP_PUT, P3A_HTTP_BODY_JSON, "/api/v2/player/playset", put_active_playset},
     {P3A_HTTP_GET, 0, "/api/v2/playsets", get_playsets},

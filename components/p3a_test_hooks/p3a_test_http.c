@@ -72,13 +72,26 @@ static void get_screenshot(p3a_http_request_t *req)
         return;
     }
     const size_t row_bytes = ((size_t)w * 3 + 3) & ~(size_t)3;  // BMP rows are padded to 4 bytes
-    // Rows are sent a batch at a time: one small send per row made the full
-    // frame take over ten seconds.
-    const int batch = 32;
-    uint8_t *rows = psram_calloc((size_t)batch, row_bytes);
+    // The picture is copied first and sent afterwards. Sending takes
+    // seconds, and rows read from the framebuffer as they were sent showed
+    // the bottom of a later frame than the top: a mark that lasts three
+    // seconds was gone from the corner by the time its row was read.
+    uint8_t *rows = psram_calloc((size_t)h, row_bytes);
     if (rows == NULL) {
         p3a_http_fail_err(req, ESP_ERR_NO_MEM, "taking the screenshot");
         return;
+    }
+    const size_t stride = p3a_board_get_row_stride();
+    for (int y = 0; y < h; y++) {
+        const uint8_t *src = buffer + (size_t)(y * div + div / 2) * stride;
+        uint8_t *row = rows + (size_t)y * row_bytes;
+        if (div == 1) {
+            memcpy(row, src, (size_t)w * 3);
+        } else {
+            for (int x = 0; x < w; x++) {
+                memcpy(row + (size_t)x * 3, src + (size_t)(x * div + div / 2) * 3, 3);
+            }
+        }
     }
     // A 24-bit BMP, top row first (negative height). The framebuffer is
     // already in BMP's byte order: blue, green, red.
@@ -96,22 +109,12 @@ static void get_screenshot(p3a_http_request_t *req)
     httpd_resp_set_type(raw, "image/bmp");
     httpd_resp_set_hdr(raw, "Cache-Control", "no-store");
     esp_err_t err = httpd_resp_send_chunk(raw, (const char *)header, sizeof(header));
-    const size_t stride = p3a_board_get_row_stride();
-    int held = 0;
-    for (int y = 0; y < h && err == ESP_OK; y++) {
-        const uint8_t *src = buffer + (size_t)(y * div + div / 2) * stride;
-        uint8_t *row = rows + (size_t)held * row_bytes;
-        if (div == 1) {
-            memcpy(row, src, (size_t)w * 3);
-        } else {
-            for (int x = 0; x < w; x++) {
-                memcpy(row + (size_t)x * 3, src + (size_t)(x * div + div / 2) * 3, 3);
-            }
-        }
-        if (++held == batch || y == h - 1) {
-            err = httpd_resp_send_chunk(raw, (const char *)rows, (ssize_t)(row_bytes * (size_t)held));
-            held = 0;
-        }
+    // A batch of rows at a time: one small send per row made the full frame
+    // take over ten seconds.
+    const int batch = 32;
+    for (int y = 0; y < h && err == ESP_OK; y += batch) {
+        const int n = h - y < batch ? h - y : batch;
+        err = httpd_resp_send_chunk(raw, (const char *)(rows + (size_t)y * row_bytes), (ssize_t)(row_bytes * (size_t)n));
     }
     free(rows);
     httpd_resp_send_chunk(raw, NULL, 0);

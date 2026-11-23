@@ -137,6 +137,14 @@ static esp_err_t capture_location_cb(esp_http_client_event_t *evt)
 
 // Parse a numeric Retry-After (seconds). Mirrors the old ai_parse_retry_after:
 // leading spaces skipped, non-positive/non-numeric -> 0, capped at 1 hour.
+// How much of a URL may be logged: up to its query. A query carries API
+// keys (Giphy's and Klipy's are parameters), and a key is never logged.
+static int url_log_len(const char *url)
+{
+    const char *query = strchr(url, '?');
+    return query != NULL ? (int)(query - url) : (int)strlen(url);
+}
+
 static uint32_t parse_retry_after(const char *value)
 {
     if (!value) return 0;
@@ -383,8 +391,8 @@ static esp_err_t do_fetch(const http_fetch_request_t *req, fetch_sink_t *sink,
             if (attempt > 0) {
                 uint32_t delay = backoff_for(req, attempt);
                 if (delay) {
-                    ESP_LOGW(TAG, "Retrying %s in %lums (attempt %d/%d)",
-                             cur_url, (unsigned long)delay, attempt + 1, max_attempts);
+                    ESP_LOGW(TAG, "Retrying %.*s in %lums (attempt %d/%d)",
+                             url_log_len(cur_url), cur_url, (unsigned long)delay, attempt + 1, max_attempts);
                     // Don't pin a concurrency slot while sleeping on the backoff.
                     if (gate) xSemaphoreGive(gate);
                     vTaskDelay(pdMS_TO_TICKS(delay));
@@ -478,7 +486,7 @@ static esp_err_t do_fetch(const http_fetch_request_t *req, fetch_sink_t *sink,
             bool status_ok = (last_status == 200) ||
                              (req->accept_2xx && last_status >= 200 && last_status < 300);
             if (!status_ok) {
-                ESP_LOGW(TAG, "HTTP status %d for %s", last_status, cur_url);
+                ESP_LOGW(TAG, "HTTP status %d for %.*s", last_status, url_log_len(cur_url), cur_url);
                 esp_http_client_close(client);
                 esp_http_client_cleanup(client);
                 continue;  // retry
@@ -486,7 +494,7 @@ static esp_err_t do_fetch(const http_fetch_request_t *req, fetch_sink_t *sink,
 
             // --- 200 OK (or accepted 2xx) ---
             if (content_length == 0 && req->treat_empty_as_not_found) {
-                ESP_LOGW(TAG, "Empty body (200, Content-Length: 0): %s", cur_url);
+                ESP_LOGW(TAG, "Empty body (200, Content-Length: 0): %.*s", url_log_len(cur_url), cur_url);
                 esp_http_client_close(client);
                 esp_http_client_cleanup(client);
                 fatal = P3A_ERR_MISSING;
@@ -524,21 +532,21 @@ static esp_err_t do_fetch(const http_fetch_request_t *req, fetch_sink_t *sink,
             esp_http_client_cleanup(client);
 
             if (br == BODY_ABORTED) {
-                ESP_LOGI(TAG, "Transfer aborted by caller: %s", cur_url);
+                ESP_LOGI(TAG, "Transfer aborted by caller: %.*s", url_log_len(cur_url), cur_url);
                 aborted = true;
                 fatal = ESP_ERR_INVALID_STATE;
                 break;
             }
             if (br == BODY_WRITE_ERR) { fatal = ESP_FAIL; break; }
             if (br == BODY_TOO_LARGE) {
-                ESP_LOGW(TAG, "Download exceeded %lld bytes, aborting: %s",
-                         (long long)max_size, cur_url);
+                ESP_LOGW(TAG, "Download exceeded %lld bytes, aborting: %.*s",
+                         (long long)max_size, url_log_len(cur_url), cur_url);
                 fatal = ESP_ERR_INVALID_SIZE;
                 break;
             }
             if (br == BODY_BUFFER_FULL) {
-                ESP_LOGE(TAG, "Response truncated at %zu bytes (buffer full): %s",
-                         sink->bytes, cur_url);
+                ESP_LOGE(TAG, "Response truncated at %zu bytes (buffer full): %.*s",
+                         sink->bytes, url_log_len(cur_url), cur_url);
                 buffer_full = true;
                 fatal = ESP_ERR_INVALID_SIZE;
                 break;
@@ -551,8 +559,8 @@ static esp_err_t do_fetch(const http_fetch_request_t *req, fetch_sink_t *sink,
                              chunked_incomplete;
             if (truncated) {
                 if (chunked_incomplete) {
-                    ESP_LOGW(TAG, "Truncated chunked response: got %zu bytes, terminal chunk never arrived: %s",
-                             sink->bytes, cur_url);
+                    ESP_LOGW(TAG, "Truncated chunked response: got %zu bytes, terminal chunk never arrived: %.*s",
+                             sink->bytes, url_log_len(cur_url), cur_url);
                 } else {
                     ESP_LOGW(TAG, "Truncated response: got %zu/%lld bytes",
                              sink->bytes, (long long)content_length);
@@ -583,7 +591,7 @@ static esp_err_t do_fetch(const http_fetch_request_t *req, fetch_sink_t *sink,
     free(redir);
 
     if (!success && fatal == ESP_OK && manual_redirect) {
-        ESP_LOGE(TAG, "Exhausted %d redirects without success: %s", max_redirects, req->url);
+        ESP_LOGE(TAG, "Exhausted %d redirects without success: %.*s", max_redirects, url_log_len(req->url), req->url);
     }
 
     if (result) {

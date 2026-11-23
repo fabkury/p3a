@@ -18,6 +18,7 @@ _Static_assert(sizeof(playset_header_record_t) == PLAYSET_RECORD_SIZE, "the head
 static const char *const s_source_names[PLAYSET_SOURCE_END_] = {
     [PLAYSET_SOURCE_LOCAL] = "local",   [PLAYSET_SOURCE_MAKAPIX] = "makapix", [PLAYSET_SOURCE_GIPHY] = "giphy",
     [PLAYSET_SOURCE_KLIPY] = "klipy",   [PLAYSET_SOURCE_MUSEUM] = "museum",   [PLAYSET_SOURCE_PINNED] = "pinned",
+    [PLAYSET_SOURCE_TEST] = "test",
 };
 
 const char *playset_source_name(uint8_t source)

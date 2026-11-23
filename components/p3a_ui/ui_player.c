@@ -17,10 +17,20 @@ ui_player_standing_t ui_player_standing(const ui_player_facts_t *facts, p3a_ui_c
     if (facts->playable > 0) {
         return UI_PLAYER_NONE;  // between two turns; the scheduler will ask again
     }
+    if (facts->wanted > 0 && facts->online && !facts->card_failed) {
+        p3a_ui_content(out, "Getting ready", -1, "Downloading artworks");
+        return UI_PLAYER_LOADING;
+    }
     if (facts->card_failed) {
         p3a_ui_content(out, "Nothing to play", -1, "The SD card could not be read");
     } else if (facts->channels > 0 && facts->no_source == facts->channels) {
         p3a_ui_content(out, "Nothing to play", -1, "This playset's sources are not part of this firmware");
+    } else if (facts->offline > 0 || facts->wanted > 0) {
+        p3a_ui_content(out, "Nothing to play yet", -1, "Waiting for the network");
+    } else if (facts->need_key) {
+        p3a_ui_content(out, "Nothing to play", -1, "A source needs its key. Enter it on the web page");
+    } else if (facts->rate_limited) {
+        p3a_ui_content(out, "Nothing to play yet", -1, "A source asked to wait. Trying again later");
     } else if (facts->failed > 0) {
         p3a_ui_content(out, "Nothing to play", -1, "%u of %u channels could not be loaded", (unsigned)facts->failed,
                        (unsigned)facts->channels);

@@ -6,6 +6,9 @@
 // !library blob <bytes> <seed> <fmt>   makes a file of <bytes> bytes from <seed>, takes it into
 //                                      the blob store as format number <fmt>
 // !library blob-remove <ref> <fmt>     removes the blob with this 32-digit reference
+// !library blob-has <ref> <fmt>        whether the store holds it
+// !library evict <bytes> <min_age_s> <keep ref>   deletes the oldest blobs until <bytes> are
+//                                      freed, sparing the younger ones and the one named
 // !library local-put <name> <bytes>    makes a file of that size in the user's folder
 // !library local-remove <name>
 // !library local-scan <capacity>       lists the folder through the local source's table
@@ -19,6 +22,7 @@
 #include "esp_timer.h"
 #include "p3a_blob.h"
 #include "p3a_err.h"
+#include "p3a_evict.h"
 #include "p3a_frame.h"
 #include "p3a_index.h"
 #include "p3a_source.h"
@@ -319,6 +323,24 @@ static void cmd_local_scan(unsigned capacity)
     p3a_test_reply_ok(json);
 }
 
+static bool keep_one(const uint8_t ref[P3A_RECORD_BLOB_REF_LEN], void *ctx)
+{
+    return memcmp(ref, ctx, P3A_RECORD_BLOB_REF_LEN) == 0;
+}
+
+static void cmd_evict(uint64_t need, uint32_t min_age_s, const char *keep_hex)
+{
+    uint8_t keep[P3A_RECORD_BLOB_REF_LEN] = {0};
+    parse_ref(keep_hex, keep);  // anything that is not a reference keeps nothing
+    p3a_blob_evict_t done = {0};
+    const esp_err_t err = p3a_blob_evict(need, min_age_s, keep_one, keep, &done);
+    char text[160];
+    snprintf(text, sizeof(text), "{\"result\":\"%s\",\"seen\":%u,\"deleted\":%u,\"freed\":%llu}",
+             err == ESP_OK ? "ok" : p3a_err_to_name(err), (unsigned)done.seen, (unsigned)done.deleted,
+             (unsigned long long)done.freed_bytes);
+    p3a_test_reply_ok(text);
+}
+
 static void cmd_library(const char *args)
 {
     unsigned a = 0, b = 0;
@@ -339,8 +361,18 @@ static void cmd_library(const char *args)
         cmd_local_scan(a);
         return;
     }
+    unsigned long long need = 0;
     if (sscanf(args, " index %u", &a) == 1) {
         cmd_index((int)a);
+    } else if (sscanf(args, " evict %llu %u %39s", &need, &a, hex) == 3) {
+        cmd_evict(need, a, hex);
+    } else if (sscanf(args, " blob-has %39s %d", hex, &format) == 2) {
+        uint8_t ref[P3A_RECORD_BLOB_REF_LEN];
+        if (!parse_ref(hex, ref)) {
+            p3a_test_reply_err("a reference is 32 hex digits");
+        } else {
+            p3a_test_reply_ok(p3a_blob_exists(ref, (p3a_format_t)format) ? "{\"has\":true}" : "{\"has\":false}");
+        }
     } else if (sscanf(args, " blob-remove %39s %d", hex, &format) == 2) {
         cmd_blob_remove(hex, format);
     } else if (sscanf(args, " blob %u %u %d", &a, &b, &format) == 3) {

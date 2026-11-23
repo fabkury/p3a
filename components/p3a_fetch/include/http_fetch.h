@@ -133,7 +133,7 @@ typedef struct {
     int64_t                    max_size;             ///< hard cap; 0 -> no cap
     size_t                     min_size;             ///< reject success if bytes < min_size (0 -> none)
     bool                       require_exact_length; ///< reject success if bytes != Content-Length
-    bool                       treat_empty_as_not_found; ///< 200 + Content-Length 0 -> ESP_ERR_NOT_FOUND
+    bool                       treat_empty_as_not_found; ///< 200 + Content-Length 0 -> P3A_ERR_MISSING
     bool                       allow_empty_body;     ///< a 0-byte body is success (default: treated
                                                      ///< as a truncated read and retried)
 

@@ -4,6 +4,8 @@
 # network.
 idf_component_register(
     SRCS "p3a_blob.c"
+         "p3a_blob_evict.c"
+         "p3a_evict.c"
          "p3a_index.c"
          "p3a_index_file.c"
          "p3a_record.c"

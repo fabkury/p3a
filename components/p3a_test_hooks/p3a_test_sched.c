@@ -66,6 +66,8 @@ static void cmd_status(void)
         cJSON_AddStringToObject(item, "state", c->state < 6 ? s_states[c->state] : "?");
         cJSON_AddNumberToObject(item, "records", c->records);
         cJSON_AddNumberToObject(item, "available", c->available);
+        cJSON_AddNumberToObject(item, "listings", c->listings);
+        cJSON_AddNumberToObject(item, "refresh_in_s", c->refresh_in_s);
         if (c->error != ESP_OK) {
             cJSON_AddStringToObject(item, "error", p3a_err_to_name(c->error));
         }
@@ -76,13 +78,18 @@ static void cmd_status(void)
     if (st->playing) {
         cJSON_AddStringToObject(out, "current_source", p3a_source_name(st->current.source));
         cJSON_AddStringToObject(out, "current",
-                                st->current.source == P3A_SOURCE_LOCAL ? st->current.identity.local.filename : "");
+                                st->current.source == P3A_SOURCE_LOCAL   ? st->current.identity.local.filename
+                                : st->current.source == P3A_SOURCE_GIPHY ? st->current.identity.giphy.id
+                                                                         : "");
     }
     cJSON_AddNumberToObject(out, "history", st->history_count);
     cJSON_AddNumberToObject(out, "position", st->history_position);
     cJSON_AddNumberToObject(out, "picks", st->picks);
     cJSON_AddNumberToObject(out, "shown", st->shown);
     cJSON_AddNumberToObject(out, "failed", st->failed);
+    cJSON_AddBoolToObject(out, "downloading", st->downloading);
+    cJSON_AddNumberToObject(out, "downloads", st->downloads);
+    cJSON_AddNumberToObject(out, "download_failures", st->download_failures);
     cJSON_AddStringToObject(out, "last_error", st->last_error == ESP_OK ? "" : p3a_err_to_name(st->last_error));
     cJSON_AddBoolToObject(out, "paused", st->paused);
     cJSON_AddNumberToObject(out, "advance_in_s", st->advance_in_s);

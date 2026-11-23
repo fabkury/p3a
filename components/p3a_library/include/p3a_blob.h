@@ -10,11 +10,9 @@
 // giphy, klipy, museum, pinned), each with its own path builder and
 // exists-check, and pinning copied the bytes.
 //
-// What the store does not do yet, and where it arrives:
-//   - eviction by age when the card fills up (M4.1);
-//   - refusing to remove a blob the user pinned: the set of kept blobs comes
-//     with the pin lists, and p3a_blob_remove() will consult it. Until then
-//     nothing calls p3a_blob_remove() on its own initiative.
+// When the card fills up the oldest blobs are deleted (p3a_evict.h). What
+// the store does not do yet: sparing the blobs the user pinned. The set of
+// kept blobs comes with the pin lists (M4.4) and joins the caller's `keep`.
 #pragma once
 
 #include <stdbool.h>

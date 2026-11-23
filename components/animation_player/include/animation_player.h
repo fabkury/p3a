@@ -88,6 +88,10 @@ esp_err_t animation_player_stop(uint32_t token);
 
 void animation_player_get_status(animation_player_status_t *out);
 
+// What a file is, by its first bytes: a p3a_format_t number (1 WebP, 2 GIF,
+// 3 PNG, 4 JPEG, 5 BMP), or 0 for something the player cannot show.
+int animation_player_format_of(const uint8_t *data, size_t size);
+
 #ifdef __cplusplus
 }
 #endif

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // The source interface: what every place artworks come from must be able to
 // do, as a table of functions. A source registers its table at boot; the
-// scheduler, the download manager and the API call through it and never name
+// scheduler, its content task and the API call through it and never name
 // a source.
 //
 // 1.x had no such table: each source was an arm in about a dozen type
@@ -29,7 +29,8 @@ extern "C" {
 // from, and one more for pinned lists, whose records keep their own source.
 // The same numbers as playset_source_t; written to disk.
 #define P3A_CHANNEL_SOURCE_PINNED 6
-#define P3A_CHANNEL_SOURCE_END_   7
+#define P3A_CHANNEL_SOURCE_TEST   7  // served by the test hooks; no such source in a release build
+#define P3A_CHANNEL_SOURCE_END_   8
 
 // Which of a source's channels: the three fields of a playset channel that,
 // with the source, make its id.
@@ -43,13 +44,23 @@ typedef struct {
     uint8_t source;    // the channel source number this table serves
     const char *name;  // "local", "giphy", ...
 
-    // Lists the channel into `index`, replacing or merging as the source
-    // sees fit, and leaves each record's availability right. May take long
-    // (a card scan, network requests): call it from a job, never from a task
-    // that must stay responsive. P3A_ERR_NO_KEY, P3A_ERR_RATE_LIMITED,
+    // Lists the channel into `index`, which is empty: what the channel holds
+    // now, in its order. The caller brings over what the device already
+    // knew about those artworks (p3a_index_carry_over). May take long (a
+    // card scan, network requests): it runs on the content task. P3A_ERR_NO_KEY, P3A_ERR_RATE_LIMITED,
     // P3A_ERR_AUTH and P3A_ERR_SD_FAILED mean what p3a_err.h says.
     esp_err_t (*refresh)(const p3a_channel_ref_t *channel, p3a_index_t *index);
 
+    // True for a source whose channels are listed over the network and
+    // whose artworks are downloaded into the blob store. Its channels are
+    // not listed without a network, and their indices are kept on the card.
+    bool remote;
+    // Where to download a record's bytes from. May ask the network itself
+    // (a source that must look the address up); P3A_ERR_MISSING when the
+    // artwork no longer exists. NULL for a source that is not remote.
+    esp_err_t (*url)(const p3a_record_t *record, char *out, size_t len);
+    // What its downloads say they are; NULL for "p3a".
+    const char *user_agent;
     // Where a record's bytes are when they are not in the blob store (records
     // flagged P3A_RECORD_IN_PLACE). NULL for a source whose artworks are
     // always blobs.

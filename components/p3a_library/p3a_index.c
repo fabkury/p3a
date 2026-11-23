@@ -118,6 +118,44 @@ esp_err_t p3a_index_set_records(p3a_index_t *index, const p3a_record_t *records,
     return ESP_OK;
 }
 
+void p3a_index_carry_over(p3a_index_t *fresh, const p3a_index_t *known, p3a_index_merge_t *out)
+{
+    p3a_index_merge_t stats = {0};
+    for (uint32_t i = 0; i < fresh->count; i++) {
+        p3a_record_t *r = &fresh->records[i];
+        const int32_t at = known != NULL && known->count > 0 ? p3a_index_find_record(known, r) : -1;
+        if (at < 0) {
+            stats.added++;
+            continue;
+        }
+        stats.carried++;
+        const p3a_record_t *old = &known->records[at];
+        if (!p3a_record_has_blob(r) && p3a_record_has_blob(old)) {
+            memcpy(r->blob_ref, old->blob_ref, sizeof(r->blob_ref));
+            r->format = old->format;  // of the bytes that were fetched
+            r->flags &= (uint8_t)~P3A_RECORD_UNRESOLVED;
+        }
+        if (r->width == 0 || r->height == 0) {
+            r->width = old->width;
+            r->height = old->height;
+        }
+        r->resolve_fails = old->resolve_fails;
+        r->download_fails = old->download_fails;
+    }
+    stats.dropped = (known != NULL ? known->count : 0) - stats.carried;
+    memset(fresh->available, 0, (fresh->capacity + 7) / 8);
+    fresh->available_count = 0;
+    for (uint32_t i = 0; i < fresh->count; i++) {
+        if (playable_now(&fresh->records[i])) {
+            bit_put(fresh->available, i, true);
+            fresh->available_count++;
+        }
+    }
+    if (out != NULL) {
+        *out = stats;
+    }
+}
+
 int32_t p3a_index_find(const p3a_index_t *index, uint32_t id32)
 {
     if (index->slots == NULL) {

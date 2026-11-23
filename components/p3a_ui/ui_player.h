@@ -24,6 +24,11 @@ typedef struct {
     bool loading;         // a request is with the player
     uint32_t channels;    // in the active playset
     uint32_t listing;     // of them, not yet listed
+    uint32_t offline;     // of them, not yet listed and waiting for the network to be
+    uint32_t wanted;      // artworks listed that are still to be downloaded
+    bool online;          // the network is up
+    bool need_key;        // a channel's source has no key, or its key was refused
+    bool rate_limited;    // a channel's source asked to wait
     uint32_t failed;      // of them, could not be listed
     uint32_t no_source;   // of them, from a source this firmware lacks
     uint32_t playable;    // artworks that could be chosen now

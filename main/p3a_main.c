@@ -213,6 +213,9 @@ void app_main(void)
     boot_step("storage", p3a_storage_start(s_settings.sd_root));
     p3a_ui_card_check();  // no usable card: the screen says so and offers to format one
     boot_step("local source", source_local_start());
+#if CONFIG_P3A_TEST_HOOKS
+    p3a_test_sources_register();  // before the scheduler reads a playset that may name them
+#endif
     boot_step("scheduler", play_scheduler_start());
 
     // The Wi-Fi co-processor: bring its link up and update its firmware if the

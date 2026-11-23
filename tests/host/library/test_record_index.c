@@ -335,12 +335,93 @@ static esp_err_t fake_refresh(const p3a_channel_ref_t *channel, p3a_index_t *ind
     return ESP_OK;
 }
 
+static p3a_record_t giphy(const char *id)
+{
+    p3a_record_t r;
+    TEST_ASSERT_EQUAL(ESP_OK, p3a_record_init_giphy(&r, id));
+    return r;
+}
+
+static void test_a_fresh_listing_takes_over_what_was_known_about_its_artworks(void)
+{
+    p3a_index_t known = {0}, fresh = {0};
+    TEST_ASSERT_EQUAL(ESP_OK, p3a_index_create(&known, 8));
+    TEST_ASSERT_EQUAL(ESP_OK, p3a_index_create(&fresh, 8));
+    // Known: a (downloaded and measured), b (two failed downloads), c (downloaded).
+    p3a_record_t a = giphy("a"), b = giphy("b"), c = giphy("c");
+    memset(a.blob_ref, 0xA1, sizeof(a.blob_ref));
+    a.format = P3A_FORMAT_GIF;
+    a.width = 480;
+    a.height = 270;
+    b.download_fails = 2;
+    memset(c.blob_ref, 0xC3, sizeof(c.blob_ref));
+    c.format = P3A_FORMAT_WEBP;
+    p3a_index_append(&known, &a, NULL);
+    p3a_index_append(&known, &b, NULL);
+    p3a_index_append(&known, &c, NULL);
+
+    // The source now lists d (new), then a and b, in that order; c is gone from the channel.
+    p3a_record_t d = giphy("d"), a2 = giphy("a"), b2 = giphy("b");
+    p3a_index_append(&fresh, &d, NULL);
+    p3a_index_append(&fresh, &a2, NULL);
+    p3a_index_append(&fresh, &b2, NULL);
+    TEST_ASSERT_EQUAL(0, fresh.available_count);
+
+    p3a_index_merge_t stats;
+    p3a_index_carry_over(&fresh, &known, &stats);
+    TEST_ASSERT_EQUAL(2, stats.carried);
+    TEST_ASSERT_EQUAL(1, stats.added);
+    TEST_ASSERT_EQUAL(1, stats.dropped);
+    TEST_ASSERT_EQUAL(3, fresh.count);
+    // The source's order stands.
+    TEST_ASSERT_EQUAL_STRING("d", p3a_index_at(&fresh, 0)->identity.giphy.id);
+    const p3a_record_t *got_a = p3a_index_at(&fresh, 1), *got_b = p3a_index_at(&fresh, 2);
+    TEST_ASSERT_EQUAL_HEX8(0xA1, got_a->blob_ref[0]);
+    TEST_ASSERT_EQUAL(P3A_FORMAT_GIF, got_a->format);
+    TEST_ASSERT_EQUAL(480, got_a->width);
+    TEST_ASSERT_EQUAL(2, got_b->download_fails);
+    TEST_ASSERT_FALSE(p3a_record_has_blob(got_b));
+    // Only what has its bytes can be played.
+    TEST_ASSERT_EQUAL(1, fresh.available_count);
+    TEST_ASSERT_FALSE(p3a_index_is_available(&fresh, 0));
+    TEST_ASSERT_TRUE(p3a_index_is_available(&fresh, 1));
+    TEST_ASSERT_EQUAL(1, p3a_index_nth_available(&fresh, 0));
+    // And the records are still found by key.
+    TEST_ASSERT_EQUAL(2, p3a_index_find_record(&fresh, &b));
+
+    // Nothing known before: everything is new, nothing playable. No index at all is the same.
+    p3a_index_t empty = {0};
+    TEST_ASSERT_EQUAL(ESP_OK, p3a_index_create(&empty, 8));
+    p3a_index_t again = {0};
+    TEST_ASSERT_EQUAL(ESP_OK, p3a_index_create(&again, 8));
+    p3a_index_append(&again, &d, NULL);
+    p3a_index_carry_over(&again, &empty, &stats);
+    TEST_ASSERT_EQUAL(1, stats.added);
+    TEST_ASSERT_EQUAL(0, stats.dropped);
+    p3a_index_carry_over(&again, NULL, &stats);
+    TEST_ASSERT_EQUAL(1, stats.added);
+    p3a_index_carry_over(&again, &known, NULL);  // no statistics wanted
+
+    // An artwork the source flags as gone is not playable though its bytes are still here.
+    p3a_index_clear(&fresh);
+    a2.flags |= P3A_RECORD_GONE;
+    p3a_index_append(&fresh, &a2, NULL);
+    p3a_index_carry_over(&fresh, &known, &stats);
+    TEST_ASSERT_TRUE(p3a_record_has_blob(p3a_index_at(&fresh, 0)));
+    TEST_ASSERT_EQUAL(0, fresh.available_count);
+
+    p3a_index_destroy(&known);
+    p3a_index_destroy(&fresh);
+    p3a_index_destroy(&empty);
+    p3a_index_destroy(&again);
+}
+
 static void test_sources_register_once_and_unknown_ones_are_absent(void)
 {
     static const p3a_source_ops_t giphy = {.source = P3A_SOURCE_GIPHY, .name = "giphy", .refresh = fake_refresh};
     static const p3a_source_ops_t pinned = {.source = P3A_CHANNEL_SOURCE_PINNED, .name = "pinned", .refresh = fake_refresh};
     static const p3a_source_ops_t no_refresh = {.source = P3A_SOURCE_KLIPY, .name = "klipy"};
-    static const p3a_source_ops_t out_of_range = {.source = 7, .name = "x", .refresh = fake_refresh};
+    static const p3a_source_ops_t out_of_range = {.source = P3A_CHANNEL_SOURCE_END_, .name = "x", .refresh = fake_refresh};
     static const p3a_source_ops_t zero = {.source = 0, .name = "x", .refresh = fake_refresh};
     p3a_source_reset_for_test();
     TEST_ASSERT_NULL(p3a_source_get(P3A_SOURCE_GIPHY));
@@ -379,6 +460,7 @@ int main(void)
 {
     UNITY_BEGIN();
     RUN_TEST(test_a_record_in_place_is_available_without_a_blob);
+    RUN_TEST(test_a_fresh_listing_takes_over_what_was_known_about_its_artworks);
     RUN_TEST(test_sources_register_once_and_unknown_ones_are_absent);
     RUN_TEST(test_local_files_are_pictures_by_their_extension);
     RUN_TEST(test_the_layout_is_the_one_on_disk);

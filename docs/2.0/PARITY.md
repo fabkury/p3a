@@ -67,13 +67,13 @@ describe what a client can do, not the 1.x URL.
 | [ ] | Rotation 0, 90, 180, 270: persisted, applies to playback, screens and overlays | keep | M2.4, M3.3 | Playback: done (M2.1) |
 | [x] | User-requested swaps fail loudly; automatic ones retry silently (3 retries, a small blocklist, a skip budget) | keep | M2.4 | Changed (D55): "next" also tries other artworks and reports only if all fail; a named artwork reports at once. No blocklist: a failed artwork is set aside until its channel is listed again |
 | [ ] | A corrupt cached file is deleted, at most one per minute; local files are never deleted | keep | M2.4 | Through the blob store, on `CORRUPT` only Wired in M2.4; seen on the device when a source makes blobs (M4.1) |
-| [ ] | Artworks the server no longer has are remembered and skipped | keep | M4.1 | One implementation in the blob store |
+| [x] | Artworks the server no longer has are remembered and skipped | keep | M4.1 | One implementation: the record's `gone` flag, set by the content task on a 404. Device-tested with the test source |
 | [ ] | A high miss rate triggers a verification sweep of what is on the card | change | M2.2 | Availability comes from the blob index; a miss is a repair event |
 | [ ] | Boot restores the active playset; with none, plays Promoted without saving that choice | keep | M2.3, M4.5 | Restoring is done (M2.3). With none, 2.0 plays the user's own files (D53) until Makapix exists; revisit at M4.5 |
 | [x] | First swap waits for the first available artwork, a finished refresh, or the timer | keep | M2.4 | |
-| [ ] | One-time "refresh every channel now" switch | keep | M4.1 | |
+| [x] | One-time "refresh every channel now" switch | keep | M4.1 | `POST /api/v2/player/refresh`. Device-tested |
 | [ ] | Makapix channels other than Promoted do not refresh on an unregistered device, and the UI says so | keep | M4.5 | |
-| [ ] | Per-channel refresh failures back off | keep | M4.1 | |
+| [x] | Per-channel refresh failures back off | keep | M4.1 | `sched_refresh.c` (D66). Host-tested; the rate-limit and no-key waits seen on the device |
 
 ## Playsets
 
@@ -189,10 +189,10 @@ Same pages and look, new internals (D11).
 | | Capability | 2.0 | M | Note |
 |---|---|---|---|---|
 | [ ] | Configurable SD root, validated, reboot to apply | keep | M1.3, M1.4 | Validation and resolution done and host-tested (M1.3); the setting itself arrives with M1.4 |
-| [ ] | Atomic writes; health latch (boot probe or three failed writes) that stops downloads until reboot | keep | M1.3 | Atomic writes and the latch verified on the device; "stops downloads" waits for a download manager (M4.1) |
+| [ ] | Atomic writes; health latch (boot probe or three failed writes) that stops downloads until reboot | keep | M1.3 | Atomic writes and the latch verified on the device; the content task downloads nothing onto a failed card (M4.1, not tested on the device) |
 | [ ] | Self-repair: quarantine to `lost/`, FAT mirror repair at boot, counters | keep | M1.3 | Moved; the boot-time FAT comparison runs. The repair paths need a failing card and are untested in 2.0 |
-| [ ] | Eviction: watermarks scaled to the card, age halving from 30 days to a 4-hour floor, needs a synced clock, never touches local files or pins | keep | M4.1 | Told about pins by data |
-| [ ] | Stale channel indices dropped after 60 days | keep | M4.1 | |
+| [ ] | Eviction: watermarks scaled to the card, age halving from 30 days to a 4-hour floor, needs a synced clock, never touches local files or pins | change | M4.1 | Same marks, floor and clock rule; oldest first in one walk instead of age halving (D65). Local files are not in the blob store. The walk is device-tested through a hook; starting by itself on a full card is not. Pins join the kept set at M4.4 |
+| [ ] | Stale channel indices dropped after 60 days | keep | M4.1 | Built (once per boot, the active playset's kept). Not tested |
 | [ ] | Five cache trees and a pinned tree on the card | change | M2.2 | One blob store |
 | [ ] | USB mass storage: card exposed to a computer; swaps, upload, show URL and updates blocked meanwhile; every session ends in a reboot | keep | M3.6 | |
 | [ ] | Build-time switches to start with fresh NVS, Wi-Fi or card | keep | M1.4 | |
@@ -230,7 +230,7 @@ Same pages and look, new internals (D11).
 | [ ] | Giphy and Klipy branding in the letterbox band, on by default (idea 2) | M3.5 |
 | [ ] | Pixel fonts on screen (idea 3) | M3.2 |
 | [ ] | Pins without duplicate bytes | M4.4 |
-| [ ] | Back-off under memory pressure | M4.1 |
+| [x] | Back-off under memory pressure | M4.1 |
 
 ## Behaviours to decide
 

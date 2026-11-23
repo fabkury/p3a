@@ -55,6 +55,16 @@ void player_fit_fill_lookup(uint16_t *table, int table_len, int used_len, int sr
     }
 }
 
+// The public form answers in p3a_format_t numbers, which are these.
+_Static_assert(PLAYER_FORMAT_WEBP == 1 && PLAYER_FORMAT_GIF == 2 && PLAYER_FORMAT_PNG == 3 &&
+                   PLAYER_FORMAT_JPEG == 4 && PLAYER_FORMAT_BMP == 5,
+               "player formats are numbered like p3a_format_t");
+
+int animation_player_format_of(const uint8_t *data, size_t size)
+{
+    return (int)player_format_sniff(data, size);
+}
+
 player_format_t player_format_sniff(const uint8_t *data, size_t size)
 {
     if (data == NULL) {

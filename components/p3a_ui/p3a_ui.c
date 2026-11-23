@@ -142,6 +142,11 @@ static void facts_from(const play_scheduler_status_t *st, ui_player_facts_t *f)
         f->playable += c->available;
         switch (c->state) {
         case PLAY_CHANNEL_WAITING:
+            if (c->remote && !st->online) {
+                f->offline++;  // it is not being looked for: there is no network to look on
+                break;
+            }
+            // fall through
         case PLAY_CHANNEL_LISTING:
             f->listing++;
             break;
@@ -157,7 +162,11 @@ static void facts_from(const play_scheduler_status_t *st, ui_player_facts_t *f)
         if (c->error == (esp_err_t)P3A_ERR_SD_FAILED) {
             f->card_failed = true;
         }
+        f->need_key = f->need_key || c->error == (esp_err_t)P3A_ERR_NO_KEY || c->error == (esp_err_t)P3A_ERR_AUTH;
+        f->rate_limited = f->rate_limited || c->error == (esp_err_t)P3A_ERR_RATE_LIMITED;
+        f->wanted += c->wanted;
     }
+    f->online = st->online;
     f->asked = st->asked;
     f->problem = st->problem;
     f->problems = st->problems;

@@ -162,6 +162,13 @@ All in `components/p3a_util`; each header explains itself at the top.
   move on and what a failure leads to; `sched_history.c`; `playset.c`);
   change behaviour there, not in the wiring. A screen that covers the
   artwork stops the dwell timer with `play_scheduler_hold()`.
+- **Channels are filled by the content task** (`sched_content.c`): it
+  lists them, keeps their indices on the card, downloads their artworks
+  and makes room, one transfer at a time. A source only lists
+  (`ops->refresh`, into an empty index) and says where the bytes are
+  (`ops->url`). When a channel is listed again and how long a failure
+  waits is `sched_refresh.c`; which blobs go when the card fills is
+  `p3a_evict.c`. Both are pure with host tests: change behaviour there.
 - **What is on the screen is the UI's model** (`components/p3a_ui`,
   `ui_model.c`, pure). Nothing switches screens: a screen or a notice is
   put up or taken down, and what is seen follows by precedence. Code

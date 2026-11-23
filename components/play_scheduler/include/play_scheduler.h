@@ -65,6 +65,10 @@ bool play_scheduler_is_paused(void);
 // for when something says they changed (an upload, a USB session).
 esp_err_t play_scheduler_refresh_source(uint8_t source);
 
+// The same for every channel of the active playset, whatever it was waiting
+// for: a person asked for fresh listings now.
+esp_err_t play_scheduler_refresh_all(void);
+
 // Stops playback for good, until the device restarts: the panel goes
 // black, the file being played is closed, and nothing is asked of the card
 // again. For when the card is about to be taken away (a format, sharing it
@@ -94,6 +98,10 @@ typedef struct {
     esp_err_t error;    // of the last listing
     uint32_t records;
     uint32_t available;
+    bool remote;           // listed over the network, its artworks downloaded
+    uint32_t wanted;       // artworks listed that are not on the card yet and will be downloaded
+    uint32_t listings;     // listings finished since the playset was put in place, whatever their result
+    int32_t refresh_in_s;  // seconds until it is listed again by itself; 0 when due or being listed, -1 when it will not be
 } play_channel_status_t;
 
 typedef struct {
@@ -113,6 +121,9 @@ typedef struct {
     int32_t advance_in_s;   // seconds until it moves on by itself; -1 when it will not
     esp_err_t problem;      // why the last thing a person asked for was not shown; ESP_OK when it was
     uint32_t problems;      // how many such, since boot
+    bool downloading;       // an artwork is being downloaded
+    bool online;            // the network is up
+    uint32_t downloads, download_failures;  // since boot
 } play_scheduler_status_t;  // about 2 KB: allocate it
 
 void play_scheduler_get_status(play_scheduler_status_t *out);

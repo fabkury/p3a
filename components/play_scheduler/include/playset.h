@@ -45,6 +45,7 @@ typedef enum {
     PLAYSET_SOURCE_KLIPY = 4,
     PLAYSET_SOURCE_MUSEUM = 5,
     PLAYSET_SOURCE_PINNED = 6,
+    PLAYSET_SOURCE_TEST = 7,  // the test hooks' source; a release build has none and never plays its channels
     PLAYSET_SOURCE_END_
 } playset_source_t;
 

@@ -25,6 +25,10 @@ extern "C" {
 // Starts the UART test console. Call once from app_main.
 void p3a_test_console_start(void);
 
+// Registers the test hooks' own source ("test"). Call before the scheduler
+// starts.
+void p3a_test_sources_register(void);
+
 #endif
 
 #ifdef __cplusplus

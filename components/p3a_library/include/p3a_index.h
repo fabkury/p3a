@@ -84,6 +84,23 @@ void p3a_index_set_available(p3a_index_t *index, uint32_t position, bool availab
 // -1 when fewer are available. This is how a pick lands on a record.
 int32_t p3a_index_nth_available(const p3a_index_t *index, uint32_t n);
 
+// Brings a fresh listing of a channel together with what the device already
+// knew about that channel. `fresh` keeps its records and their order (the
+// source's word on what the channel holds now); a record that `known` also
+// has, by identity, takes over what was learned about it: its blob, its
+// format, its size, its failure counts. Availability is then worked out
+// anew. An artwork the source no longer lists is simply not in the result;
+// its blob stays in the store until it ages out.
+//
+// 1.x had three near-copies of this, one per source, each with its own
+// "evict what was not seen this refresh".
+typedef struct {
+    uint32_t carried;  // records known before
+    uint32_t added;    // new in this listing
+    uint32_t dropped;  // known before, no longer listed
+} p3a_index_merge_t;
+void p3a_index_carry_over(p3a_index_t *fresh, const p3a_index_t *known, p3a_index_merge_t *out);
+
 // --- files (p3a_index_file.c) ----------------------------------------------------
 
 // Saves the records as a framed container (p3a_frame.h). `flags` says what

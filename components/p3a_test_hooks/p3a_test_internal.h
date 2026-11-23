@@ -26,6 +26,8 @@ extern const p3a_test_command_t p3a_test_storage_commands[];
 extern const size_t p3a_test_storage_command_count;
 extern const p3a_test_command_t p3a_test_sched_commands[];
 extern const size_t p3a_test_sched_command_count;
+extern const p3a_test_command_t p3a_test_content_commands[];
+extern const size_t p3a_test_content_command_count;
 extern const p3a_test_command_t p3a_test_fetch_commands[];
 extern const size_t p3a_test_fetch_command_count;
 extern const p3a_test_command_t p3a_test_ui_commands[];

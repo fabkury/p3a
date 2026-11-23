@@ -9,8 +9,8 @@ times.
 | | |
 |---|---|
 | Phase | 3, on-device UI (Phases 0, 1 and 2 complete) |
-| Current milestone | M3.2 text and fonts (the look awaits Fab), then M3.4 |
-| Next action | M3.4: `ui_gesture.c` (pure, host-tested: tap, swipe, long press, two-finger rotate, with 1.x's thresholds) is in the tree and not yet fed. Write the touch task on class `TOUCH` that samples the GT911 every 20 ms and feeds it, a table from the screen on top to what each gesture does (PARITY.md, "Touch and buttons"), and a touch injection hook for the device tests. Then M3.3's remaining screens (info, registration code, SD format flow, boot logo and intro animations). When Fab has answered O3 and O4: regenerate `components/p3a_ui/fonts/ui.p3afont`, tune `ui_style_default()`, close M3.2 |
+| Current milestone | M3.3 screens (M3.2 awaits Fab's choice of font; M3.4 awaits real fingers) |
+| Next action | M3.3: the remaining screens on the model and the text path. From `legacy/`: the information screen's full content (`main/ugfx_ui.c`), the registration code (with M4.5), the SD error and format flow (`main/sd_format.c`, taps through `ui_route`), the repair notice (`sd_repair_fat_stats()`), the fatal error, the boot logo and the 22 intro animations (`p3a_core/intro_anims`, `host/intro-anim-lab` must keep working), the touch-failure countdown. Then M3.5 overlays and M3.6 USB. When Fab has answered O3 and O4: regenerate `components/p3a_ui/fonts/ui.p3afont`, tune `ui_style_default()`, close M3.2 |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -48,7 +48,7 @@ reopened (why).
 | M3.1 Screen model and hook table | done 2026-11-23. Tiers: host tests (22 programs, under the sanitizers too), device tests (smoke, UI, pipeline and player: 48 cases), test build. Nothing is drawn yet |
 | M3.2 Text and fonts | built 2026-11-23 with a provisional font; open until Fab picks the family (O4) and approves the look. Tiers: host tests (24 programs, under the sanitizers too), device tests (With them the smoke, UI, player, pipeline, scheduler and player-API tests pass (62 cases) on the final firmware; the other tests not marked slow passed (190 cases) on the build just before the last two fixes) |
 | M3.3 Screens | not started |
-| M3.4 Touch router and gestures | begun 2026-11-23: the gesture recogniser (pure, host tests). The touch task, the table and the injection hook are to do |
+| M3.4 Touch router and gestures | built 2026-11-23; open for manual check M3.4-a (real fingers), swipe actions (Phase 4) and the SD-format taps (M3.3). Tiers: host tests (26 programs, under the sanitizers too), device tests with scripted fingers (71 cases with the areas around it) |
 | M3.5 Overlays | not started |
 | M3.6 USB mass storage | not started |
 | M4.1 Fetch, download, refresh, eviction | not started |
@@ -122,6 +122,12 @@ Open:
   Also worth one try with a wrong password: the unit should offer
   `p3a-setup` again within about a minute. If anything goes wrong,
   `python host/p3a-lab/lab.py provision` puts the unit back online.
+- **M3.4-a, real fingers.** With something playing: tap the right half
+  (next), the left half (back); hold a finger still for a little over two
+  seconds (the information screen; the same again closes it); turn two
+  fingers a quarter turn (the screen turns; turn it back); start a swipe
+  and stop short (nothing should happen). Then press BOOT to pause and
+  check that taps do nothing and a long press resumes.
 - **M3.2-a, the look of the screens.** Pick the font family from the
   specimen sheet (`C:\Users\fab\p3a-2.0-fonts\overview.png`, and one
   720 by 720 picture per family beside it), then look at a screen on the
@@ -316,6 +322,42 @@ M1.1, 2026-11-17:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-23: M3.4 part 2, the touch task and what gestures do
+
+- `ui_route.c` (pure): one function from the screen on top, the pause
+  state and a gesture to an action. On the artwork: tap right or left is
+  next or back, two fingers turned turn the screen, a long press opens the
+  information screen. Paused: only a long press, which resumes. The
+  information, setup and registration screens: a long press closes them.
+  An update, a shared card and a fatal error: nothing.
+- `ui_touch.c`: the touch task (class `TOUCH`) reads the controller every
+  20 ms, feeds the recogniser, asks the table and acts: the scheduler for
+  next, back and resume, the `rotation` setting for a turn (saved, as in
+  1.x), the model for the information screen.
+- **The information screen** has first content: the device's name, its
+  address, the firmware version and the card's free space, filled by
+  `app_main` because the network is above the UI. Its full content is
+  M3.3.
+- **Scripted fingers** (`p3a_ui_touch_script()`, `!ui touch`): the task
+  reads a script in place of the controller at the same pace, so a test
+  takes the path real fingers take.
+- Swipe up and down are recognised and do nothing yet: what they do
+  depends on where the artwork is from (Phase 4).
+- Checked on the way: the UI's rotation agrees with the artworks' (the
+  canvas and `test_player.TURN` put the same corner in the same place),
+  so a turned screen's "right half" is where the viewer sees it.
+- Verified, host tests: 26 programs, also under the sanitizers; new is
+  `test_ui_route` (5 cases).
+- Verified, device tests (6 new cases in `test_touch.py`, scripted
+  fingers): tap right and left, a drift that does nothing, both swipes
+  recognised, long press opening and closing the information screen with
+  a tap under it ignored, pause, two-finger turns both ways with the
+  setting saved and taps following the turned screen, an update not
+  interrupted. With the smoke, UI, drawing, pipeline, player and board
+  display tests: 71 cases pass.
+- Not verified: real fingers (manual check M3.4-a); the task's cost while
+  an animation plays (to measure with the trace build).
 
 ### 2026-11-23: M3.4 part 1, the gesture recogniser
 

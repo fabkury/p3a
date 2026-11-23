@@ -170,6 +170,8 @@ All in `components/p3a_util`; each header explains itself at the top.
   Everything the UI draws goes through `ui_canvas_fill()` (which handles
   rotation and clipping) and `ui_font.h`; the look is `ui_style_default()`.
   `build-host/ui_preview` draws any screen on the workstation.
+  What a gesture does on each screen is one function, `ui_route()`; add a
+  behaviour there, with its host test, not in the touch task.
 - **HTTP endpoints** are rows in a route table (`p3a_http.h`). A handler
   answers once through `p3a_http_ok`, `p3a_http_accepted` or
   `p3a_http_fail` and never writes an envelope, a status line or a header

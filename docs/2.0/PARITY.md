@@ -92,15 +92,15 @@ describe what a client can do, not the 1.x URL.
 
 | | Capability | 2.0 | M | Note |
 |---|---|---|---|---|
-| [ ] | Tap right or left half: next or previous, in rotated coordinates | keep | M3.4 | |
-| [ ] | A touch that drifts without becoming a swipe is discarded, not a tap | keep | M3.4 | |
-| [ ] | Swipe up: pin; also Like on Makapix art, click on Giphy art. Swipe down undoes it. Error indicator on local files | keep | M3.4, M4.4, M4.5 | |
-| [ ] | Two-finger rotate past 45 degrees turns the screen 90 degrees, once per gesture | keep | M3.4 | |
-| [ ] | Long press (2.25 s): info screen, or the setup screen in setup mode; dismisses any screen | keep | M3.4 | |
-| [ ] | While paused, only long press works, and it resumes | keep | M3.4 | |
-| [ ] | While a screen is up, taps reach only the SD-format controls | keep | M3.4 | |
-| [ ] | During registration, long press cancels and returns to playback | keep | M3.4 | |
-| [ ] | During a firmware update, gestures are ignored | keep | M3.4 | |
+| [x] | Tap right or left half: next or previous, in rotated coordinates | keep | M3.4 | |
+| [x] | A touch that drifts without becoming a swipe is discarded, not a tap | keep | M3.4 | |
+| [ ] | Swipe up: pin; also Like on Makapix art, click on Giphy art. Swipe down undoes it. Error indicator on local files | keep | M3.4, M4.4, M4.5 | Recognised since M3.4; what it does arrives with the sources |
+| [x] | Two-finger rotate past 45 degrees turns the screen 90 degrees, once per gesture | keep | M3.4 | |
+| [ ] | Long press (2.25 s): info screen, or the setup screen in setup mode; dismisses any screen | keep | M3.4 | Done in M3.4 for the information screen and for closing; in setup mode the setup screen is up by itself in 2.0 |
+| [x] | While paused, only long press works, and it resumes | keep | M3.4 | |
+| [ ] | While a screen is up, taps reach only the SD-format controls | keep | M3.4 | Taps are ignored under a screen (M3.4); the format controls come with that screen (M3.3) |
+| [ ] | During registration, long press cancels and returns to playback | keep | M3.4 | The long press closes the screen (M3.4); cancelling the registration is M4.5 |
+| [x] | During a firmware update, gestures are ignored | keep | M3.4 | |
 | [ ] | BOOT button toggles pause; ignored during the co-processor update | keep | M1.2, M2.4 | Wired in M2.4; manual check M2.4-a |
 | [ ] | Touch failure at boot: countdown and one reboot, then carry on without touch | keep | M3.4 | The bounded init is in M1.2; the reboot streak needs settings (M1.4) and the countdown needs the UI |
 

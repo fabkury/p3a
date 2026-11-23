@@ -301,5 +301,8 @@ esp_err_t p3a_ui_start(void)
         on_card_failed(NULL, NULL);
     }
     on_player_changed(NULL, NULL);
+    if (err == ESP_OK) {
+        err = ui_touch_start();
+    }
     return err;
 }

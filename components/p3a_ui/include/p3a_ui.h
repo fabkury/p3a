@@ -13,6 +13,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #include "esp_err.h"
@@ -40,6 +41,33 @@ typedef struct {
 } p3a_ui_state_t;
 
 void p3a_ui_get_state(p3a_ui_state_t *out);
+
+// --- touch ----------------------------------------------------------------------
+
+// What the information screen says (the device's name, its address, the
+// firmware): filled by app_main's function each time the screen is opened,
+// because most of it is known only above the UI.
+typedef void (*p3a_ui_info_fn)(p3a_ui_content_t *out);
+void p3a_ui_set_info_source(p3a_ui_info_fn fill);
+
+// Fingers for a test: each step is what the touch controller would report,
+// held for `hold_ms`. The touch task reads the steps in place of the
+// controller, one sample every 20 ms, so a script takes its real time.
+// ESP_ERR_INVALID_STATE while an earlier script is still running.
+typedef struct {
+    uint8_t fingers;   // 0, 1 or 2
+    int32_t x[2], y[2];  // the panel's own coordinates
+    uint32_t hold_ms;
+} p3a_ui_touch_step_t;
+esp_err_t p3a_ui_touch_script(const p3a_ui_touch_step_t *steps, size_t count);
+
+typedef struct {
+    bool scripted;             // a script is running
+    uint32_t gestures;         // recognised since boot
+    const char *last_gesture;  // "tap", "swipe_up", ...; "none" before the first
+    const char *last_action;   // what it did: "next", "open_info", "none", ...
+} p3a_ui_touch_status_t;
+void p3a_ui_touch_get_status(p3a_ui_touch_status_t *out);
 
 const char *p3a_ui_screen_name(p3a_screen_t screen);
 const char *p3a_ui_notice_name(p3a_notice_t notice);

@@ -4,6 +4,8 @@
 // Boot never aborts on a recoverable failure: a step that fails is logged and
 // the device carries on with what it has.
 
+#include <stdio.h>
+
 #include "animation_decoder.h"
 #include "animation_player.h"
 #include "display_renderer.h"
@@ -45,6 +47,26 @@ static void boot_step(const char *what, esp_err_t err)
 {
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "boot: %s failed: %s", what, p3a_err_to_name(err));
+    }
+}
+
+// What the information screen says. Gathered here because the network is
+// above the UI.
+static void fill_info(p3a_ui_content_t *out)
+{
+    p3a_net_status_t net;
+    p3a_net_status(&net);
+    const p3a_storage_space_t space = p3a_storage_space();
+    char card[40] = "no SD card";
+    if (space.valid) {
+        snprintf(card, sizeof(card), "%u MB free on the card", (unsigned)(space.free_bytes / (1024 * 1024)));
+    }
+    const esp_app_desc_t *app = esp_app_get_description();
+    if (net.state == P3A_NET_UP) {
+        p3a_ui_content(out, net.hostname, -1, "http://%s.local\n%s\nFirmware %s\n%s", net.hostname, net.ip, app->version, card);
+    } else {
+        p3a_ui_content(out, net.hostname[0] ? net.hostname : "p3a", -1, "Not on Wi-Fi (%s)\nFirmware %s\n%s",
+                       p3a_net_state_name(net.state), app->version, card);
     }
 }
 
@@ -139,6 +161,7 @@ void app_main(void)
     // to ask it for something. The co-processor update reports through it.
     boot_step("ui", p3a_ui_start());
     p3a_ui_hooks_set(p3a_ui_hook_table());
+    p3a_ui_set_info_source(fill_info);
     static const slave_ota_ui_t update_ui = {.begin = on_update_begin, .progress = on_update_progress, .end = on_update_end};
     slave_ota_set_ui(&update_ui);
 

@@ -81,7 +81,8 @@ typedef struct {
 
     bool playing;
     p3a_record_t current;
-    bool foreign_shown;      // a picture that is not the scheduler's is on the panel
+    bool foreign_shown;      // a picture that is not the scheduler's is on the panel, or about to be
+    bool staged;             // the pending request is loaded and waits for the display to draw it
     uint32_t foreign_token;  // the foreign request last reported ready with a picture
     uint32_t next_token;
     uint32_t picks, shown, failed;
@@ -323,7 +324,12 @@ static bool on_ready(uint32_t token, const animation_player_loaded_t *loaded, vo
     if (!(token & OUR_TOKENS)) {
         LOCK();
         s->foreign_token = loaded->width != 0 ? token : 0;  // 0: a request to play nothing
+        // Said now, not when it is shown: whoever holds the panel (a notice
+        // that covers it) must let go before the request can reach it. That
+        // goes for a request to play nothing too; "shown" then says which.
+        s->foreign_shown = true;
         UNLOCK();
+        changed();
         return s->foreign.ready ? s->foreign.ready(token, loaded, s->foreign_ctx) : true;
     }
     bool wanted = true;
@@ -351,7 +357,13 @@ static bool on_ready(uint32_t token, const animation_player_loaded_t *loaded, vo
             }
         }
     }
+    if (wanted && token == s->pending_token) {
+        s->staged = true;
+    }
     UNLOCK();
+    if (wanted) {
+        changed();  // see the note above: the panel must be free for it to be shown
+    }
     return wanted;
 }
 
@@ -375,6 +387,7 @@ static void on_shown(uint32_t token, void *ctx)
     LOCK();
     if (token == s->pending_token) {
         s->pending_token = 0;
+        s->staged = false;
         s->current = s->pending_record;
         s->playing = true;
         s->foreign_shown = false;
@@ -420,6 +433,7 @@ static void on_failed(uint32_t token, esp_err_t err, void *ctx)
         return;
     }
     s->pending_token = 0;
+    s->staged = false;
     int32_t at = -1;
     p3a_record_t *record = pending_in_index(&at);
     if (s->pending_kind == TURN_NEW && s->pending_generation == s->generation) {
@@ -535,7 +549,8 @@ static esp_err_t list_job(void *arg)
             sched_core_set_available(&s->core, at, ch->index.available_count);
             ESP_LOGI(TAG, "channel %s (%s): %u records, %u playable", ch->id, ops->name, (unsigned)ch->index.count,
                      (unsigned)ch->index.available_count);
-            if ((s->start_wanted || !s->playing) && s->pending_token == 0 && begin_new(SCHED_TURN_AUTO) == ESP_OK) {
+            if ((s->start_wanted || (!s->playing && !s->foreign_shown)) && s->pending_token == 0 &&
+                begin_new(SCHED_TURN_AUTO) == ESP_OK) {
                 s->start_wanted = false;  // the first thing to play has arrived
             }
         }
@@ -657,6 +672,7 @@ void play_scheduler_get_status(play_scheduler_status_t *out)
     out->last_error = s->last_error;
     out->paused = s->paused;
     out->foreign = s->foreign_shown;
+    out->staged = s->staged && s->pending_token != 0;
     out->advance_in_s = sched_turn_remaining_s(&s->turn, now_ms());
     out->problem = s->problem;
     out->problems = s->problems;

@@ -121,6 +121,7 @@ static int s_overlay_count;
 static volatile display_source_t s_source_request = DISPLAY_SOURCE_ARTWORK;
 static volatile display_source_t s_source_active = DISPLAY_SOURCE_ARTWORK;
 static atomic_bool s_blank;
+static atomic_bool s_redraw_requested;
 
 // Forward declarations
 static esp_err_t prepare_vsync(void);
@@ -157,6 +158,11 @@ static void on_setting_changed(const p3a_event_t *event, void *ctx)
     default:
         break;
     }
+}
+
+void display_renderer_request_redraw(void)
+{
+    atomic_store(&s_redraw_requested, true);
 }
 
 display_rotation_t display_renderer_get_rotation(void)
@@ -545,7 +551,8 @@ void display_producer_task(void *arg)
             xSemaphoreGive(s_registry_lock);
 
             if (source.fn) {
-                if (slot != DISPLAY_SOURCE_TEST && display_fps_overlay_due()) {
+                if (slot != DISPLAY_SOURCE_TEST &&
+                    (display_fps_overlay_due() || atomic_exchange(&s_redraw_requested, false))) {
                     must_redraw = true;  // overlays are not drawn over test patterns
                 }
                 frame_delay_ms = source.fn(back_buffer, must_redraw, source.ctx);

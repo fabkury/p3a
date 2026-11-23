@@ -22,6 +22,7 @@
 #include "play_scheduler.h"
 #include "psram_alloc.h"
 #include "sd_health.h"
+#include "ui_internal.h"
 #include "ui_model.h"
 #include "ui_player.h"
 
@@ -65,6 +66,9 @@ static void settle_and_unlock(bool changed)
     UNLOCK();
     if (flip) {
         hold ? play_scheduler_hold() : play_scheduler_release();
+    }
+    if (changed) {
+        ui_display_changed(view.covers_artwork, view.banner);
     }
 }
 
@@ -110,7 +114,10 @@ const p3a_ui_hooks_t *p3a_ui_hook_table(void)
 static void facts_from(const play_scheduler_status_t *st, ui_player_facts_t *f)
 {
     memset(f, 0, sizeof(*f));
-    f->playing = st->playing || st->foreign;  // whoever put it there, a picture is on the panel
+    // Whoever put it there, a picture is on the panel, or is decoded and
+    // waiting to be drawn: the UI must not hold the panel against it, or it
+    // would never be shown.
+    f->playing = st->playing || st->foreign || st->staged;
     f->loading = st->loading;
     f->channels = st->channel_count;
     for (uint32_t i = 0; i < st->channel_count; i++) {
@@ -273,6 +280,7 @@ esp_err_t p3a_ui_start(void)
         return ESP_ERR_NO_MEM;
     }
     ui_model_init(&s_model);
+    ui_display_start();
     esp_err_t err = p3a_event_subscribe(P3A_EVENT_PLAYER_CHANGED, on_player_changed, NULL);
     if (err == ESP_OK) {
         err = p3a_event_subscribe(P3A_EVENT_NET_SETUP_STARTED, on_setup_started, NULL);

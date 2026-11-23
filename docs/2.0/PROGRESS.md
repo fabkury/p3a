@@ -9,8 +9,8 @@ times.
 | | |
 |---|---|
 | Phase | 3, on-device UI (Phases 0, 1 and 2 complete) |
-| Current milestone | M3.2 text and fonts |
-| Next action | M3.2: bring in the text path written beside M3.1 (a canvas addressed as the viewer sees the screen, a glyph renderer for pixel fonts at whole multiples, `tools/gen_font.py`), draw the model as the display pipeline's UI source and a banner overlay, with screenshot tests. The font family is Fab's choice (O4); a provisional one is used until he picks from the specimen sheet. Then M3.4's gesture recogniser and touch table, then M3.3's remaining screens |
+| Current milestone | M3.2 text and fonts (the look awaits Fab), then M3.4 |
+| Next action | M3.4: a pure gesture recogniser (drafted and host-tested outside the tree in the session of 2026-11-23: tap, swipe, long press, two-finger rotate, with 1.x's thresholds; rewrite it from `legacy/main/app_touch.c` if the draft is gone), the touch task on class `TOUCH`, a table from the screen on top to what each gesture does, and a touch injection hook for the device tests. Then M3.3's remaining screens (info, registration code, SD format flow, boot logo and intro animations). When Fab has answered O3 and O4: regenerate `components/p3a_ui/fonts/ui.p3afont`, tune `ui_style_default()`, close M3.2 |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -46,7 +46,7 @@ reopened (why).
 | M2.3 Source interface, local source, scheduler | done 2026-11-23. Tiers: host tests (18 programs, under the sanitizers too), the whole device suite (255 cases; one needed its own bound updated for the larger JSON body limit), release, test and trace builds, the configuration guard. Left for later milestones and noted in the entries: uploads do not play at once (M2.4), more than 16 channels (M4.x), weighted shares on the device (needs a second source) |
 | M2.4 Loader pipeline, C and D | done 2026-11-23. Tiers: host tests (20 programs, under the sanitizers too), the whole device suite (260 cases pass; the 6 timing cases need the trace build and were not run), release, test and trace builds, the configuration guard. Not seen on the device because nothing produces them yet: deleting a damaged blob (M4.1), the aspect filter (M4.3). Manual check M2.4-a pending |
 | M3.1 Screen model and hook table | done 2026-11-23. Tiers: host tests (22 programs, under the sanitizers too), device tests (smoke, UI, pipeline and player: 48 cases), test build. Nothing is drawn yet |
-| M3.2 Text and fonts | not started |
+| M3.2 Text and fonts | built 2026-11-23 with a provisional font; open until Fab picks the family (O4) and approves the look. Tiers: host tests (24 programs, under the sanitizers too), device tests (With them the smoke, UI, player, pipeline, scheduler and player-API tests pass (62 cases) on the final firmware; the other tests not marked slow passed (190 cases) on the build just before the last two fixes) |
 | M3.3 Screens | not started |
 | M3.4 Touch router and gestures | not started |
 | M3.5 Overlays | not started |
@@ -122,6 +122,13 @@ Open:
   Also worth one try with a wrong password: the unit should offer
   `p3a-setup` again within about a minute. If anything goes wrong,
   `python host/p3a-lab/lab.py provision` puts the unit back online.
+- **M3.2-a, the look of the screens.** Pick the font family from the
+  specimen sheet (`C:\Users\fab\p3a-2.0-fonts\overview.png`, and one
+  720 by 720 picture per family beside it), then look at a screen on the
+  device itself:
+  `python host/p3a-lab/lab.py cmd "ui screen {\"screen\":6,\"up\":true,\"title\":\"Updating Wi-Fi\",\"text\":\"2.9.1 to 2.9.3. Do not unplug\",\"progress\":64}"`
+  (take it down with `\"up\":false`). Sizes, colours and the banner's
+  height are the numbers in `ui_style_default()`.
 - **M2.4-a, the BOOT button pauses.** With something playing, press the
   BOOT button on the board once: the panel should go fully dark (backlight
   off). Press again: the same artwork is back at the brightness it had.
@@ -309,6 +316,58 @@ M1.1, 2026-11-17:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-23: M3.2, text on the panel (provisional font)
+
+- **O3, working answer: uGFX is not carried over.** Text is drawn by
+  `ui_font.c` (pure, about 200 lines): a pixel font at whole multiples of
+  its own size, UTF-8, wrapping and alignment. Fab may still overrule;
+  nothing else depends on uGFX.
+- **Fonts are small binary files** made from a pixel font's TTF by
+  `tools/gen_font.py` (1 bit a pixel, no anti-aliasing) and committed, so a
+  build needs neither Pillow nor the TTFs. Every size in the file is
+  checked when it is opened. The built-in one is `fonts/ui.p3afont`:
+  Everyday Standard by VEXED, 6 px, 159 characters (ASCII and the Latin-1
+  letters), 3 KB, CC BY 4.0 with the attribution in `fonts/README.md`.
+  **The family is provisional (O4).**
+- **`ui_canvas.c`** (pure): everything is drawn through one fill that
+  turns viewer coordinates into the panel's for the rotation in force and
+  clips. No drawing code knows about rotation.
+- **`ui_draw.c`** (pure): one layout for every screen that is words (a
+  title, a paragraph, a progress bar when there is one, centred as a
+  group) and a band along the bottom for a notice over an artwork. The
+  look is the few numbers of `ui_style_default()`.
+- **`ui_display.c`**: the model drawn as the display pipeline's UI source
+  and as an overlay. The UI takes the panel when a screen covers the
+  artwork and gives it back, through a job. A still artwork is redrawn
+  when a banner appears or goes (`display_renderer_request_redraw()`, one
+  flag beside the FPS counter's; the timing code is untouched).
+- So the notices of M3.1 are now seen: "Nothing to play" with the reason
+  on a device with an empty card, a failed request as a band over what
+  plays, the co-processor update with its progress bar.
+- `tests/host/ui/ui_preview.c` draws any screen on the workstation with
+  the device's code; the device tests compare the panel with it.
+- Verified, host tests: 24 programs pass, also under ASan and UBSan in
+  WSL. New: `test_ui_text` (8 cases: rotation and clipping of the canvas,
+  measuring, drawing, UTF-8 including malformed, wrapping, a font file
+  refused in nine ways, and 20,000 damaged font files that are refused or
+  harmless) and `test_ui_draw` (4: order and centring, margins, the bar's
+  fill, nothing pushed off the screen by any words at any rotation).
+- Verified, device tests (5 new cases in `test_ui_drawing.py`): the panel
+  equals the workstation's rendering pixel for pixel for a screen at
+  rotations 0, 90, 180 and 270, after a change of words, and for a band
+  over a still artwork; the artwork returns untouched. With them the smoke, UI, player, pipeline, scheduler and player-API tests pass (62 cases) on the final firmware; the other tests not marked slow passed (190 cases) on the build just before the last two fixes.
+- **A stall found by the wider test run and fixed.** With a notice
+  covering the panel, a newly loaded artwork was never drawn, so it was
+  never reported shown, and the notice never left. The scheduler's status
+  now says when a request is decoded and waiting for the display
+  (`staged`), and the UI gives the panel up for it. The same for a
+  request to play nothing.
+- Not verified: the look, by eye, on the panel (manual check M3.2-a); a
+  banner over an animation (the same overlay path as the FPS counter);
+  frame timing with a banner up (to measure with the trace build).
+- Still to do in M3.2: Fab's choice of family and sizes; image assets
+  through `EMBED_FILES` (they arrive with the screens that need them).
 
 ### 2026-11-23: M3.1, the screen model and the hook table
 

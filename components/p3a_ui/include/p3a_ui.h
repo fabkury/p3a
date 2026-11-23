@@ -7,9 +7,9 @@
 // scheduler about playback. The few callers that must tell it something
 // use p3a_ui_hooks.h, from any layer.
 //
-// Drawing arrives with the text path (M3.2) and the screens (M3.3); until
-// then the model is kept, reported over the API, and holds playback while
-// a screen is up.
+// A screen is drawn as the display pipeline's UI source and takes the whole
+// panel; a notice over a playing artwork is drawn as a band on top of it.
+// Text is a built-in pixel font at whole multiples of its size (ui_font.h).
 #pragma once
 
 #include <stdbool.h>

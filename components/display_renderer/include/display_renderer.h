@@ -93,6 +93,11 @@ esp_err_t display_renderer_add_overlay(display_overlay_fn fn, void *ctx, bool ov
 // shown at once instead of on the old schedule.
 void display_renderer_note_content_discontinuity(void);
 
+// Asks for the next frame to be drawn afresh even if the source would say
+// "unchanged": for an overlay that has something new to draw over a still
+// picture. Returns at once.
+void display_renderer_request_redraw(void);
+
 // Black frames instead of the source's, for as long as it is set: pause.
 // Brightness zero has the same effect by itself.
 void display_renderer_set_blank(bool blank);

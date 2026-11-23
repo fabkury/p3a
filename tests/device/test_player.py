@@ -152,7 +152,15 @@ def panel(bring_up):
     api = Api(lab.provision(uart)["ip"])
     p = Panel(api)
     p.set(rotation=0, background_color="#000000", brightness=100, show_fps=False, playback_max_speed=False)
+    # Something for the scheduler to have: with an empty folder the UI says
+    # "Nothing to play" on the panel whenever these tests stop the player.
+    keep = "/api/v2/test/local?name=zz-player-keep.png"
+    assert api.call("POST", keep, (CORPUS / "good" / "png" / "one_pixel.png").read_bytes(), timeout=30).status == 200
+    uart.command("sched refresh 1")
+    time.sleep(1.0)
     yield p
+    api.call("POST", keep)
+    uart.command("sched refresh 1")
     api.call("POST", "/api/v2/test/play/blank?on=0")
     api.call("POST", "/api/v2/test/play/stop")
     p.set(rotation=0, background_color="#000000", brightness=100)

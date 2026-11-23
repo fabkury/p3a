@@ -154,7 +154,6 @@ and proposals are in [DECISIONS.md](DECISIONS.md) under "Open decisions".
 | Q1 to Q10 | Ten 1.x behaviours that look accidental (brightness not restored at boot, API keys readable over the LAN, no update check for 12 hours, and others). Keep or change each? Listed in [PARITY.md](PARITY.md) under "Behaviours to decide" | M1.3 at the earliest; each row names its milestone |
 | O18 | Should the user's own files be scaled smoothly or with sharp pixels? 1.x used sharp pixels for everything on the card, which suits pixel art and makes photographs blocky. Options: keep sharp; go smooth; or decide per file (smooth for JPEG, sharp for the rest) | M2.4 |
 | O2 | Should 1.2.5 carry a notice about 2.0, and with what wording? | 1.2.5 |
-| O3 | Keep uGFX for text, or replace it with a glyph-sheet renderer? | M3.2 |
 | O5 | Clock overlay details (12 or 24 hour, seconds, when hidden) | M3.5 |
 | O6 | Branding overlay rules from the Giphy and Klipy terms | M3.5 |
 | O15 | Does Makapix need any server-side change for 2.0 devices? | M4.5 |
@@ -319,6 +318,18 @@ M1.1, 2026-11-17:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-23: uGFX is dropped (O3 decided)
+
+- Fab agreed to drop uGFX after the trade-offs were laid out (D60): 2.0
+  draws text with its own renderer and gives up anti-aliased text and a
+  ready-made widget toolkit, neither of which the plan uses.
+- His observation, kept for later: characters outside Latin may be wanted
+  at some point. Recorded as idea 5 in
+  `docs/2.0-architecture-review/ideas.md` with what it would take.
+- `legacy/components/ugfx` and `legacy/main/ugfx_ui.c` stay in the quarry
+  until M3.3 has taken the screens' content from them; their deletion is
+  logged then.
 
 ### 2026-11-23: the font is Everyday Ample (O4 decided)
 

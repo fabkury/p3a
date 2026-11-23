@@ -128,3 +128,24 @@ Whether to scan once when setup starts and cache the list, or on request.
 Append a dated section with the same four parts: what it is, where it lands
 in the skeleton, what it depends on, open questions. If an idea changes the
 skeleton itself, update `target-architecture.md` in the same commit.
+
+## Added 2026-11-23
+
+### 5. On-screen text beyond Latin
+
+**What it is.** The device's own screens draw ASCII and the Latin-1
+accented letters; anything else appears as "?". Titles and artist names
+from Makapix and the museums can be in any script. Fab raised it when
+uGFX was dropped (D60) and has not decided whether it is wanted.
+
+**Where it lands.** `tools/gen_font.py` (the `CODEPOINTS` list) and
+`components/p3a_ui/fonts/`. The file format and the renderer need no
+change: a font file holds any character up to U+FFFF, found by binary
+search.
+
+**What it depends on.** The font. Everyday Ample also has Cyrillic and the
+extra letters of Polish and Turkish, so those are a change of one list and
+a few kilobytes. Greek, Hebrew, Arabic or CJK need a second pixel font
+with those glyphs, a way to fall back from one font to the other, and for
+Arabic and Hebrew right-to-left layout, which the renderer does not do.
+

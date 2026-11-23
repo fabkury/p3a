@@ -46,6 +46,53 @@ static int32_t body(const ui_canvas_t *canvas, const ui_style_t *style, int32_t 
     return used;
 }
 
+// Where things are at the bottom of a screen, from the bottom edge up: the
+// hint, then the buttons. The same arithmetic places them and finds them
+// again under a finger.
+static int32_t hint_height(const ui_style_t *style, const p3a_ui_content_t *content)
+{
+    return content->hint[0] != '\0' ? style->font->height * style->banner_scale + style->margin / 2 : 0;
+}
+
+static int button_count(const p3a_ui_content_t *content)
+{
+    int n = 0;
+    while (n < P3A_UI_BUTTONS && content->buttons[n][0] != '\0') {
+        n++;
+    }
+    return n;
+}
+
+bool ui_draw_button_rect(const ui_style_t *style, int32_t view_width, int32_t view_height,
+                         const p3a_ui_content_t *content, int index, int32_t *x, int32_t *y, int32_t *w, int32_t *h)
+{
+    const int count = content != NULL && style->font != NULL ? button_count(content) : 0;
+    if (index < 0 || index >= count) {
+        return false;
+    }
+    const int32_t height = style->font->height * style->text_scale * 5 / 2;  // 90 pixels on the panel: a finger's worth
+    const int32_t gap = style->margin / 2;
+    const int32_t bottom = view_height - style->margin / 2 - hint_height(style, content);
+    *w = (view_width - 2 * style->margin) * 3 / 4;
+    *h = height;
+    *x = (view_width - *w) / 2;
+    *y = bottom - (count - index) * height - (count - 1 - index) * gap;
+    return true;
+}
+
+int ui_draw_button_at(const ui_style_t *style, int32_t view_width, int32_t view_height, const p3a_ui_content_t *content,
+                      int32_t tap_x, int32_t tap_y)
+{
+    for (int i = 0; i < P3A_UI_BUTTONS; i++) {
+        int32_t x, y, w, h;
+        if (ui_draw_button_rect(style, view_width, view_height, content, i, &x, &y, &w, &h) && tap_x >= x &&
+            tap_x < x + w && tap_y >= y && tap_y < y + h) {
+            return (content->buttons_enabled >> i) & 1 ? i : -1;  // a dimmed button takes the tap and does nothing
+        }
+    }
+    return -1;
+}
+
 void ui_style_default(ui_style_t *style, const ui_font_t *font, int32_t view_width)
 {
     // Sized for a font about 12 rows high on a 720-pixel screen: a title of
@@ -91,7 +138,15 @@ void ui_draw_screen(const ui_canvas_t *canvas, const ui_style_t *style, const p3
     if (parts > 1) {
         total += (parts - 1) * gap;
     }
-    int32_t y = (vh - total) / 2;
+    // The group is centred in what the buttons and the hint leave free.
+    int32_t free_h = vh;
+    int32_t bx, by, bw, bh;
+    if (ui_draw_button_rect(style, vw, vh, content, 0, &bx, &by, &bw, &bh)) {
+        free_h = by - style->margin / 2;
+    } else {
+        free_h = vh - hint_height(style, content);
+    }
+    int32_t y = (free_h - total) / 2;
     if (y < style->margin / 2) {
         y = style->margin / 2;
     }
@@ -111,6 +166,15 @@ void ui_draw_screen(const ui_canvas_t *canvas, const ui_style_t *style, const p3
         const int32_t inner = column - 4 * edge;
         ui_canvas_fill(canvas, style->margin + 2 * edge, y + 2 * edge, inner * progress / 100, bar_h - 4 * edge,
                        style->accent);
+    }
+    for (int i = 0; ui_draw_button_rect(style, vw, vh, content, i, &bx, &by, &bw, &bh); i++) {
+        const bool enabled = (content->buttons_enabled >> i) & 1;
+        const ui_colour_t colour = enabled ? style->title : style->label;
+        ui_canvas_fill(canvas, bx, by, bw, bh, style->background);
+        ui_canvas_frame(canvas, bx, by, bw, bh, style->text_scale, colour);
+        const int32_t label_h = style->font->height * style->text_scale;
+        ui_text_block(canvas, style->font, bx, by + (bh - label_h) / 2, bw, style->text_scale, 0, UI_ALIGN_CENTRE, colour,
+                      content->buttons[i], 1);
     }
     if (content->hint[0] != '\0') {
         // What a person can do here, small, at the bottom edge.

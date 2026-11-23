@@ -6,7 +6,7 @@ idf_component_register(
          "p3a_board_sd.c" "p3a_board_touch.c"
     INCLUDE_DIRS "include"
     REQUIRES esp_lcd espressif__esp_lcd_touch sdmmc
-    PRIV_REQUIRES esp_driver_gpio waveshare__esp32_p4_wifi6_touch_lcd_4b p3a_util sd_idle_wait
+    PRIV_REQUIRES esp_driver_gpio esp_driver_sdmmc fatfs waveshare__esp32_p4_wifi6_touch_lcd_4b p3a_util sd_idle_wait
 )
 
 # FatFS takes its buffers from p3a_board_ff_alloc.c (cache-line aligned, so the

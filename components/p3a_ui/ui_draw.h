@@ -39,6 +39,15 @@ void ui_style_default(ui_style_t *style, const ui_font_t *font, int32_t view_wid
 // draws the background alone.
 void ui_draw_screen(const ui_canvas_t *canvas, const ui_style_t *style, const p3a_ui_content_t *content);
 
+// Where button `index` of a screen is, in viewer coordinates. False when
+// the content has no such button.
+bool ui_draw_button_rect(const ui_style_t *style, int32_t view_width, int32_t view_height,
+                         const p3a_ui_content_t *content, int index, int32_t *x, int32_t *y, int32_t *w, int32_t *h);
+
+// Which enabled button a tap at (tap_x, tap_y) is on, or -1.
+int ui_draw_button_at(const ui_style_t *style, int32_t view_width, int32_t view_height, const p3a_ui_content_t *content,
+                      int32_t tap_x, int32_t tap_y);
+
 // Draws a notice as a band along the bottom of the screen, over whatever is
 // in the canvas. Returns the band's height.
 int32_t ui_draw_banner(const ui_canvas_t *canvas, const ui_style_t *style, const p3a_ui_content_t *content);

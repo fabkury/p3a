@@ -40,14 +40,25 @@ static void test_while_paused_only_a_long_press_works_and_it_resumes(void)
 
 static void test_a_long_press_closes_the_screens_a_person_may_close_and_nothing_else_reaches_them(void)
 {
-    const p3a_screen_t closable[] = {P3A_SCREEN_INFO, P3A_SCREEN_SETUP, P3A_SCREEN_REGISTRATION};
-    for (unsigned s = 0; s < 3; s++) {
+    const p3a_screen_t closable[] = {P3A_SCREEN_SETUP, P3A_SCREEN_REGISTRATION};
+    for (unsigned s = 0; s < 2; s++) {
         for (unsigned i = 0; i < 6; i++) {
             const ui_action_t want = all[i] == UI_GESTURE_LONG_PRESS ? UI_ACTION_CLOSE_SCREEN : UI_ACTION_NONE;
             TEST_ASSERT_EQUAL(want, route(closable[s], false, all[i], 500));
             TEST_ASSERT_EQUAL(want, route(closable[s], true, all[i], 500));  // paused or not
         }
     }
+}
+
+static void test_screens_with_buttons_take_taps_for_them(void)
+{
+    TEST_ASSERT_EQUAL(UI_ACTION_BUTTON, route(P3A_SCREEN_INFO, false, UI_GESTURE_TAP, 100));
+    TEST_ASSERT_EQUAL(UI_ACTION_CLOSE_SCREEN, route(P3A_SCREEN_INFO, false, UI_GESTURE_LONG_PRESS, 100));
+    TEST_ASSERT_EQUAL(UI_ACTION_NONE, route(P3A_SCREEN_INFO, false, UI_GESTURE_SWIPE_UP, 100));
+    TEST_ASSERT_EQUAL(UI_ACTION_BUTTON, route(P3A_SCREEN_CARD, false, UI_GESTURE_TAP, 100));
+    TEST_ASSERT_EQUAL(UI_ACTION_BUTTON, route(P3A_SCREEN_CARD, true, UI_GESTURE_TAP, 100));  // paused or not
+    TEST_ASSERT_EQUAL(UI_ACTION_CANCEL, route(P3A_SCREEN_CARD, false, UI_GESTURE_LONG_PRESS, 100));
+    TEST_ASSERT_EQUAL(UI_ACTION_NONE, route(P3A_SCREEN_CARD, false, UI_GESTURE_ROTATE_CW, 100));
 }
 
 static void test_an_update_a_shared_card_and_a_fatal_error_are_not_interrupted(void)
@@ -75,6 +86,7 @@ int main(void)
     RUN_TEST(test_on_the_artwork_every_gesture_has_its_meaning);
     RUN_TEST(test_while_paused_only_a_long_press_works_and_it_resumes);
     RUN_TEST(test_a_long_press_closes_the_screens_a_person_may_close_and_nothing_else_reaches_them);
+    RUN_TEST(test_screens_with_buttons_take_taps_for_them);
     RUN_TEST(test_an_update_a_shared_card_and_a_fatal_error_are_not_interrupted);
     RUN_TEST(test_a_notice_that_fills_the_screen_leaves_the_device_usable);
     return UNITY_END();

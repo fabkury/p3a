@@ -42,6 +42,10 @@ typedef struct {
 
 void p3a_ui_get_state(p3a_ui_state_t *out);
 
+// Call once storage has started: when there is no card the device can use,
+// the UI puts up "No usable SD card" with the offer to format one.
+void p3a_ui_card_check(void);
+
 // --- touch ----------------------------------------------------------------------
 
 // What the information screen says (the device's name, its address, the
@@ -69,6 +73,14 @@ typedef struct {
     const char *last_action;   // what it did: "next", "open_info", "none", ...
 } p3a_ui_touch_status_t;
 void p3a_ui_touch_get_status(p3a_ui_touch_status_t *out);
+
+// The boot animations by name, for the `intro_animation` setting's choices.
+int p3a_ui_intro_count(void);
+const char *p3a_ui_intro_name(int index);  // NULL past the end
+
+// Where button `index` of what is on the screen is drawn, as the viewer
+// sees the screen. False when there is no such button.
+bool p3a_ui_button_rect(int index, int32_t *x, int32_t *y, int32_t *w, int32_t *h);
 
 const char *p3a_ui_screen_name(p3a_screen_t screen);
 const char *p3a_ui_notice_name(p3a_notice_t notice);

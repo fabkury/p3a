@@ -29,7 +29,7 @@ pytestmark = pytest.mark.live
 REPO = Path(__file__).resolve().parents[2]
 PREVIEW = REPO / "build-host" / ("ui_preview.exe" if sys.platform == "win32" else "ui_preview")
 FONT = REPO / "components" / "p3a_ui" / "fonts" / "ui.p3afont"
-UPDATE = 7         # p3a_screen_t
+UPDATE = 8         # p3a_screen_t
 CARD_REPAIRED = 5  # p3a_notice_t
 
 

@@ -15,7 +15,13 @@ ui_action_t ui_route(p3a_screen_t screen, bool paused, const ui_gesture_t *gestu
     case P3A_SCREEN_USB:
     case P3A_SCREEN_FATAL:
         return UI_ACTION_NONE;
+    case P3A_SCREEN_CARD:
+        return kind == UI_GESTURE_TAP ? UI_ACTION_BUTTON : kind == UI_GESTURE_LONG_PRESS ? UI_ACTION_CANCEL : UI_ACTION_NONE;
     case P3A_SCREEN_INFO:
+        if (kind == UI_GESTURE_TAP) {
+            return UI_ACTION_BUTTON;
+        }
+        return kind == UI_GESTURE_LONG_PRESS ? UI_ACTION_CLOSE_SCREEN : UI_ACTION_NONE;
     case P3A_SCREEN_SETUP:
     case P3A_SCREEN_REGISTRATION:
         return kind == UI_GESTURE_LONG_PRESS ? UI_ACTION_CLOSE_SCREEN : UI_ACTION_NONE;
@@ -51,6 +57,6 @@ ui_action_t ui_route(p3a_screen_t screen, bool paused, const ui_gesture_t *gestu
 const char *ui_action_name(ui_action_t action)
 {
     static const char *const names[] = {"none", "next", "back", "like", "unlike", "turn_cw",
-                                        "turn_ccw", "open_info", "close_screen", "resume"};
+                                        "turn_ccw", "open_info", "close_screen", "resume", "button", "cancel"};
     return (unsigned)action < sizeof(names) / sizeof(names[0]) ? names[action] : "unknown";
 }

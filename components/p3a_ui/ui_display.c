@@ -90,6 +90,35 @@ static void draw_banner(uint8_t *buffer, void *ctx)
     ui_draw_banner(&canvas, &style, &state.content);
 }
 
+int ui_display_button_at(int32_t x, int32_t y)
+{
+    p3a_ui_state_t state;
+    p3a_ui_get_state(&state);
+    if (!state.has_content) {
+        return -1;
+    }
+    ui_canvas_t canvas;
+    canvas_for(NULL, &canvas);
+    ui_style_t style;
+    ui_style_default(&style, &s_font, ui_canvas_view_width(&canvas));
+    return ui_draw_button_at(&style, ui_canvas_view_width(&canvas), ui_canvas_view_height(&canvas), &state.content, x, y);
+}
+
+bool p3a_ui_button_rect(int index, int32_t *x, int32_t *y, int32_t *w, int32_t *h)
+{
+    p3a_ui_state_t state;
+    p3a_ui_get_state(&state);
+    if (!state.has_content) {
+        return false;
+    }
+    ui_canvas_t canvas;
+    canvas_for(NULL, &canvas);
+    ui_style_t style;
+    ui_style_default(&style, &s_font, ui_canvas_view_width(&canvas));
+    return ui_draw_button_rect(&style, ui_canvas_view_width(&canvas), ui_canvas_view_height(&canvas), &state.content,
+                               index, x, y, w, h);
+}
+
 // A job: switching the pipeline's source waits for the producer, which the
 // tasks that change the model must not.
 static esp_err_t select_job(void *arg)

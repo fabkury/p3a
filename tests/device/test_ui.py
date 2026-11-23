@@ -17,7 +17,7 @@ from test_decoders import CORPUS
 pytestmark = pytest.mark.live
 
 # p3a_screen_t and p3a_notice_t (p3a_ui_hooks.h)
-INFO, SETUP, UPDATE = 3, 5, 7
+INFO, SETUP, UPDATE = 3, 6, 8
 LOADING, SOURCE_PROBLEM, CARD_REPAIRED = 0, 3, 5
 FILES = {"zz-ui-a.gif": "gif/opaque_anim.gif", "zz-ui-b.png": "png/rgb.png"}
 LOCAL_ONLY = {"name": "", "channels": [{"source": "local"}]}
@@ -47,7 +47,7 @@ def rig(bring_up):
     api = Api(lab.provision(uart)["ip"])
 
     def clean():
-        for screen in range(3, 8):
+        for screen in range(3, 9):
             uart.command("ui screen", {"screen": screen, "up": False})
         for notice in range(7):
             uart.command("ui notice", {"notice": notice, "up": False})
@@ -147,6 +147,13 @@ def test_a_screen_over_the_artwork_holds_playback_and_a_banner_does_not(rig):
         uart.command("ui screen", {"screen": INFO, "up": False})
         uart.command("sched auto off")
         uart.command("settings set", {"dwell_s": 30})
+
+
+def test_the_boot_animations_are_listed_by_name(rig):
+    uart, api = rig
+    names = api.get("/api/v2/ui/intro-animations").data["animations"]
+    assert len(names) == 22 and len(set(names)) == 22
+    assert "smoothstep-fade" in names and all(n == n.lower() and " " not in n for n in names)
 
 
 def test_a_capped_notice_is_shown_only_so_many_times_per_boot(rig):

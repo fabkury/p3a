@@ -19,7 +19,7 @@ pytestmark = pytest.mark.live
 
 FILES = {"zz-touch-a.gif": "gif/opaque_anim.gif", "zz-touch-b.png": "png/rgb.png", "zz-touch-c.jpg": "jpeg/baseline.jpg"}
 LOCAL_ONLY = {"name": "", "channels": [{"source": "local"}]}
-UPDATE = 7
+UPDATE = 8
 LIFT = [0, 0, 0, 0, 0, 60]
 
 
@@ -133,9 +133,10 @@ def test_a_long_press_opens_the_information_screen_and_another_closes_it(rig):
     assert ui["hint"] == "Long press to close"
     # Under the screen a tap does nothing.
     shown = rig.player()["counters"]["shown"]
-    assert rig.fingers(tap(600, 300))["last_action"] == "none"
+    # A tap is for the screen's buttons; it has none now, so nothing happens.
+    assert rig.fingers(tap(600, 300))["last_action"] == "button"
     time.sleep(0.5)
-    assert rig.player()["counters"]["shown"] == shown
+    assert rig.player()["counters"]["shown"] == shown and rig.screen() == "info"
     assert rig.fingers(long_press())["last_action"] == "close_screen"
     assert rig.screen() == "artwork"
 

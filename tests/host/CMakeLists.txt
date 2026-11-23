@@ -189,6 +189,9 @@ p3a_host_test(test_ui_gesture
     SOURCES ui/test_ui_gesture.c ${UI}/ui_gesture.c
     INCLUDES ${UI}
     LIBS m)
+p3a_host_test(test_ui_card
+    SOURCES ui/test_ui_card.c ${UI}/ui_card.c ${UTIL}/p3a_ui_hooks.c
+    INCLUDES ${UI} ${UTIL}/include)
 p3a_host_test(test_ui_route
     SOURCES ui/test_ui_route.c ${UI}/ui_route.c
     INCLUDES ${UI} ${UTIL}/include)

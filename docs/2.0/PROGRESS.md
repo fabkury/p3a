@@ -9,8 +9,8 @@ times.
 | | |
 |---|---|
 | Phase | 3, on-device UI (Phases 0, 1 and 2 complete) |
-| Current milestone | M3.3 screens (M3.4 awaits real fingers) |
-| Next action | M3.3, the rest: the fatal error screen's callers and its SD-format offer, the SD error and format flow (`legacy/main/sd_format.c`; taps go through `ui_route`, which needs a way to say where a screen's controls are), the repair notice (`sd_repair_fat_stats()`), the touch-failure countdown (PARITY "Touch and buttons"), an API to list the boot animations for the settings page. The registration code comes with M4.5 and the USB screen with M3.6. Then M3.5 overlays and M3.6 USB |
+| Current milestone | M3.5 overlays (M3.3 and M3.4 await their manual checks) |
+| Next action | M3.5 overlays. From `legacy/main`: the processing indicator (`display_processing_notification.c`), the reaction and pin overlays with their icons (hex arrays to `EMBED_FILES`, finding 24; their triggers arrive in Phase 4, so build them drawable and testable through the hooks), the FPS counter is done. New: the clock (idea 1; O5 is Fab's, take working defaults: 24 hour, no seconds, hidden while a screen is up) and source branding (idea 2, O6; needs the Giphy and Klipy terms read first). Then M3.6 USB mass storage: `legacy/main/app_usb.c`, `usb_descriptors.*`; the card is handed over with `play_scheduler_shutdown()` and the session ends in a restart; `P3A_SCREEN_USB` is its screen |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -47,7 +47,7 @@ reopened (why).
 | M2.4 Loader pipeline, C and D | done 2026-11-23. Tiers: host tests (20 programs, under the sanitizers too), the whole device suite (260 cases pass; the 6 timing cases need the trace build and were not run), release, test and trace builds, the configuration guard. Not seen on the device because nothing produces them yet: deleting a damaged blob (M4.1), the aspect filter (M4.3). Manual check M2.4-a pending |
 | M3.1 Screen model and hook table | done 2026-11-23. Tiers: host tests (22 programs, under the sanitizers too), device tests (smoke, UI, pipeline and player: 48 cases), test build. Nothing is drawn yet |
 | M3.2 Text and fonts | done 2026-11-23: the font is Everyday Ample, Fab's choice (D61). Tiers: host tests, device tests (the panel equals the workstation's rendering pixel for pixel). Manual check M3.2-a (the look on the panel itself) pending; image assets arrive with the screens that need them |
-| M3.3 Screens | in progress: the boot animation, the information screen and the setup screen are in (2026-11-23). The fatal error with its format offer, the SD flow, the repair notice and the touch-failure countdown are to do |
+| M3.3 Screens | done 2026-11-23 except the registration code (M4.5) and the USB screen (M3.6). Tiers: host tests (27 programs, under the sanitizers too), the whole device suite (278 cases passed and 6 timing cases were skipped; 3 failed in the touch tests, whose expectation of a tap on the information screen was out of date, and pass since), including a real format of the dev unit's card. Manual check M3.3-a pending |
 | M3.4 Touch router and gestures | built 2026-11-23; open for manual check M3.4-a (real fingers), swipe actions (Phase 4) and the SD-format taps (M3.3). Tiers: host tests (26 programs, under the sanitizers too), device tests with scripted fingers (71 cases with the areas around it) |
 | M3.5 Overlays | not started |
 | M3.6 USB mass storage | not started |
@@ -122,6 +122,15 @@ Open:
   Also worth one try with a wrong password: the unit should offer
   `p3a-setup` again within about a minute. If anything goes wrong,
   `python host/p3a-lab/lab.py provision` puts the unit back online.
+- **M3.3-a, the screens by eye.** Restart the unit and watch the boot
+  animation hand over to the artwork. Long press for the information
+  screen. Then the format flow without formatting: run
+  `python host/p3a-lab/lab.py cmd "storage latch"` four times, long press,
+  tap "Format SD card", watch the button count down, tap "Cancel", and
+  restart the unit (`lab.py cmd reboot`) to clear the latch. The "No
+  usable SD card" screen needs the card taken out: power off, remove it,
+  power on, tap "Format this card" (it should say no card was found), then
+  put the card back.
 - **M3.4-a, real fingers.** With something playing: tap the right half
   (next), the left half (back); hold a finger still for a little over two
   seconds (the information screen; the same again closes it); turn two
@@ -130,7 +139,7 @@ Open:
   check that taps do nothing and a long press resumes.
 - **M3.2-a, the look of the screens.** The font is chosen (Everyday
   Ample). Look at a screen on the device itself:
-  `python host/p3a-lab/lab.py cmd "ui screen {\"screen\":7,\"up\":true,\"title\":\"Updating Wi-Fi\",\"text\":\"2.9.1 to 2.9.3. Do not unplug\",\"progress\":64}"`
+  `python host/p3a-lab/lab.py cmd "ui screen {\"screen\":8,\"up\":true,\"title\":\"Updating Wi-Fi\",\"text\":\"2.9.1 to 2.9.3. Do not unplug\",\"progress\":64}"`
   (take it down with `\"up\":false`). Sizes, colours and the banner's
   height are the numbers in `ui_style_default()`.
 - **M2.4-a, the BOOT button pauses.** With something playing, press the
@@ -324,6 +333,47 @@ M3.3, 2026-11-23:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-23: M3.3 part 3, the SD card on the screen
+
+- **Formatting the card on the device** is back, as a flow of the model's
+  new `P3A_SCREEN_CARD`. The steps are `ui_card.c` (pure): the offer, a
+  look at the slot, the warning whose confirm button is dead for three
+  seconds, the format, the restart. p3a still never formats unasked.
+  - At boot with no usable card the screen says "No usable SD card" and
+    offers the format. 2.0 boots on regardless (H10); 1.x stopped there.
+  - On the information screen a "Format SD card" button appears once the
+    card in use has stopped taking writes.
+  - The work is `p3a_storage_format()` over the new
+    `p3a_board_sd_format()` (1.x's two paths: a mounted card, and one that
+    would not mount). `p3a_storage_card_state()` tells an absent card
+    from one with no usable file system, by the mount's own error.
+- **Screens can have buttons**: up to two labelled targets, 90 pixels
+  high, drawn and hit-tested by the same arithmetic (`ui_draw.c`). A
+  dimmed button takes the tap and does nothing. `GET /api/v2/ui` lists
+  them with their rectangles.
+- **`play_scheduler_shutdown()`**: playback stops for good until the
+  restart and nothing more is asked of the card. Used before the format;
+  USB mass storage (M3.6) needs the same.
+- The notice that the card stopped working, and the one that it was
+  repaired at boot, are shown once for 20 seconds, as in 1.x.
+- A touch controller that does not answer is said on the screen with a
+  ten second countdown before the one restart; if the restart does not
+  help, a notice says to use the web page.
+- `GET /api/v2/ui/intro-animations` lists the 22 names.
+- Verified, host tests: 27 programs, also under the sanitizers; new is
+  `test_ui_card` (6 cases), and cases for buttons in the route.
+- Verified, device tests with scripted fingers (`test_card_flow.py`): the
+  offer on the information screen after the card is latched as failed,
+  the dead confirm button, cancelling by button and by long press with
+  the card untouched, and **a real format of the dev unit's card**
+  followed by the restart into an empty card in service. 278 cases passed and 6 timing cases were skipped; 3 failed in the touch tests, whose expectation of a tap on the information screen was out of date, and pass since.
+- Not verified: the boot-time offer and the "no card found" and "the card
+  works" answers (they need the card taken out: manual check M3.3-a); the
+  format of a card that would not mount (the same); a format that fails;
+  the repair notice and the touch countdown (they need a failing card and
+  a failing controller); buttons at rotations other than 0 on the device
+  (host-tested through the canvas).
 
 ### 2026-11-23: M3.3 parts 1 and 2, the boot animation, information and setup
 

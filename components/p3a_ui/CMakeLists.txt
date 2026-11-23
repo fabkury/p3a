@@ -15,6 +15,7 @@
 idf_component_register(
     SRCS "p3a_ui.c"
          "ui_canvas.c"
+         "ui_card.c"
          "ui_display.c"
          "ui_draw.c"
          "ui_font.c"
@@ -51,6 +52,6 @@ idf_component_register(
          "intro/p3a_logo.c"
     INCLUDE_DIRS "include"
     REQUIRES p3a_util
-    PRIV_REQUIRES display_renderer esp_hw_support esp_timer espressif__esp_lcd_touch p3a_board p3a_settings play_scheduler
+    PRIV_REQUIRES display_renderer esp_hw_support esp_system esp_timer espressif__esp_lcd_touch p3a_board p3a_settings p3a_storage play_scheduler
     EMBED_FILES "fonts/ui.p3afont"
 )

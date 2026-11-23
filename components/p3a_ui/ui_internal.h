@@ -22,6 +22,16 @@ int ui_intro_render(uint8_t *buffer);
 // (p3a_ui.c). Returns at once.
 void ui_info_open(void);
 
+// The SD format flow (p3a_ui.c): a tap on one of the card screen's buttons,
+// a long press on it, and the information screen's "Format SD card".
+void ui_card_press(int button);
+void ui_card_cancel(void);
+void ui_card_start(void);
+
+// Which enabled button of what is on the screen a tap lands on, in viewer
+// coordinates; -1 for none (ui_display.c, which has the font).
+int ui_display_button_at(int32_t x, int32_t y);
+
 // The touch task (ui_touch.c).
 esp_err_t ui_touch_start(void);
 

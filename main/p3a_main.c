@@ -16,6 +16,8 @@
 #include "psram_alloc.h"
 #include "esp_timer.h"
 #include "frame_trace.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "p3a_board.h"
 #include "play_scheduler.h"
 #include "source_local.h"
@@ -41,6 +43,7 @@ static const char *TAG = "p3a";
 
 // Restarts allowed in a row when the touch controller does not come up.
 #define TOUCH_RECOVERY_REBOOTS 1
+#define TOUCH_RESTART_COUNTDOWN_S 10
 
 // The settings as they were at boot. Too large for the main task's stack.
 static p3a_settings_t s_settings;
@@ -185,7 +188,21 @@ void app_main(void)
     boot_step("touch", touch);
     if (p3a_recovery_report(P3A_RECOVERY_TOUCH, touch == ESP_OK, TOUCH_RECOVERY_REBOOTS) == P3A_RECOVERY_REBOOT) {
         ESP_LOGW(TAG, "restarting to retry the touch controller");
+        // Said on the screen first, with a countdown: a restart nobody
+        // explains looks like a crash.
+        for (int left = TOUCH_RESTART_COUNTDOWN_S; left > 0; left--) {
+            p3a_ui_content_t words;
+            p3a_ui_content(&words, "Touch is not responding", -1, "Restarting in %d to try again", left);
+            p3a_ui_screen_show(P3A_SCREEN_UPDATE, &words);
+            vTaskDelay(pdMS_TO_TICKS(1000));
+        }
         esp_restart();
+    } else if (touch != ESP_OK) {
+        // The restart did not help. The device plays on; the web page does
+        // everything the fingers did.
+        p3a_ui_content_t words;
+        p3a_ui_content(&words, "Touch", -1, "Touch is not working. Use the web page instead");
+        p3a_ui_notice_show(P3A_NOTICE_SOURCE_PROBLEM, &words, 20000, 1);
     }
 
     boot_step("SDIO bus coordinator", sdio_bus_init());
@@ -193,6 +210,7 @@ void app_main(void)
     // usable card the device still boots; storage is then latched as failed.
     // An sd_root setting that is no longer acceptable falls back to the default.
     boot_step("storage", p3a_storage_start(s_settings.sd_root));
+    p3a_ui_card_check();  // no usable card: the screen says so and offers to format one
     boot_step("local source", source_local_start());
     boot_step("scheduler", play_scheduler_start());
 

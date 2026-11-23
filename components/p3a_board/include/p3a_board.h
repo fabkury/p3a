@@ -88,6 +88,14 @@ esp_err_t p3a_board_sd_mount(void);
 esp_err_t p3a_board_sd_unmount(void);
 bool p3a_board_sd_is_mounted(void);
 
+// Erases the card and makes a fresh FAT32 volume labelled "P3A" on it. The
+// one way p3a ever formats, and only because a person asked on the device
+// itself. Works on a mounted card and on one that would not mount (blank,
+// exFAT, a damaged file system); the card is left unmounted, for the
+// restart that follows. Takes from seconds to a minute. An error means the
+// card could not be written: absent, or defective.
+esp_err_t p3a_board_sd_format(void);
+
 // The card, for raw sector access (sd_repair, USB mass storage). NULL unless mounted.
 sdmmc_card_t *p3a_board_sd_card(void);
 

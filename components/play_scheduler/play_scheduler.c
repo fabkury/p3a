@@ -69,6 +69,7 @@ typedef struct {
     sched_recent_t recent;
     sched_turn_t turn;
     bool paused;
+    bool shut_down;          // the card is being taken away; nothing more is played
     bool advance_queued;     // the job that moves on is waiting to run
     esp_err_t problem;       // why the last turn a person asked for showed nothing; ESP_OK once something is shown
     uint32_t problems;
@@ -129,6 +130,9 @@ static esp_err_t record_path(const p3a_record_t *record, char *out, size_t len, 
 // Hands a record to the player. Called with the lock held.
 static esp_err_t request(turn_kind_t kind, const p3a_record_t *record, uint32_t channel)
 {
+    if (s->shut_down) {
+        return ESP_ERR_INVALID_STATE;
+    }
     animation_player_request_t req = {0};
     esp_err_t err = record_path(record, req.path, sizeof(req.path), &req.smooth);
     if (err != ESP_OK) {
@@ -511,7 +515,7 @@ static esp_err_t list_job(void *arg)
                 break;
             }
         }
-        if (at == SCHED_NONE) {
+        if (at == SCHED_NONE || s->shut_down) {
             UNLOCK();
             return ESP_OK;
         }
@@ -751,6 +755,24 @@ esp_err_t play_scheduler_set_paused(bool paused)
     UNLOCK();
     changed();
     return ESP_OK;
+}
+
+void play_scheduler_shutdown(void)
+{
+    if (s == NULL) {
+        return;
+    }
+    LOCK();
+    s->shut_down = true;
+    abandon_pending_pick();
+    s->playing = false;
+    sched_turn_stopped(&s->turn);
+    // Not one of the scheduler's own tokens: its report is passed on and
+    // otherwise ignored.
+    animation_player_stop(1);
+    UNLOCK();
+    ESP_LOGW(TAG, "playback is stopped until the restart");
+    changed();
 }
 
 bool play_scheduler_is_paused(void)

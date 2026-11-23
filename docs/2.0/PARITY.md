@@ -98,26 +98,26 @@ describe what a client can do, not the 1.x URL.
 | [x] | Two-finger rotate past 45 degrees turns the screen 90 degrees, once per gesture | keep | M3.4 | |
 | [ ] | Long press (2.25 s): info screen, or the setup screen in setup mode; dismisses any screen | keep | M3.4 | Done in M3.4 for the information screen and for closing; in setup mode the setup screen is up by itself in 2.0 |
 | [x] | While paused, only long press works, and it resumes | keep | M3.4 | |
-| [ ] | While a screen is up, taps reach only the SD-format controls | keep | M3.4 | Taps are ignored under a screen (M3.4); the format controls come with that screen (M3.3) |
+| [x] | While a screen is up, taps reach only the SD-format controls | keep | M3.4 | Taps are ignored under a screen (M3.4); the format controls come with that screen (M3.3) |
 | [ ] | During registration, long press cancels and returns to playback | keep | M3.4 | The long press closes the screen (M3.4); cancelling the registration is M4.5 |
 | [x] | During a firmware update, gestures are ignored | keep | M3.4 | |
 | [ ] | BOOT button toggles pause; ignored during the co-processor update | keep | M1.2, M2.4 | Wired in M2.4; manual check M2.4-a |
-| [ ] | Touch failure at boot: countdown and one reboot, then carry on without touch | keep | M3.4 | The bounded init is in M1.2; the reboot streak needs settings (M1.4) and the countdown needs the UI |
+| [ ] | Touch failure at boot: countdown and one reboot, then carry on without touch | keep | M3.4 | The bounded init is in M1.2; the reboot streak needs settings (M1.4) and the countdown needs the UI The countdown is on the screen since M3.3; not seen with a failing controller |
 
 ## On-screen UI
 
 | | Capability | 2.0 | M | Note |
 |---|---|---|---|---|
 | [x] | Boot: background painted before the backlight, then one of 22 intro animations (random or chosen, 1 to 7.5 s) | keep | M3.3 | |
-| [ ] | Info screen: name and version, uptime, Wi-Fi and signal, Makapix state, Giphy key state, card space, playset counts, web UI address, IP, reboot counters, format button when the card has failed | keep | M3.3 | |
+| [ ] | Info screen: name and version, uptime, Wi-Fi and signal, Makapix state, Giphy key state, card space, playset counts, web UI address, IP, reboot counters, format button when the card has failed | keep | M3.3 | Done in M3.3 except the Makapix and Giphy rows (with those sources) and the reboot counters |
 | [ ] | Setup screen: network name, both addresses, connected clients; appears when setup mode starts | keep | M3.3 | |
 | [ ] | Registration: status, the 6-character code with a colour-coded countdown, success notice for 10 s; expiry leaves the mode | keep | M3.3, M4.5 | |
 | [ ] | Firmware update screen with versions and progress | keep | M3.3, M5.2 | |
 | [ ] | Co-processor update screen with reboot countdown | keep | M1.2, M3.3 | |
 | [ ] | Channel messages: fetching, downloading with progress, failed, empty, loading, waiting for network, empty pin list, no playable files, key needed, museum unavailable, starting | keep | M3.3 | One message surface (finding 11) |
 | [ ] | Refresh-error notices with a 20 s life and a cap of two per boot; the Giphy invalid-key notice stays | keep | M4.2 | |
-| [ ] | "SD card is not working" and "SD card repaired" notices, 20 s, once per boot | keep | M3.3 | |
-| [ ] | "No Usable SD Card" screen and the two-step on-device format | keep | M3.3 | |
+| [x] | "SD card is not working" and "SD card repaired" notices, 20 s, once per boot | keep | M3.3 | |
+| [x] | "No Usable SD Card" screen and the two-step on-device format | keep | M3.3 | The device boots on behind the screen in 2.0 |
 | [ ] | USB screens: card exposed, disconnected and restarting | keep | M3.6 | |
 | [ ] | Recovery countdowns for the Wi-Fi chip and the SDIO link, and the offline notice | keep | M1.5 | |
 | [ ] | "No Internet Connection" screen | drop | | Never shown in 1.x |
@@ -158,7 +158,7 @@ Same pages and look, new internals (D11).
 | [ ] | Actions: show URL, swap to, react, pin, unpin (checked against what is on screen) | keep | M4.4, M4.5 | |
 | [ ] | Actions: start or cancel registration, unregister, reset the Giphy analytics id | keep | M4.2, M4.5 | |
 | [ ] | Rotation read and set | keep | M2.4 | Sets; never toggles |
-| [ ] | Intro animation list and choice | keep | M3.3 | The choice is the `intro_animation` setting (M3.3); listing the names over the API is to do |
+| [x] | Intro animation list and choice | keep | M3.3 | The choice is the `intro_animation` setting (M3.3); listing the names over the API is to do |
 | [ ] | Device name read and set | keep | M1.5 | Through settings |
 | [ ] | Memory breakdown | keep | M1.5 | |
 | [ ] | Museum cooldown table and browser 429 report | keep | M4.3 | |

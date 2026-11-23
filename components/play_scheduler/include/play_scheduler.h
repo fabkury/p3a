@@ -65,6 +65,12 @@ bool play_scheduler_is_paused(void);
 // for when something says they changed (an upload, a USB session).
 esp_err_t play_scheduler_refresh_source(uint8_t source);
 
+// Stops playback for good, until the device restarts: the panel goes
+// black, the file being played is closed, and nothing is asked of the card
+// again. For when the card is about to be taken away (a format, sharing it
+// over USB), which always ends in a restart.
+void play_scheduler_shutdown(void);
+
 // A screen is up over the artwork (or a test wants the device to stay
 // put): it does not move on by itself until every hold is released, and
 // then gives the artwork a full dwell. Next, back and show still work.

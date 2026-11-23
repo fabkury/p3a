@@ -8,7 +8,8 @@
 //     two fingers turned              the screen turns 90 degrees
 //     long press                      the information screen
 //   paused                            only a long press, which resumes
-//   the information screen            long press closes it
+//   the information screen            long press closes it; a tap presses its button, when it has one
+//   the card screen                   a tap presses a button; a long press cancels the warning
 //   setup, registration               long press closes them (the device stays in that state)
 //   a notice that fills the screen    as on the artwork, except next and back (there is nothing to step through)
 //   an update, the card shared over USB, a fatal error, the boot animation
@@ -39,6 +40,8 @@ typedef enum {
     UI_ACTION_OPEN_INFO,
     UI_ACTION_CLOSE_SCREEN,  // the screen on top
     UI_ACTION_RESUME,
+    UI_ACTION_BUTTON,        // a tap on a screen that has buttons: whichever is under the finger, if any
+    UI_ACTION_CANCEL,        // a long press on the card screen: cancels the format warning
 } ui_action_t;
 
 // `screen` is the screen on top; `view_width` the screen's width as the

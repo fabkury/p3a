@@ -9,25 +9,32 @@
 #include "p3a_ui.h"
 
 #include <stdatomic.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "esp_log.h"
+#include "esp_system.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "p3a_err.h"
 #include "p3a_event.h"
 #include "p3a_job.h"
+#include "p3a_storage.h"
 #include "play_scheduler.h"
 #include "psram_alloc.h"
+#include "sd_repair.h"
+#include "intro/p3a_intro_anim_list.h"
+#include "ui_card.h"
 #include "ui_internal.h"
 #include "ui_model.h"
 #include "ui_player.h"
 
 static const char *TAG = "ui";
 
-#define TICK_MS 250
+#define TICK_MS        250
+#define NOTICE_CARD_MS 20000
 
 static SemaphoreHandle_t s_lock;
 static ui_model_t s_model;  // guarded by s_lock
@@ -38,6 +45,7 @@ static atomic_bool s_look_again;      // the "getting ready" notice is being hel
 static atomic_bool s_player_job_queued;
 static esp_timer_handle_t s_tick;
 static p3a_ui_info_fn s_info;
+static ui_card_t s_card;  // the SD format flow; guarded by s_lock
 static atomic_bool s_info_job_queued;
 static uint32_t s_ticks;
 
@@ -225,6 +233,12 @@ static esp_err_t info_job(void *arg)
     if (s_info != NULL) {
         s_info(&words);
     }
+    if (p3a_storage_card_state() == P3A_CARD_FAILED) {
+        // The card that was in use stopped taking writes. Formatting it is
+        // offered here, where a person has come looking, and nowhere else.
+        snprintf(words.buttons[0], sizeof(words.buttons[0]), "Format SD card");
+        words.buttons_enabled = 1;
+    }
     LOCK();
     if (!open && !s_model.screens[P3A_SCREEN_INFO].up) {
         UNLOCK();  // closed meanwhile: a refresh must not open it again
@@ -242,6 +256,115 @@ void ui_info_open(void)
     }
 }
 
+// --- the SD format flow ---------------------------------------------------------
+//
+// The steps and the words are ui_card.c's. Here its commands are carried
+// out: a look at the slot and the format itself as jobs, the restart.
+
+static void card_run(ui_card_command_t command);
+
+// Brings the card screen in line with the flow, lets go of the lock, and
+// carries out what the flow asked for. Called with the lock held.
+static void card_settle_and_unlock(ui_card_command_t command)
+{
+    p3a_ui_content_t words;
+    const bool changed = ui_card_content(&s_card, now_ms(), &words)
+                             ? ui_model_screen_show(&s_model, P3A_SCREEN_CARD, &words)
+                             : ui_model_screen_hide(&s_model, P3A_SCREEN_CARD);
+    settle_and_unlock(changed);
+    card_run(command);
+}
+
+static esp_err_t card_probe_job(void *arg)
+{
+    (void)arg;
+    ui_card_found_t found;
+    switch (p3a_storage_card_probe()) {
+    case P3A_CARD_IN_SERVICE:
+        found = UI_CARD_FOUND_GOOD;
+        break;
+    case P3A_CARD_ABSENT:
+        found = UI_CARD_FOUND_NOTHING;
+        break;
+    default:
+        found = UI_CARD_FOUND_UNUSABLE;
+        break;
+    }
+    LOCK();
+    card_settle_and_unlock(ui_card_probed(&s_card, found, now_ms()));
+    return ESP_OK;
+}
+
+static esp_err_t card_format_job(void *arg)
+{
+    (void)arg;
+    // Nothing may be reading the card: playback stops for good, and the
+    // player is given a moment to close its file.
+    play_scheduler_shutdown();
+    vTaskDelay(pdMS_TO_TICKS(500));
+    const esp_err_t err = p3a_storage_format();
+    LOCK();
+    ui_card_formatted(&s_card, err == ESP_OK, now_ms());
+    card_settle_and_unlock(UI_CARD_DO_NOTHING);
+    return err;
+}
+
+static void card_run(ui_card_command_t command)
+{
+    switch (command) {
+    case UI_CARD_DO_PROBE:
+        p3a_job_submit(P3A_JOBS_IO, "ui: look at the card", card_probe_job, NULL, NULL);
+        break;
+    case UI_CARD_DO_FORMAT:
+        p3a_job_submit(P3A_JOBS_IO, "ui: format the card", card_format_job, NULL, NULL);
+        break;
+    case UI_CARD_DO_RESTART:
+        ESP_LOGW(TAG, "restarting after the card flow");
+        esp_restart();  // asked for by a person, not a remedy: not counted
+        break;
+    default:
+        break;
+    }
+}
+
+void p3a_ui_card_check(void)
+{
+    // A card whose file tables had to be repaired at boot is a card that is
+    // losing data: the person should know, once.
+    const sd_repair_fat_stats_t *fat = sd_repair_fat_stats();
+    if (fat->ran && (fat->repaired_fat1 != 0 || fat->repaired_fat2 != 0)) {
+        p3a_ui_content_t words;
+        p3a_ui_content(&words, "SD card", -1, "The SD card was repaired. Consider replacing it");
+        hook_notice_show(P3A_NOTICE_CARD_REPAIRED, &words, NOTICE_CARD_MS, 1);
+    }
+    const p3a_card_state_t state = p3a_storage_card_state();
+    if (state == P3A_CARD_NO_FILESYSTEM || state == P3A_CARD_ABSENT) {
+        LOCK();
+        ui_card_offer(&s_card);
+        card_settle_and_unlock(UI_CARD_DO_NOTHING);
+    }
+}
+
+void ui_card_press(int button)
+{
+    LOCK();
+    card_settle_and_unlock(ui_card_button(&s_card, button, now_ms()));
+}
+
+void ui_card_cancel(void)
+{
+    LOCK();
+    ui_card_long_press(&s_card);
+    card_settle_and_unlock(UI_CARD_DO_NOTHING);
+}
+
+void ui_card_start(void)
+{
+    LOCK();
+    ui_card_ask(&s_card, now_ms());
+    card_settle_and_unlock(UI_CARD_DO_NOTHING);
+}
+
 // --- the card -------------------------------------------------------------------
 
 static void on_card_failed(const p3a_event_t *event, void *ctx)
@@ -249,8 +372,10 @@ static void on_card_failed(const p3a_event_t *event, void *ctx)
     (void)event;
     (void)ctx;
     p3a_ui_content_t words;
-    p3a_ui_content(&words, "SD card", -1, "The SD card stopped working. Restart the device; if this returns, replace the card");
-    hook_notice_show(P3A_NOTICE_CARD_FAILED, &words, 0, 0);
+    p3a_ui_content(&words, "SD card", -1, "The SD card is not working. Long press for details");
+    // Said once, for a while (as 1.x did); the information screen goes on
+    // saying it, and offers the format.
+    hook_notice_show(P3A_NOTICE_CARD_FAILED, &words, NOTICE_CARD_MS, 1);
 }
 
 // --- the rest -------------------------------------------------------------------
@@ -262,7 +387,17 @@ static void tick(void *arg)
         return;
     }
     const bool info_up = s_model.screens[P3A_SCREEN_INFO].up;
-    settle_and_unlock(ui_model_tick(&s_model, now_ms()));
+    bool changed = ui_model_tick(&s_model, now_ms());
+    // The format flow's notices end and its countdown counts by the clock.
+    ui_card_command_t command = UI_CARD_DO_NOTHING;
+    if (s_card.phase != UI_CARD_NONE) {
+        command = ui_card_tick(&s_card, now_ms());
+        p3a_ui_content_t words;
+        changed |= ui_card_content(&s_card, now_ms(), &words) ? ui_model_screen_show(&s_model, P3A_SCREEN_CARD, &words)
+                                                             : ui_model_screen_hide(&s_model, P3A_SCREEN_CARD);
+    }
+    settle_and_unlock(changed);
+    card_run(command);
     if (atomic_load(&s_look_again)) {
         on_player_changed(NULL, NULL);
     }
@@ -295,6 +430,16 @@ void p3a_ui_get_state(p3a_ui_state_t *out)
     UNLOCK();
 }
 
+int p3a_ui_intro_count(void)
+{
+    return p3a_intro_anim_get_count();
+}
+
+const char *p3a_ui_intro_name(int index)
+{
+    return p3a_intro_anim_get_name(index);
+}
+
 const char *p3a_ui_screen_name(p3a_screen_t screen)
 {
     return ui_screen_name(screen);
@@ -315,6 +460,7 @@ esp_err_t p3a_ui_start(void)
         return ESP_ERR_NO_MEM;
     }
     ui_model_init(&s_model);
+    ui_card_init(&s_card);
     ui_display_start();
     // The boot animation is the first thing on the panel. Whatever else
     // comes up meanwhile (the first artwork, a notice) waits under it.

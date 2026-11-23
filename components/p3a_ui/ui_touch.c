@@ -119,7 +119,7 @@ static void turn(int by)
     p3a_settings_set_int(P3A_SET_ROTATION, rotation);
 }
 
-static void act(ui_action_t action, p3a_screen_t screen)
+static void act(ui_action_t action, p3a_screen_t screen, const ui_gesture_t *gesture)
 {
     switch (action) {
     case UI_ACTION_NEXT:
@@ -142,6 +142,21 @@ static void act(ui_action_t action, p3a_screen_t screen)
         break;
     case UI_ACTION_RESUME:
         play_scheduler_set_paused(false);
+        break;
+    case UI_ACTION_BUTTON: {
+        const int button = ui_display_button_at(gesture->x, gesture->y);
+        if (button < 0) {
+            break;  // beside the buttons, or on a dimmed one
+        }
+        if (screen == P3A_SCREEN_CARD) {
+            ui_card_press(button);
+        } else if (screen == P3A_SCREEN_INFO) {
+            ui_card_start();  // its one button: "Format SD card"
+        }
+        break;
+    }
+    case UI_ACTION_CANCEL:
+        ui_card_cancel();
         break;
     case UI_ACTION_LIKE:
     case UI_ACTION_UNLIKE:
@@ -179,7 +194,7 @@ static void touch_task(void *arg)
         s_status.last_gesture = ui_gesture_name(gesture.kind);
         s_status.last_action = ui_action_name(action);
         xSemaphoreGive(s_lock);
-        act(action, state.screen);
+        act(action, state.screen, &gesture);
     }
 }
 

@@ -61,6 +61,30 @@ extern "C" {
 // on without storage. Returns ESP_OK when the card is in service.
 esp_err_t p3a_storage_start(const char *configured_root);
 
+// --- the card itself ---------------------------------------------------------------
+
+typedef enum {
+    P3A_CARD_IN_SERVICE = 0,  // mounted and passed its probe
+    P3A_CARD_FAILED,          // was in service, then stopped accepting writes (latched until restart)
+    P3A_CARD_NO_FILESYSTEM,   // a card answers, but p3a cannot mount it: blank, exFAT, damaged
+    P3A_CARD_ABSENT,          // nothing answers in the slot
+} p3a_card_state_t;
+
+// What the card is to the device now. Instant.
+p3a_card_state_t p3a_storage_card_state(void);
+
+// Looks at the slot again, for a card that was absent or unmountable at
+// boot: tries to mount it and unmounts it again. Answers what it found;
+// P3A_CARD_IN_SERVICE here means "it mounts", and a restart then brings it
+// into service. Slow (a mount attempt): call from a job.
+p3a_card_state_t p3a_storage_card_probe(void);
+
+// Erases the card and formats it for p3a. Only ever because a person asked
+// for it on the device. Nothing may be using the card (stop playback
+// first), and the device must be restarted afterwards whatever the result.
+// Slow: call from a job.
+esp_err_t p3a_storage_format(void);
+
 // --- free space -------------------------------------------------------------------
 
 typedef struct {

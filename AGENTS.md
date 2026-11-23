@@ -119,7 +119,7 @@ All in `components/p3a_util`; each header explains itself at the top.
 - **Files on the SD card** go through `components/p3a_storage`: paths are
   built by `sd_path` (never a literal `/sdcard/p3a`), writes go through
   `fs_atomic`, and binary files are `p3a_frame` containers with a schema
-  number. A file that fails to load is never deleted. Free space is read
+  number. A file that fails to load is never deleted. The card is formatted only by `p3a_storage_format()`, and only from the on-device flow a person confirms (`ui_card.c`). Free space is read
   from `p3a_storage_space()`, never computed in a request path. What may be
   assumed about FAT is stated in `p3a_storage.h`.
 - **Artworks are `p3a_record_t` records in a `p3a_index_t`, and their bytes

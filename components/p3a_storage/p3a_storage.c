@@ -54,12 +54,53 @@ static esp_err_t space_job(void *arg)
     return p3a_storage_space_refresh();
 }
 
+// Why the boot's mount failed, for p3a_storage_card_state(). ESP_FAIL is the
+// mount's own answer for "a card is there, its file system is not usable";
+// anything else (a timeout, mostly) is the card not answering.
+static esp_err_t s_mount_error = ESP_OK;
+
+static p3a_card_state_t state_of_mount_error(esp_err_t err)
+{
+    return err == ESP_OK ? P3A_CARD_IN_SERVICE : err == ESP_FAIL ? P3A_CARD_NO_FILESYSTEM : P3A_CARD_ABSENT;
+}
+
+p3a_card_state_t p3a_storage_card_state(void)
+{
+    if (s_mount_error != ESP_OK) {
+        return state_of_mount_error(s_mount_error);
+    }
+    return sd_health_is_failed() ? P3A_CARD_FAILED : P3A_CARD_IN_SERVICE;
+}
+
+p3a_card_state_t p3a_storage_card_probe(void)
+{
+    if (p3a_board_sd_is_mounted()) {
+        return P3A_CARD_IN_SERVICE;
+    }
+    const esp_err_t err = p3a_board_sd_mount();
+    if (err == ESP_OK) {
+        p3a_board_sd_unmount();
+    }
+    return state_of_mount_error(err);
+}
+
+esp_err_t p3a_storage_format(void)
+{
+    ESP_LOGW(TAG, "formatting the SD card at a person's request");
+    const esp_err_t err = p3a_board_sd_format();
+    if (err == ESP_OK) {
+        sd_repair_reset_total();  // a fresh file system: its repair history starts over
+    }
+    return err;
+}
+
 esp_err_t p3a_storage_start(const char *configured_root)
 {
     sd_health_init();
 
     // 1. Mount.
     esp_err_t err = p3a_board_sd_mount();
+    s_mount_error = err;
     if (err != ESP_OK) {
         sd_health_report_mount_failed();
         return err;

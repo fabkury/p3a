@@ -184,7 +184,7 @@ its own commit on `main`; nothing else of 2.0 goes there.
 
 | Commit on main | What | From | How far it was tested on 1.x |
 |---|---|---|---|
-| `9466c035` | Hardware JPEG colour range; animated WebP soft edges (D47) | `7d1a00f8` | Built only. The three functions are byte-identical to the ones run on the dev unit under 2.0. **Before 1.2.5 is released**, look at a museum JPEG and a WebP animation with soft edges on a 1.x unit |
+| `9466c035` | Hardware JPEG colour range; animated WebP soft edges (D47) | `7d1a00f8` | Built, and checked by eye on the dev unit on 2026-11-23 (ledger entry of that date). Nothing further is needed before 1.2.5 |
 
 ## Deletion log
 
@@ -310,6 +310,34 @@ M1.1, 2026-11-17:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-23: the 1.2.5 picture fixes checked on a device
+
+- The build of `main` (`9466c035`) ran on the dev unit: the 1.2.4 flash
+  backup with the new app written into its active slot, as an OTA update
+  would leave a unit in the field. The boot log confirmed the slot and the
+  compile time.
+- Two test pictures were made so that the answer is yes or no. A JPEG
+  with words 17 levels inside white and 22 above black: the old conversion
+  maps the first to pure white and the second to 7, so the words vanish.
+  An animated WebP with words at 60% opacity on transparent: the old blend
+  turns them into background. Both were first played on 2.0, whose
+  decoders carry the same fixes, and read back from its framebuffer as
+  expected.
+- Fab looked at the panel under 1.x: both sets of JPEG words readable; the
+  WebP words visible with the moving dot. The fixes work on 1.x.
+- 2.0 was put back afterwards: flash erased, test build flashed, unit
+  provisioned, smoke tests run. The temporary flash image and the
+  temporary checkout of `main` are deleted; the 1.2.4 backup is untouched.
+- Left behind: `check-jpeg.jpg` and `check-webp.webp` in the card's
+  `animations/` folder (1.x has no call to delete an upload), and copies in
+  `C:\Users\fab\p3a-1.2.5-check\`, useful for manual check M2.1-a.
+- While on 1.x the unit was live on Makapix under its own registration for
+  about ten minutes.
+- `p3a.local` gave no answer to a name lookup on 2026-11-23 (the other
+  unit that used it has left the LAN, Fab says). The lab still names the
+  dev unit `fab`; nothing depends on the bare name being free.
+- `main` records the check in `dbb7ec51`.
 
 ### 2026-11-19: M2.3 part 1, the scheduler's arithmetic
 

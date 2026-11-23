@@ -225,6 +225,31 @@ static void test_rows_line_up_in_two_columns_and_the_hint_sits_at_the_bottom(voi
     }
 }
 
+static void test_the_indicator_is_a_checkered_triangle_in_the_viewers_bottom_right(void)
+{
+    fresh(0);
+    ui_draw_indicator(&canvas, 64, 0x0080FF);
+    // Half of a triangle of 64: 64 * 65 / 2 pixels, every other one.
+    TEST_ASSERT_INT_WITHIN(40u, 64 * 65 / 4, count(0x0080FF));
+    TEST_ASSERT_EQUAL_HEX32(0x0080FF, at(W - 1, H - 1));
+    TEST_ASSERT_EQUAL_HEX32(0x555555, at(W - 2, H - 1));   // checkered
+    TEST_ASSERT_EQUAL_HEX32(0x555555, at(W - 64, H - 64)); // the far corner of its box is not in the triangle
+    TEST_ASSERT_EQUAL_HEX32(0x555555, at(W - 65, H - 1));  // nothing outside the box
+    guard_intact();
+    // Turned, it is still at the viewer's bottom right: the panel's bottom
+    // left at 90 degrees, top left at 180, top right at 270.
+    fresh(90);
+    ui_draw_indicator(&canvas, 64, 0x0080FF);
+    TEST_ASSERT_EQUAL_HEX32(0x0080FF, at(0, H - 1));
+    fresh(180);
+    ui_draw_indicator(&canvas, 64, 0x0080FF);
+    TEST_ASSERT_EQUAL_HEX32(0x0080FF, at(0, 0));
+    fresh(270);
+    ui_draw_indicator(&canvas, 64, 0x0080FF);
+    TEST_ASSERT_EQUAL_HEX32(0x0080FF, at(W - 1, 0));
+    guard_intact();
+}
+
 int main(void)
 {
     FILE *f = fopen(UI_FONT_FILE, "rb");
@@ -245,6 +270,7 @@ int main(void)
     RUN_TEST(test_no_words_can_push_anything_off_the_screen);
     RUN_TEST(test_a_banner_is_a_band_at_the_viewers_bottom_and_leaves_the_rest);
     RUN_TEST(test_rows_line_up_in_two_columns_and_the_hint_sits_at_the_bottom);
+    RUN_TEST(test_the_indicator_is_a_checkered_triangle_in_the_viewers_bottom_right);
     const int failed = UNITY_END();
     free(pixels);
     return failed;

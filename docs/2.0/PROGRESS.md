@@ -9,8 +9,8 @@ times.
 | | |
 |---|---|
 | Phase | 3, on-device UI (Phases 0, 1 and 2 complete) |
-| Current milestone | M3.5 overlays (M3.3 and M3.4 await their manual checks) |
-| Next action | M3.5 overlays. From `legacy/main`: the processing indicator (`display_processing_notification.c`), the reaction and pin overlays with their icons (hex arrays to `EMBED_FILES`, finding 24; their triggers arrive in Phase 4, so build them drawable and testable through the hooks), the FPS counter is done. New: the clock (idea 1; O5 is Fab's, take working defaults: 24 hour, no seconds, hidden while a screen is up) and source branding (idea 2, O6; needs the Giphy and Klipy terms read first). Then M3.6 USB mass storage: `legacy/main/app_usb.c`, `usb_descriptors.*`; the card is handed over with `play_scheduler_shutdown()` and the session ends in a restart; `P3A_SCREEN_USB` is its screen |
+| Current milestone | M3.6 USB mass storage |
+| Next action | M3.6 USB mass storage. From `legacy/main`: `app_usb.c`, `usb_descriptors.*`, `tusb_config.h`, and the parked USB options at the bottom of `sdkconfig.defaults`. The card is handed to the computer with `play_scheduler_shutdown()`, `P3A_SCREEN_USB` says so, uploads are refused meanwhile, and every session ends in a restart (memory: USB-MSC always reboots). Its check is manual (a computer must mount the card). Then Phase 4, starting with M4.1 (fetch, download, refresh, eviction) |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -49,7 +49,7 @@ reopened (why).
 | M3.2 Text and fonts | done 2026-11-23: the font is Everyday Ample, Fab's choice (D61). Tiers: host tests, device tests (the panel equals the workstation's rendering pixel for pixel). Manual check M3.2-a (the look on the panel itself) pending; image assets arrive with the screens that need them |
 | M3.3 Screens | done 2026-11-23 except the registration code (M4.5) and the USB screen (M3.6). Tiers: host tests (27 programs, under the sanitizers too), the whole device suite (278 cases passed and 6 timing cases were skipped; 3 failed in the touch tests, whose expectation of a tap on the information screen was out of date, and pass since), including a real format of the dev unit's card. Manual check M3.3-a pending |
 | M3.4 Touch router and gestures | built 2026-11-23; open for manual check M3.4-a (real fingers), swipe actions (Phase 4) and the SD-format taps (M3.3). Tiers: host tests (26 programs, under the sanitizers too), device tests with scripted fingers (71 cases with the areas around it) |
-| M3.5 Overlays | not started |
+| M3.5 Overlays | done 2026-11-23 except source branding, which moves to M4.2 where its sources and their terms are (O6). Tiers: host tests (29 programs, under the sanitizers too), device tests (the overlays equal the workstation's rendering). Manual check M3.5-a pending |
 | M3.6 USB mass storage | not started |
 | M4.1 Fetch, download, refresh, eviction | not started |
 | M4.2 Giphy and Klipy | not started |
@@ -122,6 +122,12 @@ Open:
   Also worth one try with a wrong password: the unit should offer
   `p3a-setup` again within about a minute. If anything goes wrong,
   `python host/p3a-lab/lab.py provision` puts the unit back online.
+- **M3.5-a, the overlays by eye.** Turn the clock on
+  (`python host/p3a-lab/lab.py cmd "settings set {\"clock_enabled\":true,\"timezone\":\"EST5EDT,M3.2.0,M11.1.0\"}"`)
+  and judge its size, place and outline over a few artworks; swipe up on
+  an artwork (the error icon should flash top right for four seconds);
+  tap to skip and watch for the small blue triangle bottom right while
+  the next artwork loads.
 - **M3.3-a, the screens by eye.** Restart the unit and watch the boot
   animation hand over to the artwork. Long press for the information
   screen. Then the format flow without formatting: run
@@ -163,8 +169,9 @@ and proposals are in [DECISIONS.md](DECISIONS.md) under "Open decisions".
 | Q1 to Q10 | Ten 1.x behaviours that look accidental (brightness not restored at boot, API keys readable over the LAN, no update check for 12 hours, and others). Keep or change each? Listed in [PARITY.md](PARITY.md) under "Behaviours to decide" | M1.3 at the earliest; each row names its milestone |
 | O18 | Should the user's own files be scaled smoothly or with sharp pixels? 1.x used sharp pixels for everything on the card, which suits pixel art and makes photographs blocky. Options: keep sharp; go smooth; or decide per file (smooth for JPEG, sharp for the rest) | M2.4 |
 | O2 | Should 1.2.5 carry a notice about 2.0, and with what wording? | 1.2.5 |
-| O5 | Clock overlay details (12 or 24 hour, seconds, when hidden) | M3.5 |
-| O6 | Branding overlay rules from the Giphy and Klipy terms | M3.5 |
+| O5 | Clock overlay: built with working answers (24 hour by default with a 12 hour setting, no seconds, hidden under any screen, one font). Say if any should differ | when convenient |
+| O19 | How does a person tell the device its time zone? The setting is a POSIX TZ string, which nobody types. The web page could offer a list of regions, or send the browser's own zone | M5.1 |
+| O6 | Branding overlay rules from the Giphy and Klipy terms | M4.2 |
 | O15 | Does Makapix need any server-side change for 2.0 devices? | M4.5 |
 | O1 | Exact name of the 2.x firmware asset | M5.2 |
 | O12 | OTA hardening choices | M5.2 |
@@ -329,10 +336,59 @@ M3.3, 2026-11-23:
   `components/p3a_ui/ui_intro.c` on the settings store and the UI's model;
   the phases and timings are the same.
 
+M3.5, 2026-11-23:
+
+- `main/display_processing_notification.c`, `display_reaction_overlay.c`,
+  `display_pin_overlay.c`: rewritten in `components/p3a_ui` (the indicator
+  follows the scheduler's state; the icons are one overlay with two
+  corners).
+- `main/pin_icon_img.*`, `unpin_icon_img.*`, `reaction_submit_img.*`,
+  `reaction_revoke_img.*`, `reaction_error_img.*`, `submit_click_img.*`:
+  the pictures are now `components/p3a_ui/images/*.png` with their
+  generated `.p3aimg` files.
+
 ## Session log
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-23: M3.5, the overlays
+
+- **The processing indicator**: the checkered triangle in the viewer's
+  bottom right corner, blue while what a person asked for is loading, red
+  for three seconds when it could not be shown. Its state follows the
+  scheduler (a new `asked` in its status); nothing "starts" or "clears"
+  it, where 1.x had a start call, a success call, a failure call and a
+  30 second watchdog for the paths that forgot. Settings
+  `indicator_enabled` and `indicator_size` as before.
+- **The clock** (idea 1), off by default: hours and minutes over the
+  artwork, in one of nine places, with a size, a colour and an outline
+  that keeps it legible over anything. Hidden until the device knows the
+  time, and under any screen. Eight settings in a new `clock` group, one
+  of them `timezone`, a POSIX TZ string (D62; how a person chooses it is
+  O19). A still artwork is redrawn when the minute turns.
+- **Corner icons**: like, unlike, click, pin, unpin and error, flashed
+  for four seconds top right or top left through `p3a_ui_icon_show()`.
+  The six pictures are 1.x's, taken out of 4,700 lines of hex arrays into
+  PNGs and small picture files (`ui_image.c`, `tools/gen_image.py`),
+  which closes finding 24. Their real triggers come with the sources;
+  for now a swipe on an artwork answers with the error icon, as 1.x did
+  for a file of the user's own.
+- The legacy overlay files and icon arrays are deleted (deletion log).
+- **Source branding (idea 2) moves to M4.2**, where Giphy and Klipy and
+  their terms are (O6).
+- Verified, host tests: 29 programs, also under the sanitizers; new are
+  `test_ui_clock` (3 cases), `test_ui_image` (3, with 20,000 damaged
+  files) and cases for the indicator's state and drawing.
+- Verified, device tests (3 new cases in `test_overlays.py`, against the
+  workstation's rendering): the clock in two zones, both hour formats,
+  two places and sizes, redrawn when the minute turns, and gone when
+  turned off; the error icon after a swipe, gone after four seconds from
+  a still artwork; the red indicator after a failed request, over the
+  notice's band. With the smoke, settings and UI tests: 28 cases.
+- Not verified: the overlays by eye (M3.5-a); the blue indicator on the
+  panel (it shows for the fraction of a second a local file takes to
+  load; its state is host-tested); frame timing with the clock up.
 
 ### 2026-11-23: M3.3 part 3, the SD card on the screen
 

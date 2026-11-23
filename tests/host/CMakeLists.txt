@@ -195,14 +195,21 @@ p3a_host_test(test_ui_card
 p3a_host_test(test_ui_route
     SOURCES ui/test_ui_route.c ${UI}/ui_route.c
     INCLUDES ${UI} ${UTIL}/include)
+p3a_host_test(test_ui_image
+    SOURCES ui/test_ui_image.c ${UI}/ui_image.c ${UI}/ui_canvas.c
+    INCLUDES ${UI})
+p3a_host_test(test_ui_clock
+    SOURCES ui/test_ui_clock.c ${UI}/ui_clock.c ${UI}/ui_canvas.c ${UI}/ui_font.c
+    INCLUDES ${UI})
+target_compile_definitions(test_ui_clock PRIVATE UI_FONT_FILE="${UI}/fonts/ui.p3afont")
 p3a_host_test(test_ui_draw
-    SOURCES ui/test_ui_draw.c ${UI}/ui_draw.c ${UI}/ui_canvas.c ${UI}/ui_font.c ${UTIL}/p3a_ui_hooks.c
+    SOURCES ui/test_ui_draw.c ${UI}/ui_draw.c ${UI}/ui_canvas.c ${UI}/ui_font.c ${UI}/ui_image.c ${UI}/ui_clock.c ${UTIL}/p3a_ui_hooks.c
     INCLUDES ${UI} ${UTIL}/include)
 target_compile_definitions(test_ui_draw PRIVATE UI_FONT_FILE="${UI}/fonts/ui.p3afont")
 
 # Not a test: draws the UI's screens into a file on the workstation, with
 # the code the device runs. The device tests compare the panel with it
 # (tests/device/test_ui_drawing.py), and it is handy for looking at a change.
-add_executable(ui_preview ui/ui_preview.c ${UI}/ui_draw.c ${UI}/ui_canvas.c ${UI}/ui_font.c ${UTIL}/p3a_ui_hooks.c)
+add_executable(ui_preview ui/ui_preview.c ${UI}/ui_draw.c ${UI}/ui_canvas.c ${UI}/ui_font.c ${UI}/ui_image.c ${UI}/ui_clock.c ${UTIL}/p3a_ui_hooks.c)
 target_include_directories(ui_preview PRIVATE ${UI} ${UTIL}/include)
 target_compile_options(ui_preview PRIVATE -Wall -Wextra -Werror -Wshadow -Wconversion -g)

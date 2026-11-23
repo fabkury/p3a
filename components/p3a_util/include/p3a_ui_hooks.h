@@ -51,6 +51,27 @@ typedef enum {
     P3A_NOTICE_COUNT
 } p3a_notice_t;
 
+// The icons the UI can flash in a corner of the artwork, for a few
+// seconds, as the answer to a gesture.
+typedef enum {
+    P3A_ICON_NONE = 0,
+    P3A_ICON_LIKE,
+    P3A_ICON_UNLIKE,
+    P3A_ICON_CLICK,
+    P3A_ICON_PIN,
+    P3A_ICON_UNPIN,
+    P3A_ICON_ERROR,
+    P3A_ICON_COUNT
+} p3a_icon_t;
+
+// Which corner, as the viewer sees the screen. Reactions go top right and
+// pins top left, so that one gesture can answer with both.
+typedef enum {
+    P3A_ICON_TOP_RIGHT = 0,
+    P3A_ICON_TOP_LEFT,
+    P3A_ICON_PLACES
+} p3a_icon_place_t;
+
 #define P3A_UI_TITLE_LEN 48
 #define P3A_UI_TEXT_LEN  400
 #define P3A_UI_HINT_LEN  48
@@ -80,6 +101,7 @@ typedef struct {
     // ttl_ms: 0 stays until hidden. max_per_boot: 0 is no limit.
     void (*notice_show)(p3a_notice_t notice, const p3a_ui_content_t *content, uint32_t ttl_ms, uint32_t max_per_boot);
     void (*notice_hide)(p3a_notice_t notice);
+    void (*icon_show)(p3a_icon_t icon, p3a_icon_place_t place);
 } p3a_ui_hooks_t;
 
 // Called once by app_main. The table must stay valid for good.
@@ -95,6 +117,10 @@ void p3a_ui_screen_hide(p3a_screen_t screen);
 // ignored: for conditions that come back every few minutes.
 void p3a_ui_notice_show(p3a_notice_t notice, const p3a_ui_content_t *content, uint32_t ttl_ms, uint32_t max_per_boot);
 void p3a_ui_notice_hide(p3a_notice_t notice);
+
+// Flashes an icon in a corner for four seconds; a new one in the same
+// corner replaces what is there. Safe from any task.
+void p3a_ui_icon_show(p3a_icon_t icon, p3a_icon_place_t place);
 
 // Fills a content from a title, a printf-style text and a progress; no hint
 // and no buttons.

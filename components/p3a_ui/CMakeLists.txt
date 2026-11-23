@@ -11,15 +11,18 @@
 # (buffer, context, t), also built and checked on the workstation by
 # host/intro-anim-lab; ui_intro.c plays one at boot.
 #
-# fonts/ holds the built-in font, made by tools/gen_font.py and committed.
+# fonts/ holds the built-in font, made by tools/gen_font.py, and images/ the
+# icons, made from the PNGs beside them by tools/gen_image.py; both committed.
 idf_component_register(
     SRCS "p3a_ui.c"
          "ui_canvas.c"
          "ui_card.c"
+         "ui_clock.c"
          "ui_display.c"
          "ui_draw.c"
          "ui_font.c"
          "ui_gesture.c"
+         "ui_image.c"
          "ui_intro.c"
          "ui_model.c"
          "ui_player.c"
@@ -54,4 +57,6 @@ idf_component_register(
     REQUIRES p3a_util
     PRIV_REQUIRES display_renderer esp_hw_support esp_system esp_timer espressif__esp_lcd_touch p3a_board p3a_settings p3a_storage play_scheduler
     EMBED_FILES "fonts/ui.p3afont"
+                "images/like.p3aimg" "images/unlike.p3aimg" "images/click.p3aimg"
+                "images/pin.p3aimg" "images/unpin.p3aimg" "images/error.p3aimg"
 )

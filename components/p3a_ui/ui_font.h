@@ -52,6 +52,11 @@ int32_t ui_text_width(const ui_font_t *font, const char *text, int32_t scale);
 int32_t ui_text_draw(const ui_canvas_t *canvas, const ui_font_t *font, int32_t x, int32_t y, int32_t scale,
                      ui_colour_t colour, const char *text);
 
+// The same line with every stroke `grow` pixels fatter on all sides: drawn
+// first in a second colour, it is an outline for the text drawn over it.
+int32_t ui_text_draw_grown(const ui_canvas_t *canvas, const ui_font_t *font, int32_t x, int32_t y, int32_t scale,
+                           ui_colour_t colour, const char *text, int32_t grow);
+
 typedef enum { UI_ALIGN_LEFT = 0, UI_ALIGN_CENTRE, UI_ALIGN_RIGHT } ui_align_t;
 
 // Draws text in a column `width` wide starting at (x, y): broken into lines

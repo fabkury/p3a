@@ -160,8 +160,10 @@ static void act(ui_action_t action, p3a_screen_t screen, const ui_gesture_t *ges
         break;
     case UI_ACTION_LIKE:
     case UI_ACTION_UNLIKE:
-        // What these do depends on where the artwork is from; it arrives
-        // with the sources (Phase 4). Recognised and counted until then.
+        // What these do depends on where the artwork is from, which
+        // arrives with the sources (Phase 4). A user's own file, the only
+        // kind there is so far, has nothing to like: the error icon, as 1.x.
+        p3a_ui_icon_show(P3A_ICON_ERROR, P3A_ICON_TOP_RIGHT);
         break;
     default:
         break;

@@ -32,6 +32,16 @@ void ui_card_start(void);
 // coordinates; -1 for none (ui_display.c, which has the font).
 int ui_display_button_at(int32_t x, int32_t y);
 
+// The processing indicator in the corner (ui_display.c): 0 off, 1 busy,
+// 2 failed. Safe from any task.
+void ui_display_set_indicator(int show);
+
+// Flashes an icon (a p3a_icon_t) in a corner (a p3a_icon_place_t), and the
+// panel side's share of the UI's tick: icons that expire, the clock's
+// minute (ui_display.c).
+void ui_display_icon(int icon, int place);
+void ui_display_tick(void);
+
 // The touch task (ui_touch.c).
 esp_err_t ui_touch_start(void);
 

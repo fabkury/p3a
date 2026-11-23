@@ -67,6 +67,41 @@ static void test_a_failed_request_is_put_in_plain_words(void)
     TEST_ASSERT_NULL(strstr(c.text, "ESP_"));  // never an error code on the screen
 }
 
+static void test_the_indicator_is_busy_while_a_person_waits_and_red_briefly_after_a_failure(void)
+{
+    ui_indicator_t ind = {0};
+    ui_player_facts_t f = {.playing = true, .problems = 4};  // failures from before this UI looked
+    ui_indicator_update(&ind, &f, 1000);
+    TEST_ASSERT_EQUAL(UI_INDICATOR_OFF, ui_indicator_now(&ind, 1000));
+
+    f.asked = true;
+    ui_indicator_update(&ind, &f, 2000);
+    TEST_ASSERT_EQUAL(UI_INDICATOR_BUSY, ui_indicator_now(&ind, 2000));
+    TEST_ASSERT_EQUAL(UI_INDICATOR_BUSY, ui_indicator_now(&ind, 90000));  // for as long as it takes
+    f.asked = false;  // shown
+    ui_indicator_update(&ind, &f, 3000);
+    TEST_ASSERT_EQUAL(UI_INDICATOR_OFF, ui_indicator_now(&ind, 3000));
+
+    f.asked = true;
+    ui_indicator_update(&ind, &f, 4000);
+    f.asked = false;
+    f.problems = 5;  // it could not be shown
+    ui_indicator_update(&ind, &f, 5000);
+    TEST_ASSERT_EQUAL(UI_INDICATOR_FAILED, ui_indicator_now(&ind, 5000));
+    TEST_ASSERT_EQUAL(UI_INDICATOR_FAILED, ui_indicator_now(&ind, 7999));
+    TEST_ASSERT_EQUAL(UI_INDICATOR_OFF, ui_indicator_now(&ind, 8000));
+
+    // Asking again while it is red: busy at once, and no red left over after.
+    f.problems = 6;
+    ui_indicator_update(&ind, &f, 9000);
+    f.asked = true;
+    ui_indicator_update(&ind, &f, 9500);
+    TEST_ASSERT_EQUAL(UI_INDICATOR_BUSY, ui_indicator_now(&ind, 9500));
+    f.asked = false;
+    ui_indicator_update(&ind, &f, 9800);
+    TEST_ASSERT_EQUAL(UI_INDICATOR_OFF, ui_indicator_now(&ind, 9800));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -74,5 +109,6 @@ int main(void)
     RUN_TEST(test_loading_until_every_channel_is_listed_and_the_first_artwork_is_up);
     RUN_TEST(test_nothing_to_play_says_why);
     RUN_TEST(test_a_failed_request_is_put_in_plain_words);
+    RUN_TEST(test_the_indicator_is_busy_while_a_person_waits_and_red_briefly_after_a_failure);
     return UNITY_END();
 }

@@ -206,3 +206,27 @@ int32_t ui_draw_banner(const ui_canvas_t *canvas, const ui_style_t *style, const
     ui_text_block(canvas, style->font, pad, top + pad, column, scale, scale, UI_ALIGN_CENTRE, style->title, words, 2);
     return height;
 }
+
+void ui_draw_indicator(const ui_canvas_t *canvas, int32_t size, ui_colour_t colour)
+{
+    const int32_t vw = ui_canvas_view_width(canvas), vh = ui_canvas_view_height(canvas);
+    // A right triangle in the viewer's bottom right corner, every other
+    // pixel of it: a mark that reads over any artwork without hiding it.
+    for (int32_t ly = 0; ly < size; ly++) {
+        for (int32_t lx = size - 1 - ly; lx < size; lx++) {
+            if ((lx + ly) % 2 == 0) {
+                ui_canvas_fill(canvas, vw - size + lx, vh - size + ly, 1, 1, colour);
+            }
+        }
+    }
+}
+
+void ui_draw_icon(const ui_canvas_t *canvas, const ui_image_t *image, bool left)
+{
+    if (image == NULL || image->pixels == NULL) {
+        return;
+    }
+    const int32_t vw = ui_canvas_view_width(canvas);
+    const int32_t margin = vw / 45;
+    ui_image_draw(canvas, image, left ? margin : vw - margin - image->width, margin, 1);
+}

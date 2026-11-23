@@ -47,6 +47,14 @@ void p3a_ui_notice_hide(p3a_notice_t notice)
     }
 }
 
+void p3a_ui_icon_show(p3a_icon_t icon, p3a_icon_place_t place)
+{
+    const p3a_ui_hooks_t *hooks = atomic_load(&s_hooks);
+    if (hooks != NULL && hooks->icon_show != NULL) {
+        hooks->icon_show(icon, place);
+    }
+}
+
 void p3a_ui_content(p3a_ui_content_t *out, const char *title, int progress, const char *format, ...)
 {
     memset(out, 0, sizeof(*out));

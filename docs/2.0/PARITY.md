@@ -121,7 +121,7 @@ describe what a client can do, not the 1.x URL.
 | [ ] | USB screens: card exposed, disconnected and restarting | keep | M3.6 | |
 | [ ] | Recovery countdowns for the Wi-Fi chip and the SDIO link, and the offline notice | keep | M1.5 | |
 | [ ] | "No Internet Connection" screen | drop | | Never shown in 1.x |
-| [ ] | Overlays: FPS, processing indicator (size setting), reaction icons, pin icons, all following rotation | keep | M3.5 | |
+| [x] | Overlays: FPS, processing indicator (size setting), reaction icons, pin icons, all following rotation | keep | M3.5 | Done in M3.5; the icons' real triggers come with the sources |
 | [ ] | All text in DejaVu Sans through uGFX | change | M3.2 | VEXED pixel fonts (idea 3) |
 
 ## Web UI

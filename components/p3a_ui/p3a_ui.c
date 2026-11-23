@@ -46,6 +46,7 @@ static atomic_bool s_player_job_queued;
 static esp_timer_handle_t s_tick;
 static p3a_ui_info_fn s_info;
 static ui_card_t s_card;  // the SD format flow; guarded by s_lock
+static ui_indicator_t s_indicator;  // guarded by s_lock
 static atomic_bool s_info_job_queued;
 static uint32_t s_ticks;
 
@@ -108,6 +109,11 @@ static void hook_notice_hide(p3a_notice_t notice)
     settle_and_unlock(ui_model_notice_hide(&s_model, notice));
 }
 
+static void hook_icon_show(p3a_icon_t icon, p3a_icon_place_t place)
+{
+    ui_display_icon((int)icon, (int)place);
+}
+
 const p3a_ui_hooks_t *p3a_ui_hook_table(void)
 {
     static const p3a_ui_hooks_t table = {
@@ -115,6 +121,7 @@ const p3a_ui_hooks_t *p3a_ui_hook_table(void)
         .screen_hide = hook_screen_hide,
         .notice_show = hook_notice_show,
         .notice_hide = hook_notice_hide,
+        .icon_show = hook_icon_show,
     };
     return &table;
 }
@@ -151,6 +158,7 @@ static void facts_from(const play_scheduler_status_t *st, ui_player_facts_t *f)
             f->card_failed = true;
         }
     }
+    f->asked = st->asked;
     f->problem = st->problem;
     f->problems = st->problems;
 }
@@ -199,7 +207,10 @@ static esp_err_t player_job(void *arg)
         changed |= ui_model_notice_show(&s_model, P3A_NOTICE_PLAY_PROBLEM, &words, UI_PLAYER_PROBLEM_TTL_MS, 0, now_ms());
     }
     s_problems_seen = facts.problems;
+    ui_indicator_update(&s_indicator, &facts, now_ms());
+    const int indicator = (int)ui_indicator_now(&s_indicator, now_ms());
     settle_and_unlock(changed);
+    ui_display_set_indicator(indicator);
     return ESP_OK;
 }
 
@@ -396,7 +407,10 @@ static void tick(void *arg)
         changed |= ui_card_content(&s_card, now_ms(), &words) ? ui_model_screen_show(&s_model, P3A_SCREEN_CARD, &words)
                                                              : ui_model_screen_hide(&s_model, P3A_SCREEN_CARD);
     }
+    const int indicator = (int)ui_indicator_now(&s_indicator, now_ms());  // its red runs out by the clock
     settle_and_unlock(changed);
+    ui_display_set_indicator(indicator);
+    ui_display_tick();
     card_run(command);
     if (atomic_load(&s_look_again)) {
         on_player_changed(NULL, NULL);

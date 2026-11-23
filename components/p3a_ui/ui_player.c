@@ -50,3 +50,24 @@ void ui_player_problem(int problem, p3a_ui_content_t *out)
         break;
     }
 }
+
+void ui_indicator_update(ui_indicator_t *indicator, const ui_player_facts_t *facts, int64_t now_ms)
+{
+    if (indicator->primed && facts->problems != indicator->problems_seen) {
+        indicator->failed_until_ms = now_ms + UI_INDICATOR_FAILED_MS;
+    }
+    indicator->primed = true;
+    indicator->problems_seen = facts->problems;
+    indicator->busy = facts->asked;
+    if (facts->asked) {
+        indicator->failed_until_ms = 0;  // asking again clears the red at once
+    }
+}
+
+ui_indicator_show_t ui_indicator_now(const ui_indicator_t *indicator, int64_t now_ms)
+{
+    if (indicator->busy) {
+        return UI_INDICATOR_BUSY;
+    }
+    return now_ms < indicator->failed_until_ms ? UI_INDICATOR_FAILED : UI_INDICATOR_OFF;
+}

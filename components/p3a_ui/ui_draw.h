@@ -17,6 +17,7 @@
 #include "p3a_ui_hooks.h"
 #include "ui_canvas.h"
 #include "ui_font.h"
+#include "ui_image.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -38,6 +39,13 @@ void ui_style_default(ui_style_t *style, const ui_font_t *font, int32_t view_wid
 // Draws a whole screen: background, title, text, progress. NULL content
 // draws the background alone.
 void ui_draw_screen(const ui_canvas_t *canvas, const ui_style_t *style, const p3a_ui_content_t *content);
+
+// Draws the processing indicator: a checkered triangle `size` pixels on a
+// side in the viewer's bottom right corner.
+void ui_draw_indicator(const ui_canvas_t *canvas, int32_t size, ui_colour_t colour);
+
+// Draws an icon in the viewer's top left or top right corner.
+void ui_draw_icon(const ui_canvas_t *canvas, const ui_image_t *image, bool left);
 
 // Where button `index` of a screen is, in viewer coordinates. False when
 // the content has no such button.

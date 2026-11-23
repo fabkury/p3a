@@ -88,6 +88,7 @@ Set before the architecture review and taken as given by everything since.
 | D59 | 2026-11-23 | Working | O7: one model of what is on screen, in the UI (`ui_model.c`); `p3a_state` is not carried over. Screens and notices are facts that are up or down, and what is seen follows by fixed precedence. Notices about playback are worked out from the scheduler's state. A notice is a banner while an artwork plays | Finding 11. Precedence instead of "last writer wins" removes the arbitration rules 1.x needed, and a banner does not take the artwork away to say something minor |
 | D60 | 2026-11-23 | Fab (O3) | Text is drawn by a glyph renderer of p3a's own from font files made out of pixel-font TTFs at build-tool time; uGFX is not carried over. The family is D61's | uGFX's converter anti-aliases, which a pixel font must not be, and 54,000 lines were kept for text alone. The renderer is about 200 lines, pure and host-tested. Fab agreed on 2026-11-23, noting that characters outside Latin may be wanted later: the font format already holds any character up to U+FFFF, and which ones a font file carries is the list in `tools/gen_font.py` |
 | D61 | 2026-11-23 | Fab | O4: the on-device UI's font is Everyday Ample (VEXED, 9 px, CC BY 4.0), one family for titles, text and notices | Chosen from a specimen of 15 families drawn as p3a screens |
+| D62 | 2026-11-23 | Working | O5: the clock shows hours and minutes (24 hour by default, 12 hour as a setting), no seconds, in one font, and is hidden under any screen and until the time is known. The zone is one setting, a POSIX TZ string | Seconds would redraw a still artwork every second. A wrong clock is worse than none. A TZ string needs no zone database on the device; choosing it is the web page's job (O19) |
 
 ## 1.x decisions that stay in force
 
@@ -150,8 +151,8 @@ are not missed.
 |---|---|---|---|
 | O1 | Exact asset name for 2.x firmware (D12), and whether the 2.x OTA check gets a compatibility field so that a future break cannot repeat the 1.x trap | M5.2 | Proposal: `p3a-v2.bin`, plus a `series` number in the release manifest that the device must match |
 | O2 | Whether 1.2.5 carries an on-device or web UI notice about 2.0, and its wording | 1.2.5 | Independent of the 2.0 build |
-| O5 | Clock overlay: 12 or 24 hour, seconds or not, visible during channel messages and the info screen or not | M3.5 | See idea 1 |
-| O6 | Branding overlay: minimum band height and clear space from the Giphy and Klipy terms; bottom band only, or side bands too | M3.5 | See idea 2 |
+| O19 | How a person sets the time zone: the setting is a POSIX TZ string. A list of regions on the web page, or the browser's own zone sent by the page | M5.1 | The device needs no zone database either way |
+| O6 | Branding overlay: minimum band height and clear space from the Giphy and Klipy terms; bottom band only, or side bands too | M4.2 | See idea 2 |
 | O9 | The internal-RAM measures from `docs/known-issues.md`: packet mode, refresh concurrency, the Option E items, load shedding thresholds | M4.1 | Needs measurements on the 2.0 build, then a soak |
 | O10 | A wall-clock budget for slow software JPEG decodes, and what a timed-out image becomes | M4.3 | Moved from M2.4: in the new pipeline a slow decode delays only the next artwork, and sizing a budget needs the museum JPEGs. `NOT_PLAYABLE` is its home |
 | O12 | OTA hardening from audit item M23: post-boot self-test before marking an image valid, anti-rollback, minimum-version gate | M5.2 | |

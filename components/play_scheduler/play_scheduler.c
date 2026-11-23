@@ -271,6 +271,7 @@ esp_err_t play_scheduler_next(void)
         err = sched_history_forward(&s->history, &record) ? begin_this(TURN_FORWARD, &record) : begin_new(SCHED_TURN_ANY);
     }
     UNLOCK();
+    changed();
     return err;
 }
 
@@ -286,6 +287,7 @@ esp_err_t play_scheduler_back(void)
         err = begin_this(TURN_BACK, &record);
     }
     UNLOCK();
+    changed();
     return err;
 }
 
@@ -300,6 +302,7 @@ esp_err_t play_scheduler_show(const p3a_record_t *record)
     LOCK();
     const esp_err_t err = s->paused ? ESP_ERR_INVALID_STATE : begin_this(TURN_SHOW, record);
     UNLOCK();
+    changed();
     return err;
 }
 
@@ -677,6 +680,7 @@ void play_scheduler_get_status(play_scheduler_status_t *out)
     out->last_error = s->last_error;
     out->paused = s->paused;
     out->foreign = s->foreign_shown;
+    out->asked = s->turn.busy && s->turn.origin != SCHED_TURN_AUTO;
     out->staged = s->staged && s->pending_token != 0;
     out->advance_in_s = sched_turn_remaining_s(&s->turn, now_ms());
     out->problem = s->problem;

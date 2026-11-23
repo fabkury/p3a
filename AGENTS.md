@@ -67,6 +67,7 @@ The firmware is public (Apache 2.0). 1.x runs on real users' devices from
 | `tools/check_tree.py` | The structural rules below as a script; CI and the lab run it. |
 | `tools/embed_static.py` | Gzips the web files under `components/p3a_net/static/` into the firmware at configure time. Adding a page is adding a file there. `tools/test_embed_static.py` is its self-test. |
 | `tools/gen_font.py` | Makes a UI font file from a pixel font's TTF. Run by hand when a font changes; the result under `components/p3a_ui/fonts/` is committed. |
+| `tools/gen_image.py` | Makes a UI picture file from a PNG, the same way: by hand, result committed under `components/p3a_ui/images/`. |
 | `tools/gen_settings.py` | Generates the settings table and struct from `components/p3a_settings/settings.json` at configure time. `tools/test_gen_settings.py` is its self-test. |
 | `tools/compare_sdkconfig.py` | Fails a release build whose configuration drifts from what 1.x shipped, apart from a listed set of explained differences. When a component returns and a listed difference disappears, remove it from the list. |
 | `sdkconfig.trace.defaults`, `sdkconfig.diag.defaults`, `sdkconfig.nowrap.defaults` | The jitter work's overlays (`lab.py build trace`, `build diag`; `build trace-test` adds the test hooks, for `tests/device/test_timing.py`). Never folded into the release configuration. |

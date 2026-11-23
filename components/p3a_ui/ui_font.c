@@ -110,8 +110,8 @@ static uint32_t next_char(const char **text)
 
 // Measures, and draws when there is a canvas, the text from `text` up to
 // `end` (or a newline or the terminator).
-static int32_t run(const ui_canvas_t *canvas, const ui_font_t *font, int32_t x, int32_t y, int32_t scale,
-                   ui_colour_t colour, const char *text, const char *end)
+static int32_t run_grown(const ui_canvas_t *canvas, const ui_font_t *font, int32_t x, int32_t y, int32_t scale,
+                         ui_colour_t colour, const char *text, const char *end, int32_t grow)
 {
     if (font->data == NULL || scale <= 0) {
         return 0;
@@ -139,13 +139,26 @@ static int32_t run(const ui_canvas_t *canvas, const ui_font_t *font, int32_t x, 
                     while (c < advance && (row[c / 8] & (0x80 >> (c % 8)))) {
                         c++;
                     }
-                    ui_canvas_fill(canvas, x + (pen + from) * scale, y + r * scale, (c - from) * scale, scale, colour);
+                    ui_canvas_fill(canvas, x + (pen + from) * scale - grow, y + r * scale - grow,
+                                   (c - from) * scale + 2 * grow, scale + 2 * grow, colour);
                 }
             }
         }
         pen += advance;
     }
     return pen * scale;
+}
+
+static int32_t run(const ui_canvas_t *canvas, const ui_font_t *font, int32_t x, int32_t y, int32_t scale,
+                   ui_colour_t colour, const char *text, const char *end)
+{
+    return run_grown(canvas, font, x, y, scale, colour, text, end, 0);
+}
+
+int32_t ui_text_draw_grown(const ui_canvas_t *canvas, const ui_font_t *font, int32_t x, int32_t y, int32_t scale,
+                           ui_colour_t colour, const char *text, int32_t grow)
+{
+    return text ? run_grown(canvas, font, x, y, scale, colour, text, NULL, grow < 0 ? 0 : grow) : 0;
 }
 
 int32_t ui_text_width(const ui_font_t *font, const char *text, int32_t scale)

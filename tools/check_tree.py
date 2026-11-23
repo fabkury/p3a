@@ -31,7 +31,7 @@ import re
 import sys
 from pathlib import Path
 
-LAYERS = ["util", "board", "storage", "sources", "library", "player", "ui", "net", "main"]
+LAYERS = ["util", "board", "storage", "library", "sources", "player", "ui", "net", "main"]
 CODE_SUFFIXES = {".c", ".h", ".cpp", ".hpp", ".cc", ".S"}
 CMAKE_KEYWORDS = {
     "SRCS", "SRC_DIRS", "EXCLUDE_SRCS", "INCLUDE_DIRS", "PRIV_INCLUDE_DIRS", "LDFRAGMENTS",

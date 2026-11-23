@@ -69,3 +69,34 @@ def test_what_is_not_a_blob_is_not_taken_in(uart):
         refused = uart.command(f"library blob 100 1 {bad_format}")
         assert refused["result"] == "ESP_ERR_INVALID_ARG" and refused["upload_left"] is True
     assert uart.command(f"library blob-remove {'00' * 16} {FORMAT_GIF}")["result"] == "ESP_ERR_INVALID_ARG"
+
+
+# --- the local source ---------------------------------------------------------
+
+def test_the_local_source_lists_the_users_pictures_in_place(uart):
+    long_name = "n" * 130 + ".gif"  # does not fit a record
+    ours = ["zz-test-a.gif", "zz-test-b.JPG", "zz-test-c.webp"]
+    others = ["zz-test-notes.txt", ".zz-test-hidden.png", long_name]
+    for leftover in ours + others + ["check-jpeg.jpg", "check-webp.webp"]:
+        uart.command(f"library local-remove {leftover}")
+    before = uart.command("library local-scan 4096")
+    assert before["result"] == "ok"
+    try:
+        for name in ours + others:
+            uart.command(f"library local-put {name} 300")
+        after = uart.command("library local-scan 4096")
+        assert after["result"] == "ok" and after["smooth"] is False
+        assert after["count"] == before["count"] + 3
+        assert after["available"] == after["count"], "a file that is there can be played"
+        assert after["not_pictures"] == before["not_pictures"] + 2
+        assert after["name_too_long"] == before["name_too_long"] + 1, "counted and left out, not cut"
+        assert after["first_exists"] is True and "/animations/" in after["first_path"]
+        if before["count"] == 0:
+            assert sorted(after["names"]) == [["zz-test-a.gif", 2], ["zz-test-b.JPG", 4], ["zz-test-c.webp", 1]]
+        # An index too small for the folder takes what fits and says how many it left out.
+        small = uart.command("library local-scan 2")
+        assert small["count"] == 2 and small["over_capacity"] == after["count"] - 2
+    finally:
+        for name in ours + others:
+            uart.command(f"library local-remove {name}")
+    assert uart.command("library local-scan 4096")["count"] == before["count"]

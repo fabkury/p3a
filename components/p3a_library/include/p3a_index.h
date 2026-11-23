@@ -48,7 +48,8 @@ void p3a_index_destroy(p3a_index_t *index);
 // Replaces the contents with `count` records (as read from a file). Every
 // record is checked; one bad record refuses the lot (P3A_ERR_CORRUPT) and
 // leaves the index empty. ESP_ERR_INVALID_SIZE if they do not fit. A record
-// is marked available when it has a blob and is not flagged gone.
+// is marked available when its bytes are at hand (it has a blob, or is
+// flagged in place) and it is not flagged gone.
 esp_err_t p3a_index_set_records(p3a_index_t *index, const p3a_record_t *records, uint32_t count);
 
 void p3a_index_clear(p3a_index_t *index);

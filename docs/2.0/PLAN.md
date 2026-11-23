@@ -23,8 +23,8 @@ The layers, bottom to top (review, target architecture, section 1):
 util      alloc, limits, error base, task helper, job runner, event bus, memory pressure
 board     display, touch, SD mount, button, brightness, USB, co-processor flash
 storage   sd_path, fs_atomic, sd_health, sd_repair, framed container, settings store
-sources   makapix, giphy, klipy, museum, local, pinned; each fills source_ops_t
-library   records, indices, blob store, download manager, refresh manager, eviction
+library   records, indices, blob store, the source interface, download manager, refresh manager, eviction
+sources   makapix, giphy, klipy, museum, local, pinned; each fills p3a_source_ops_t (above library: D51)
 player    scheduler, loader pipeline, decoders, upscalers, display pipeline
 ui        screen model, screens, overlays, touch router, intro animations
 net       wifi, captive portal, http routes, mqtt commands, ota, mdns, sntp

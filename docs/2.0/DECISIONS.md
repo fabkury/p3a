@@ -77,6 +77,8 @@ Set before the architecture review and taken as given by everything since.
 | D48 | 2026-11-19 | Working | The blob store keeps no table of reference counts. Blobs are evicted by age; the only blobs that must never be evicted are the pinned ones, and that set comes from the pin lists when they are built. A record whose blob is gone is discovered on play and marked | The design's count had no reader. A table with one entry per file on the card costs PSRAM and is one more file that can disagree with the truth |
 | D49 | 2026-11-23 | Fab | p3a never drops frames. An animation that cannot be decoded as fast as its file asks shows every frame and runs slower, in 2.0 as in 1.x | A design choice of the product: the artwork is shown whole. Nothing in the pipeline may skip frames to keep pace |
 | D50 | 2026-11-23 | Working | A playset channel is `source` + `kind` + `identifier` + `offset` (which make its id) with a weight and a display name; one 224-byte packed form everywhere. Its JSON is strict: anything unknown or oversized is refused with a reason. This is a new JSON shape, not 1.x's | Findings 5 and 20, audit M21. A cut identifier names another channel; a silently dropped typo is a setting the user believes they made |
+| D51 | 2026-11-23 | Working | Layer order: `library` below `sources`. The library defines the source interface and registry; sources implement it from above and register at boot | A source must produce the library's records. With the interface in the library, every arrow still points down |
+| D52 | 2026-11-23 | Working | The user's files in `animations/` are listed in place and never moved into the blob store. Their records carry the file name and the `IN_PLACE` flag | Someone browsing the card over USB must find their files under their names |
 
 ## 1.x decisions that stay in force
 
@@ -149,5 +151,6 @@ are not missed.
 | O12 | OTA hardening from audit item M23: post-boot self-test before marking an image valid, anti-rollback, minimum-version gate | M5.2 | |
 | O13 | How `v2` becomes `main` at release: merge, or replace | M6.4 | |
 | O14 | A second unit for the end-to-end field test (web flasher on a fresh board) | M6.3 | Needs hardware from Fab |
+| O18 | Whether the user's own files are scaled smoothly or with sharp pixels (1.x: sharp for everything on the card) | M2.4 | Sharp suits pixel art; smooth suits photographs. Could be decided per file by format |
 | O16 | Where a firmware install runs. `esp_ota_end()` verifies the image by memory-mapping flash, which a task with a PSRAM stack cannot do (see the 2026-11-18 ledger entry), and both job runners have PSRAM stacks. Options: a third runner with an internal stack for flash-mapping work, or verification on a dedicated internal-stack task | M5.2 | 1.x installed from the HTTP server's task, whose stack is internal |
 | O15 | Whether Makapix needs any server-side change for 2.0 devices | M4.5 | Ask the Makapix side when Phase 4 starts |

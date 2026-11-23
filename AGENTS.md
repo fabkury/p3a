@@ -81,8 +81,8 @@ The firmware is public (Apache 2.0). 1.x runs on real users' devices from
 ### Layers
 
 2.0 components belong to layers, and a component may depend only on layers
-below its own. Bottom to top: `util`, `board`, `storage`, `sources`,
-`library`, `player`, `ui`, `net`, `main`. Every dependency is a `REQUIRES`.
+below its own. Bottom to top: `util`, `board`, `storage`, `library`,
+`sources`, `player`, `ui`, `net`, `main`. Every dependency is a `REQUIRES`.
 `WHOLE_ARCHIVE`, `__attribute__((weak))`, and including a header from `main/`
 or anything from `legacy/` are forbidden. What each layer holds is in
 `docs/2.0/PLAN.md`.
@@ -126,6 +126,10 @@ All in `components/p3a_util`; each header explains itself at the top.
   `p3a_record_init_*` functions, hands finished downloads to
   `p3a_blob_adopt()`, and never builds a path under `blobs/` or deletes a
   file there itself.
+- **A source is a `p3a_source_ops_t` table** (`p3a_source.h`) registered at
+  boot. Code outside a source never names one: it asks
+  `p3a_source_get()` and calls through the table. Adding a source is adding
+  a component in the `sources` layer and one registration in `app_main`.
 - **Logic is split from hardware** so it can be host-tested: the pure part
   in its own file with no IDF includes (`p3a_job_table.c`,
   `p3a_mem_pressure.c`), the thin device part beside it.

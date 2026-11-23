@@ -132,7 +132,7 @@ esp_err_t p3a_record_check(const p3a_record_t *record)
 {
     if (record->source == P3A_SOURCE_NONE || record->source >= P3A_SOURCE_END_ || record->kind != 0 ||
         record->format >= P3A_FORMAT_END_ || record->id32 == 0 ||
-        (record->flags & ~(P3A_RECORD_UNRESOLVED | P3A_RECORD_GONE)) != 0 ||
+        (record->flags & ~P3A_RECORD_FLAGS_KNOWN) != 0 ||
         !all_zero(record->reserved, sizeof(record->reserved))) {
         return P3A_ERR_CORRUPT;
     }

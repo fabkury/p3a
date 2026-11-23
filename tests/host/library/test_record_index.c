@@ -8,6 +8,8 @@
 #include "p3a_err.h"
 #include "p3a_index.h"
 #include "p3a_record.h"
+#include "p3a_source.h"
+#include "source_local.h"
 #include "unity.h"
 
 void setUp(void) {}
@@ -306,9 +308,79 @@ static void test_records_from_a_file_are_all_checked_before_any_is_taken(void)
     p3a_index_destroy(&ix);
 }
 
+// --- records in place, the source registry, local file names -------------------
+
+static void test_a_record_in_place_is_available_without_a_blob(void)
+{
+    p3a_index_t ix;
+    TEST_ASSERT_EQUAL(ESP_OK, p3a_index_create(&ix, 4));
+    p3a_record_t r = numbered(1, false);
+    r.flags = P3A_RECORD_IN_PLACE;
+    TEST_ASSERT_EQUAL(ESP_OK, p3a_record_check(&r));
+    TEST_ASSERT_EQUAL(ESP_OK, p3a_index_append(&ix, &r, NULL));
+    TEST_ASSERT_TRUE(p3a_index_is_available(&ix, 0));
+    p3a_record_t gone = numbered(2, false);
+    gone.flags = P3A_RECORD_IN_PLACE | P3A_RECORD_GONE;
+    TEST_ASSERT_EQUAL(ESP_OK, p3a_index_append(&ix, &gone, NULL));
+    TEST_ASSERT_FALSE(p3a_index_is_available(&ix, 1));
+    r.flags = 0x08;  // a flag this firmware does not know
+    TEST_ASSERT_EQUAL(P3A_ERR_CORRUPT, p3a_record_check(&r));
+    p3a_index_destroy(&ix);
+}
+
+static esp_err_t fake_refresh(const p3a_channel_ref_t *channel, p3a_index_t *index)
+{
+    (void)channel;
+    (void)index;
+    return ESP_OK;
+}
+
+static void test_sources_register_once_and_unknown_ones_are_absent(void)
+{
+    static const p3a_source_ops_t giphy = {.source = P3A_SOURCE_GIPHY, .name = "giphy", .refresh = fake_refresh};
+    static const p3a_source_ops_t pinned = {.source = P3A_CHANNEL_SOURCE_PINNED, .name = "pinned", .refresh = fake_refresh};
+    static const p3a_source_ops_t no_refresh = {.source = P3A_SOURCE_KLIPY, .name = "klipy"};
+    static const p3a_source_ops_t out_of_range = {.source = 7, .name = "x", .refresh = fake_refresh};
+    static const p3a_source_ops_t zero = {.source = 0, .name = "x", .refresh = fake_refresh};
+    p3a_source_reset_for_test();
+    TEST_ASSERT_NULL(p3a_source_get(P3A_SOURCE_GIPHY));
+    TEST_ASSERT_EQUAL(ESP_OK, p3a_source_register(&giphy));
+    TEST_ASSERT_EQUAL(ESP_OK, p3a_source_register(&pinned));
+    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_STATE, p3a_source_register(&giphy));
+    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG, p3a_source_register(&no_refresh));
+    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG, p3a_source_register(&out_of_range));
+    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG, p3a_source_register(&zero));
+    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG, p3a_source_register(NULL));
+    TEST_ASSERT_EQUAL_PTR(&giphy, p3a_source_get(P3A_SOURCE_GIPHY));
+    TEST_ASSERT_EQUAL_PTR(&pinned, p3a_source_get(6));
+    TEST_ASSERT_NULL(p3a_source_get(P3A_SOURCE_KLIPY));
+    TEST_ASSERT_NULL(p3a_source_get(0));
+    TEST_ASSERT_NULL(p3a_source_get(250));
+}
+
+static void test_local_files_are_pictures_by_their_extension(void)
+{
+    TEST_ASSERT_EQUAL(P3A_FORMAT_GIF, source_local_format_of("cat.gif"));
+    TEST_ASSERT_EQUAL(P3A_FORMAT_GIF, source_local_format_of("CAT.GIF"));
+    TEST_ASSERT_EQUAL(P3A_FORMAT_JPEG, source_local_format_of("a photo.JPeg"));
+    TEST_ASSERT_EQUAL(P3A_FORMAT_JPEG, source_local_format_of("x.jpg"));
+    TEST_ASSERT_EQUAL(P3A_FORMAT_PNG, source_local_format_of("anim.apng"));
+    TEST_ASSERT_EQUAL(P3A_FORMAT_WEBP, source_local_format_of("archive.tar.webp"));
+    TEST_ASSERT_EQUAL(P3A_FORMAT_BMP, source_local_format_of("b.bmp"));
+    const char *passed_over[] = {"notes.txt", "gif", ".gif", ".hidden.png", "._cat.gif", "cat.gif.tmp",
+                                 "cat.gif.bak", "cat.", "cat", "", "cat.gifx"};
+    for (size_t i = 0; i < sizeof(passed_over) / sizeof(passed_over[0]); i++) {
+        TEST_ASSERT_EQUAL_MESSAGE(P3A_FORMAT_UNKNOWN, source_local_format_of(passed_over[i]), passed_over[i]);
+    }
+    TEST_ASSERT_EQUAL(P3A_FORMAT_UNKNOWN, source_local_format_of(NULL));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
+    RUN_TEST(test_a_record_in_place_is_available_without_a_blob);
+    RUN_TEST(test_sources_register_once_and_unknown_ones_are_absent);
+    RUN_TEST(test_local_files_are_pictures_by_their_extension);
     RUN_TEST(test_the_layout_is_the_one_on_disk);
     RUN_TEST(test_each_source_makes_a_record_that_passes_its_own_check);
     RUN_TEST(test_an_identifier_that_does_not_fit_is_refused_not_cut);

@@ -1,6 +1,6 @@
 # Which layer each p3a 2.0 component belongs to. Checked by tools/check_tree.py.
 #
-# Layers, bottom to top: util board storage sources library player ui net
+# Layers, bottom to top: util board storage library sources player ui net
 # (main is implicit, on top). A component may require components in its own
 # layer or below, never above, and never main.
 #
@@ -17,6 +17,7 @@ slave_ota      board
 p3a_storage    storage
 p3a_settings   storage
 p3a_library    library
+source_local   sources
 animation_decoder player
 display_renderer player
 animation_player player

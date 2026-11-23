@@ -151,8 +151,9 @@ p3a_host_test(test_player_fit
 # --- library ----------------------------------------------------------------
 set(LIBRARY "${P3A_COMPONENTS}/p3a_library")
 p3a_host_test(test_record_index
-    SOURCES library/test_record_index.c ${LIBRARY}/p3a_record.c ${LIBRARY}/p3a_index.c ${UTIL}/p3a_err.c
-    INCLUDES ${LIBRARY}/include ${P3A_STUBS} ${UTIL}/include)
+    SOURCES library/test_record_index.c ${LIBRARY}/p3a_record.c ${LIBRARY}/p3a_index.c ${LIBRARY}/p3a_source.c
+            ${P3A_COMPONENTS}/source_local/source_local_names.c ${UTIL}/p3a_err.c
+    INCLUDES ${LIBRARY}/include ${P3A_COMPONENTS}/source_local/include ${P3A_STUBS} ${UTIL}/include)
 
 # --- scheduler --------------------------------------------------------------
 set(SCHEDULER "${P3A_COMPONENTS}/play_scheduler")

@@ -49,6 +49,8 @@ typedef enum {
 // Flags, written to disk.
 #define P3A_RECORD_UNRESOLVED 0x01  // the source has not yet said where the bytes are (museum renditions)
 #define P3A_RECORD_GONE       0x02  // the source says it no longer exists; kept so that it is not listed again
+#define P3A_RECORD_IN_PLACE   0x04  // the bytes are where the source keeps them (a user's own file), not in the blob store
+#define P3A_RECORD_FLAGS_KNOWN 0x07
 
 // Sizes of the identifiers, terminator included.
 #define P3A_RECORD_GIPHY_ID_LEN  32

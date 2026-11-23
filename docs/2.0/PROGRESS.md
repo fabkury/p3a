@@ -10,7 +10,7 @@ times.
 |---|---|
 | Phase | 2, player and library (Phases 0 and 1 complete) |
 | Current milestone | M2.1 display pipeline and decoders |
-| Next action | M2.3 part 3: sources and the scheduler proper. Define `source_ops_t` and its registry (keyed by `playset_source_t`), then the local source: scan `animations/` into a `p3a_index_t` of local records (files stay where they are; available means the file exists), saved as a rebuildable index named by the channel id. Then the scheduler over `sched_core`, `p3a_index` and the active playset: load the playset's channels (at most 16 indices resident), pick a record, hand its path to `animation_player`, undo the turn on `failed`, and keep a history for back. Read `legacy/components/play_scheduler/play_scheduler.c`, `play_scheduler_navigation.c` and `sdcard_channel` for what history and navigation did. Then `player_commands` and the routes (playsets, actions, upload; audit M7) with device tests |
+| Next action | M2.3 part 4: the scheduler proper, in `components/play_scheduler`. Over `sched_core`, `p3a_index`, `p3a_source_get()` and the active playset: load the playset's channels (list each through its source's `refresh` in a job; at most 16 indices resident), pick a record, find its bytes (the source's `path` for records in place, else `p3a_blob_path`), hand them to `animation_player` with the source's `smooth`, undo the turn on `failed`, and keep a history for back. Read `legacy/components/play_scheduler/play_scheduler.c` and `play_scheduler_navigation.c` for what history and navigation did. Keep the decisions pure where possible (a host-tested history ring). The dwell timer, failure routing and pause are M2.4; here a test hook or command asks for next and back. Then `player_commands` and the routes (playsets, actions, upload; audit M7) with device tests |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -43,7 +43,7 @@ reopened (why).
 | M1.5 net base | done 2026-11-18. Tiers: host tests (12 programs, under ASan and UBSan too), tool self-tests, device tests (119 cases, on the real Wi-Fi), release and test builds, the configuration guard. Awaiting manual check M1.5-a (the portal from a phone). The Wi-Fi recovery ladders are carried over untested |
 | M2.1 Display pipeline and decoders | done 2026-11-19; manual check M2.1-a cleared 2026-11-23. Tiers: host tests (15 programs), the whole device suite (235 cases on the test build; 6 timing cases on the trace-test build), release, test, trace and trace-test builds, the configuration guard. Timing has a baseline of minutes only; the jitter pass bar waits for the soak (M6.1) |
 | M2.2 Library core | done 2026-11-19. Tiers: host tests (15 programs), the whole device suite (240 cases), release, test and trace builds, the configuration guard. The `refs` table of the plan was not built (D48) |
-| M2.3 Source interface, local source, scheduler | in progress. Done: the scheduler's arithmetic (`sched_core`), and playsets (format, JSON, channel id, the store on the card). Not started: sources, the scheduler proper, commands, routes |
+| M2.3 Source interface, local source, scheduler | in progress. Done: the scheduler's arithmetic (`sched_core`), playsets, the source interface and the local source. Not started: the scheduler proper, commands, routes |
 | M2.4 Loader pipeline, C and D | not started |
 | M3.1 Screen model and hook table | not started |
 | M3.2 Text and fonts | not started |
@@ -137,6 +137,7 @@ and proposals are in [DECISIONS.md](DECISIONS.md) under "Open decisions".
 | Id | Question | Needed before |
 |---|---|---|
 | Q1 to Q10 | Ten 1.x behaviours that look accidental (brightness not restored at boot, API keys readable over the LAN, no update check for 12 hours, and others). Keep or change each? Listed in [PARITY.md](PARITY.md) under "Behaviours to decide" | M1.3 at the earliest; each row names its milestone |
+| O18 | Should the user's own files be scaled smoothly or with sharp pixels? 1.x used sharp pixels for everything on the card, which suits pixel art and makes photographs blocky. Options: keep sharp; go smooth; or decide per file (smooth for JPEG, sharp for the rest) | M2.4 |
 | O2 | Should 1.2.5 carry a notice about 2.0, and with what wording? | 1.2.5 |
 | O4 | Which VEXED font families and sizes? | M3.2 |
 | O3 | Keep uGFX for text, or replace it with a glyph-sheet renderer? | M3.2 |
@@ -304,6 +305,45 @@ M1.1, 2026-11-17:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-23: M2.3 part 3, the source interface and the local source
+
+- **The layer order changed: `library` is now below `sources`** (D51). The
+  review's diagram had sources underneath, yet a source has to produce
+  records and fill an index, which are the library's. So the library
+  defines the interface (`p3a_source.h`: a table of functions and a
+  registry) and the sources sit above it, implement the table and register
+  at boot. The library's later managers (downloads, refresh) call through
+  the registry and still never include a source. `tools/check_tree.py`,
+  `LAYERS.txt`, `AGENTS.md` and `PLAN.md` say the new order.
+- `p3a_source_ops_t` has what is needed so far: `refresh` (list a channel
+  into an index), `path` (for records whose bytes are not blobs), the
+  refresh interval, and the scaling policy. `url` and the rest arrive with
+  the first remote source (M4.2).
+- New record flag `P3A_RECORD_IN_PLACE`: the bytes are where the source
+  keeps them. Such a record is available without a blob.
+- New component `components/source_local` (layer `sources`): lists the
+  user's `animations/` folder, newest first, files left where they are
+  (working decision from M2.2, now D52). Files are chosen by extension;
+  hidden files and macOS "._" companions are passed over. A picture whose
+  name is over 119 characters, or beyond the index's capacity, is counted
+  and left out with one warning, never cut. Registered at boot.
+- Found by its test: a long-named file in a full index was counted as
+  "over capacity" instead of "name too long". Fixed.
+- The local source scales with sharp pixels, as 1.x did for the card's
+  files. A user's photographs would look better smooth; left for Fab to
+  decide (O18).
+- The device test removed the two 1.2.5 check pictures from the card's
+  `animations/` folder; copies remain on the workstation.
+- Verified, host tests (17 programs, also under the sanitizers in WSL; 3
+  new cases): the registry, records in place, which file names are
+  pictures.
+- Verified, device tests (smoke and library: 12 cases): the folder listed
+  through the registered table with pictures, a text file, a hidden file
+  and an over-long name; every listed file available and found at its
+  path; an index smaller than the folder.
+- Not verified: a folder of thousands of files (scan time unknown); file
+  names with characters outside ASCII.
 
 ### 2026-11-23: M2.3 part 2, playsets
 

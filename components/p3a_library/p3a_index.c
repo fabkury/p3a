@@ -89,7 +89,8 @@ void p3a_index_clear(p3a_index_t *index)
 
 static bool playable_now(const p3a_record_t *record)
 {
-    return p3a_record_has_blob(record) && (record->flags & P3A_RECORD_GONE) == 0;
+    return (p3a_record_has_blob(record) || (record->flags & P3A_RECORD_IN_PLACE) != 0) &&
+           (record->flags & P3A_RECORD_GONE) == 0;
 }
 
 esp_err_t p3a_index_set_records(p3a_index_t *index, const p3a_record_t *records, uint32_t count)

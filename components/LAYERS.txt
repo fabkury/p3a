@@ -17,6 +17,7 @@ slave_ota      board
 p3a_storage    storage
 p3a_settings   storage
 p3a_library    library
+p3a_fetch      library
 source_local   sources
 animation_decoder player
 display_renderer player

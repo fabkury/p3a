@@ -47,6 +47,12 @@ esp_err_t p3a_blob_path(const uint8_t ref[P3A_RECORD_BLOB_REF_LEN], p3a_format_t
 // On failure the file is left where it was.
 esp_err_t p3a_blob_adopt(const char *path, p3a_format_t format, uint8_t ref[P3A_RECORD_BLOB_REF_LEN], bool *already);
 
+// The same for a file whose SHA-256 the caller already has (a download
+// hashed as it was written: http_fetch's hash_file): the file is not read
+// again.
+esp_err_t p3a_blob_adopt_hashed(const char *path, p3a_format_t format, const uint8_t sha256[32],
+                                uint8_t ref[P3A_RECORD_BLOB_REF_LEN], bool *already);
+
 // Whether the store holds this blob now. One stat(); for picking artworks
 // use an index's availability bits, which cost nothing.
 bool p3a_blob_exists(const uint8_t ref[P3A_RECORD_BLOB_REF_LEN], p3a_format_t format);

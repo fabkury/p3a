@@ -106,6 +106,9 @@ static esp_err_t hash_file(const char *path, uint8_t sha[32], size_t *size_out)
     return err;
 }
 
+static esp_err_t place(const char *path, p3a_format_t format, const uint8_t sha[32],
+                       uint8_t ref[P3A_RECORD_BLOB_REF_LEN], bool *already);
+
 esp_err_t p3a_blob_adopt(const char *path, p3a_format_t format, uint8_t ref[P3A_RECORD_BLOB_REF_LEN], bool *already)
 {
     if (already) {
@@ -123,6 +126,33 @@ esp_err_t p3a_blob_adopt(const char *path, p3a_format_t format, uint8_t ref[P3A_
     if (size == 0) {
         return P3A_ERR_CORRUPT;  // a download that never arrived
     }
+    return place(path, format, sha, ref, already);
+}
+
+esp_err_t p3a_blob_adopt_hashed(const char *path, p3a_format_t format, const uint8_t sha256[32],
+                                uint8_t ref[P3A_RECORD_BLOB_REF_LEN], bool *already)
+{
+    if (already) {
+        *already = false;
+    }
+    if (path == NULL || ref == NULL || sha256 == NULL || p3a_blob_extension(format) == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    struct stat st;
+    if (stat(path, &st) != 0) {
+        return P3A_ERR_MISSING;
+    }
+    if (st.st_size == 0) {
+        return P3A_ERR_CORRUPT;
+    }
+    return place(path, format, sha256, ref, already);
+}
+
+// Names the file after its hash and moves it into the store.
+static esp_err_t place(const char *path, p3a_format_t format, const uint8_t sha[32],
+                       uint8_t ref[P3A_RECORD_BLOB_REF_LEN], bool *already)
+{
+    esp_err_t err;
     memcpy(ref, sha, P3A_RECORD_BLOB_REF_LEN);
     if (is_zero_ref(ref)) {
         ref[P3A_RECORD_BLOB_REF_LEN - 1] = 1;  // all zero means "no blob"; one chance in 2^128

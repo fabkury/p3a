@@ -6,14 +6,15 @@
  * @brief Shared HTTP fetch/download helper.
  *
  * Every HTTPS request the firmware makes goes through here, with two
- * exceptions by design: the firmware image download (esp_https_ota in
- * components/ota_manager) and the persistent Makapix MQTT link (esp-mqtt).
- * Callers today: the Giphy and Klipy API and download paths, all museums
- * (art_institution), Makapix (artwork downloads, the promoted-artworks HTTPS
- * walk, provisioning, certificate renewal), show_url, and the OTA metadata
- * paths (GitHub release list, .sha256, manifest.json, web UI image). Adding
- * a fetcher means calling one of the two entry points below, not
- * hand-rolling esp_http_client.
+ * exceptions by design: the firmware image download (esp_https_ota) and the
+ * persistent Makapix MQTT link (esp-mqtt). Adding a fetcher means calling
+ * one of the two entry points below, not hand-rolling esp_http_client.
+ *
+ * In 2.0 this is the component p3a_fetch, in the library layer: below the
+ * sources, which list their channels through it, and below the content
+ * task, which downloads through it. It does not ask whether the network is
+ * up (the network is above it): callers start work on P3A_EVENT_NET_UP and
+ * a request made without a network simply fails.
  *
  * What the one core owns: client config + cert bundle, optional POST body,
  * status classification, a unified retry / truncated-read / Retry-After
@@ -79,6 +80,8 @@ typedef struct {
     bool     buffer_full;       ///< fetch_to_buffer hit buf_size-1 (response too big)
     bool     aborted;           ///< should_abort fired
     uint32_t retry_after_sec;   ///< parsed Retry-After on 429 (0 if absent/non-numeric)
+    bool     has_sha256;        ///< sha256 below is the delivered file's (hash_file, file sink, success)
+    uint8_t  sha256[32];
 } http_fetch_result_t;
 
 /** Return true to abort the transfer. Checked once per chunk. */
@@ -88,7 +91,7 @@ typedef bool (*http_fetch_should_abort_cb)(void *ctx);
  *  sinks (caller does its own throttling). content_length is 0 if unknown. */
 typedef void (*http_fetch_progress_cb)(size_t total, size_t content_length, void *ctx);
 
-/** Called once on HTTP 429 before returning ESP_ERR_INVALID_RESPONSE. */
+/** Called once on HTTP 429 before returning P3A_ERR_RATE_LIMITED. */
 typedef void (*http_fetch_rate_limited_cb)(uint32_t retry_after_sec, void *ctx);
 
 /**
@@ -137,6 +140,8 @@ typedef struct {
     // --- file sink only ---
     size_t                     chunk_size;      ///< 0 -> 32768
     bool                       leave_temp;      ///< write to out_path directly, fsync+close, NO rename
+    bool                       hash_file;       ///< compute the file's SHA-256 as it is written (needs a result);
+                                               ///< p3a_blob_adopt_hashed() then takes the file without reading it again
 
     // --- callbacks (all receive user_ctx) ---
     http_fetch_should_abort_cb should_abort;
@@ -157,10 +162,12 @@ typedef struct {
  * @param buf_size  size of @p buf in bytes (must be > 0)
  * @param out_len   optional; receives payload byte count (excludes NUL)
  * @param result    optional; receives outcome detail
- * @return ESP_OK, or ESP_ERR_NOT_FOUND / ESP_ERR_INVALID_RESPONSE (429) /
- *         ESP_ERR_NOT_ALLOWED (401/403) / ESP_ERR_INVALID_SIZE /
+ * @return ESP_OK, or P3A_ERR_MISSING (404) / P3A_ERR_RATE_LIMITED (429) /
+ *         P3A_ERR_AUTH (401/403) / ESP_ERR_INVALID_SIZE /
  *         ESP_ERR_INVALID_STATE (aborted) / ESP_ERR_TIMEOUT (sdio) /
- *         ESP_ERR_INVALID_ARG / ESP_FAIL.
+ *         ESP_ERR_INVALID_ARG / ESP_FAIL. The file variant also answers
+ *         P3A_ERR_SD_FAILED without trying when the card has failed or is
+ *         shared with a computer.
  */
 esp_err_t http_fetch_to_buffer(const http_fetch_request_t *req,
                                char *buf, size_t buf_size,

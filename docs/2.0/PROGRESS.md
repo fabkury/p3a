@@ -10,7 +10,7 @@ times.
 |---|---|
 | Phase | 4, remote sources (Phases 0 to 3 complete but for their manual checks) |
 | Current milestone | M4.1 fetch, download, refresh, eviction |
-| Next action | M4.1. Read PLAN.md M4.1 and O9, `docs/2.0-architecture-review/content-pipeline.md` sections 1 and 3, and in `legacy/components`: `http_fetch` (with its TLS gate), `storage_eviction`, and the download and refresh parts of `channel_manager` and `play_scheduler_refresh.c`. Build: `http_fetch` moved under a new `net`-or-below home that sources may use (the layer order has sources below net: decide where fetching lives), hashing into the blob store as bytes arrive, one download task and one refresh task with `refresh_state_t` (pure, host-tested), back-off on `p3a_mem_level()` and a full card, eviction told about pins by data. Device tests arrive with the first source (M4.2) |
+| Next action | M4.1 part 2: the content task. One long-lived task (class `NETWORK`) beside the scheduler that lists due channels through `ops->refresh` and downloads wanted artworks through `http_fetch` (with `hash_file`) and `p3a_blob_adopt_hashed()`, one transfer at a time (D63). Needed first: `url` in `p3a_source_ops_t`; a pure merge of a fresh listing into a kept index (blob references, sizes and fail counters carried over by identity) in `p3a_library`, host-tested; index files per channel saved after a refresh and loaded at activation, so a known channel plays at boot without the network; a pure refresh schedule (`sched_refresh.c`: due, running, backing off, and why) with back-off on `RATE_LIMITED`, `AUTH`, `NO_KEY`, no network, `p3a_mem_level()` and a full card. Then eviction (`legacy/components/storage_eviction` over `blobs/`). Device tests need a source: a test-only one registered by the hooks, serving a listing the test sets, is the way to test before Giphy (M4.2) |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -51,7 +51,7 @@ reopened (why).
 | M3.4 Touch router and gestures | built 2026-11-23; open for manual check M3.4-a (real fingers), swipe actions (Phase 4) and the SD-format taps (M3.3). Tiers: host tests (26 programs, under the sanitizers too), device tests with scripted fingers (71 cases with the areas around it) |
 | M3.5 Overlays | done 2026-11-23 except source branding, which moves to M4.2 where its sources and their terms are (O6). Tiers: host tests (29 programs, under the sanitizers too), device tests (the overlays equal the workstation's rendering). Manual check M3.5-a pending |
 | M3.6 USB mass storage | built 2026-11-23; open for manual check M3.6-a (a real computer). Tiers: host tests (30 programs, under the sanitizers too), device tests with the bus's reports injected (with it every test not marked slow passes: 267 cases), release, test and trace builds, the configuration guard, a from-scratch configure in the CI container |
-| M4.1 Fetch, download, refresh, eviction | not started |
+| M4.1 Fetch, download, refresh, eviction | in progress: the fetcher is in (2026-11-23). The content task, index merge and files, the refresh schedule and eviction are to do |
 | M4.2 Giphy and Klipy | not started |
 | M4.3 Museums | not started |
 | M4.4 Pinned lists and "show this" | not started |
@@ -361,10 +361,44 @@ M3.6, 2026-11-23:
   `components/p3a_usb/p3a_usb.c` and `usb_session.c`. The PICO-8 stream
   and touch report parts are gone with PICO-8.
 
+M4.1, 2026-11-23:
+
+- `components/http_fetch/CMakeLists.txt`: the component is now
+  `components/p3a_fetch` with its own.
+
 ## Session log
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-23: M4.1 part 1, the fetcher
+
+- `legacy/components/http_fetch` moved to `components/p3a_fetch` (layer
+  `library`: below the sources, which list through it). It was already
+  the one HTTP client of 1.x, with the retry policy, redirects,
+  `Retry-After` and the cap on concurrent TLS sessions; none of that
+  changed.
+- Its answers now use `p3a_err.h`: `MISSING` for 404, `RATE_LIMITED` for
+  429, `AUTH` for 401 and 403, and `SD_FAILED` without trying when the
+  card has failed or is shared over USB.
+- **A download is hashed as it is written** (`hash_file`), and
+  `p3a_blob_adopt_hashed()` takes such a file into the blob store without
+  reading it again.
+- It does not ask whether the network is up: the network is above it.
+  Callers start on `P3A_EVENT_NET_UP`; a request with no network fails.
+- D63: listing and downloading will be one task doing one transfer at a
+  time, beside the scheduler (which owns the indices), not two tasks in
+  the library layer as the design drew it.
+- Verified, device tests against real servers (3 new cases in
+  `test_fetch.py`): a page into memory; a file onto the card whose hash
+  made on the way equals the one computed on the workstation, taken into
+  the blob store under that name, and not stored twice; a 404 final after
+  one attempt; an unreachable host tried three times; nothing left in the
+  store after a failed download. With the smoke and library tests: 15
+  cases.
+- Not verified: `RATE_LIMITED` and `AUTH` answers against a server (they
+  come with Giphy's tests, M4.2); redirects followed by hand; a download
+  cut off half way; behaviour under low internal memory.
 
 ### 2026-11-23: M3.6, the SD card as a USB drive. Phase 3 built
 

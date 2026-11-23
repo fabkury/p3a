@@ -178,6 +178,10 @@ All in `components/p3a_util`; each header explains itself at the top.
   `p3a_http_fail` and never writes an envelope, a status line or a header
   for them by hand. Everything is under `/api/v2/`. Anything slower than a
   few milliseconds is a job answered with 202.
+- **HTTP requests go through `http_fetch`** (`components/p3a_fetch`), into
+  memory or onto the card. Nothing else opens an HTTP client, apart from
+  the firmware update. Its answers are `p3a_err.h`'s: act on `MISSING`,
+  `RATE_LIMITED` and `AUTH`, never on a status number.
 - **Test hooks** live only in `components/p3a_test_hooks`, one command file
   per area, every symbol prefixed `p3a_test_`.
 - **Managed components** are declared in the `idf_component.yml` of the

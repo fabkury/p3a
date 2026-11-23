@@ -39,6 +39,9 @@
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 
+#include "mbedtls/sha256.h"
+#include "p3a_err.h"
+#include "p3a_storage.h"
 #include "sdio_bus.h"
 #include "fs_atomic.h"   // atomic tmp->final finalize (reports to sd_health)
 #include "sd_health.h"
@@ -201,6 +204,7 @@ typedef struct {
     FILE   *f;
     uint8_t *chunk;
     size_t  chunk_size;
+    mbedtls_sha256_context *sha;  // NULL unless the caller asked for the file's hash
     // output
     size_t  bytes;   // bytes delivered in the current attempt
 } fetch_sink_t;
@@ -218,6 +222,12 @@ typedef enum {
 static bool sink_reset(fetch_sink_t *s)
 {
     s->bytes = 0;
+    if (s->sha) {
+        // A retry or a redirect starts the body over: so does its hash.
+        mbedtls_sha256_free(s->sha);
+        mbedtls_sha256_init(s->sha);
+        mbedtls_sha256_starts(s->sha, 0);
+    }
     if (s->kind == SINK_FILE && s->f) {
         rewind(s->f);
         if (ftruncate(fileno(s->f), 0) != 0) {
@@ -289,6 +299,9 @@ static body_status_t read_into_file(fetch_sink_t *s, esp_http_client_handle_t cl
             return BODY_WRITE_ERR;
         }
         s->bytes += written;
+        if (s->sha) {
+            mbedtls_sha256_update(s->sha, s->chunk, chunk_received);
+        }
 
         if (max_size > 0 && (int64_t)s->bytes > max_size) return BODY_TOO_LARGE;
 
@@ -430,7 +443,7 @@ static esp_err_t do_fetch(const http_fetch_request_t *req, fetch_sink_t *sink,
             if (last_status == 404) {
                 esp_http_client_close(client);
                 esp_http_client_cleanup(client);
-                fatal = ESP_ERR_NOT_FOUND;
+                fatal = P3A_ERR_MISSING;
                 break;
             }
             if (last_status == 429) {
@@ -441,13 +454,13 @@ static esp_err_t do_fetch(const http_fetch_request_t *req, fetch_sink_t *sink,
                 if (req->on_rate_limited) req->on_rate_limited(retry_after, req->user_ctx);
                 esp_http_client_close(client);
                 esp_http_client_cleanup(client);
-                fatal = ESP_ERR_INVALID_RESPONSE;
+                fatal = P3A_ERR_RATE_LIMITED;
                 break;
             }
             if (last_status == 401 || last_status == 403) {
                 esp_http_client_close(client);
                 esp_http_client_cleanup(client);
-                fatal = ESP_ERR_NOT_ALLOWED;
+                fatal = P3A_ERR_AUTH;
                 break;
             }
             if (manual_redirect && last_status >= 300 && last_status < 400) {
@@ -476,7 +489,7 @@ static esp_err_t do_fetch(const http_fetch_request_t *req, fetch_sink_t *sink,
                 ESP_LOGW(TAG, "Empty body (200, Content-Length: 0): %s", cur_url);
                 esp_http_client_close(client);
                 esp_http_client_cleanup(client);
-                fatal = ESP_ERR_NOT_FOUND;
+                fatal = P3A_ERR_MISSING;
                 break;
             }
             if (max_size > 0 && content_length > max_size) {
@@ -620,6 +633,8 @@ esp_err_t http_fetch_to_file(const http_fetch_request_t *req,
 {
     if (result) memset(result, 0, sizeof(*result));
     if (!req || !req->url || !out_path || out_path[0] == '\0') return ESP_ERR_INVALID_ARG;
+    // No download onto a card that has failed or that a computer has.
+    if (sd_health_is_failed() || p3a_storage_is_handed_over()) return P3A_ERR_SD_FAILED;
 
     const size_t chunk_size = req->chunk_size ? req->chunk_size : HTTP_FETCH_DEFAULT_CHUNK;
 
@@ -670,13 +685,27 @@ esp_err_t http_fetch_to_file(const http_fetch_request_t *req,
         return ESP_FAIL;
     }
 
+    mbedtls_sha256_context sha;
+    const bool hashing = req->hash_file && result != NULL;
+    if (hashing) {
+        mbedtls_sha256_init(&sha);
+        mbedtls_sha256_starts(&sha, 0);
+    }
     fetch_sink_t sink = {
         .kind = SINK_FILE,
         .f = f,
         .chunk = chunk,
         .chunk_size = chunk_size,
+        .sha = hashing ? &sha : NULL,
     };
     esp_err_t err = do_fetch(req, &sink, result);
+    if (hashing) {
+        if (err == ESP_OK) {
+            mbedtls_sha256_finish(&sha, result->sha256);
+            result->has_sha256 = true;
+        }
+        mbedtls_sha256_free(&sha);
+    }
 
     fflush(f);
     fsync(fileno(f));

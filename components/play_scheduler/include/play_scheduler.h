@@ -7,10 +7,15 @@
 //                           "failed": the turn is taken back
 //   back                ->  the artwork shown before, from the history
 //
+//   the dwell timer     ->  next, by itself, every `dwell_s` seconds
+//
 // It names no source: every channel goes through the table its source
-// registered (p3a_source.h). When to move on (the dwell timer), what to do
-// about a failure beyond taking the turn back, and pause are the loader
-// pipeline's (M2.4); here "next" and "back" happen when someone asks.
+// registered (p3a_source.h).
+//
+// A turn that fails is handled by who asked for it (sched_turn.h): the
+// device's own turns and "next" try another artwork a few times; a request
+// for one artwork does not. What a person asked for and did not get is
+// kept as `problem` in the status until something is shown.
 #pragma once
 
 #include <stdbool.h>
@@ -37,16 +42,34 @@ esp_err_t play_scheduler_start(void);
 esp_err_t play_scheduler_activate(const playset_t *playset);
 
 // Plays the next artwork: forward in the history if "back" was used, else a
-// new pick. ESP_ERR_NOT_FOUND when no channel has anything playable.
+// new pick. ESP_ERR_NOT_FOUND when no channel has anything playable,
+// ESP_ERR_INVALID_STATE while paused.
 esp_err_t play_scheduler_next(void);
 
 // Plays the artwork shown before the current one. ESP_ERR_NOT_FOUND at the
-// far end of the history.
+// far end of the history, ESP_ERR_INVALID_STATE while paused.
 esp_err_t play_scheduler_back(void);
+
+// Plays this artwork now, whatever the playset says, and then carries on
+// with the playset. It enters the history when shown. ESP_ERR_INVALID_ARG
+// for a record that fails its check, ESP_ERR_INVALID_STATE while paused.
+esp_err_t play_scheduler_show(const p3a_record_t *record);
+
+// Pause: the panel goes black and its backlight off, and the device stops
+// moving on. Resuming gives the artwork a full dwell. Not kept across a
+// restart. Next, back and show are refused meanwhile.
+esp_err_t play_scheduler_set_paused(bool paused);
+bool play_scheduler_is_paused(void);
 
 // Lists a source's channels of the active playset again, in the background:
 // for when something says they changed (an upload, a USB session).
 esp_err_t play_scheduler_refresh_source(uint8_t source);
+
+// A screen is up over the artwork (or a test wants the device to stay
+// put): it does not move on by itself until every hold is released, and
+// then gives the artwork a full dwell. Next, back and show still work.
+void play_scheduler_hold(void);
+void play_scheduler_release(void);
 
 typedef enum {
     PLAY_CHANNEL_WAITING = 0,  // not listed yet
@@ -76,6 +99,10 @@ typedef struct {
     uint32_t history_count, history_position;
     uint32_t picks, shown, failed;  // since boot
     esp_err_t last_error;   // of the last failed request
+    bool paused;
+    int32_t advance_in_s;   // seconds until it moves on by itself; -1 when it will not
+    esp_err_t problem;      // why the last thing a person asked for was not shown; ESP_OK when it was
+    uint32_t problems;      // how many such, since boot
 } play_scheduler_status_t;  // about 2 KB: allocate it
 
 void play_scheduler_get_status(play_scheduler_status_t *out);

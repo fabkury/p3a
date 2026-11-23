@@ -6,7 +6,9 @@ idf_component_register(
          "playset_store.c"
          "sched_core.c"
          "sched_history.c"
+         "sched_pick.c"
+         "sched_turn.c"
     INCLUDE_DIRS "include"
     REQUIRES animation_player json p3a_library
-    PRIV_REQUIRES esp_hw_support p3a_settings p3a_storage p3a_util
+    PRIV_REQUIRES display_renderer esp_hw_support esp_timer p3a_board p3a_settings p3a_storage p3a_util
 )

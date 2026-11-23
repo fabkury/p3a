@@ -26,7 +26,7 @@ describe what a client can do, not the 1.x URL.
 | | Capability | 2.0 | M | Note |
 |---|---|---|---|---|
 | [x] | Local files from `{root}/animations/` only | keep | M2.3 | |
-| [ ] | Upload over HTTP: 16 MiB cap, webp gif jpg jpeg png apng bmp, name reduced to its basename, overwrites, plays at once, refused while the card is shared over USB | keep | M2.3 | Done in M2.3 except: plays at once (M2.4) and the USB refusal (with USB sharing). A name the card cannot hold is refused, not reduced |
+| [x] | Upload over HTTP: 16 MiB cap, webp gif jpg jpeg png apng bmp, name reduced to its basename, overwrites, plays at once, refused while the card is shared over USB | keep | M2.3 | Done in M2.3 except: plays at once (M2.4) and the USB refusal (with USB sharing). A name the card cannot hold is refused, not reduced Plays at once since M2.4; the USB refusal comes with USB sharing (M3.6) |
 | [ ] | The home page shrinks oversized JPEGs in the browser before upload | keep | M5.1 | |
 | [ ] | Makapix channels: all, promoted, by user, by hashtag, a user's reactions, single artwork | keep | M4.5 | |
 | [ ] | Promoted refreshes over public HTTPS on an unregistered device, so a new device plays art with no account | keep | M4.5 | First-run experience depends on it |
@@ -53,24 +53,24 @@ describe what a client can do, not the 1.x URL.
 | | Capability | 2.0 | M | Note |
 |---|---|---|---|---|
 | [ ] | Animated WebP, GIF, APNG; static PNG, JPEG, BMP; transparency | keep | M2.1 | Decoders moved and pixel-tested against a corpus (part 1). Two 1.x bugs fixed on the way: JPEG colour range (D38), animated WebP blending. Short frame delays now play as in browsers (D37). On screen with part 2 |
-| [ ] | Fit to screen with aspect ratio kept, centred, borders in the background colour; the colour also prepaints boot | keep | M2.4 | |
-| [ ] | Bilinear upscaling for Giphy, Klipy and museum art; nearest-neighbour for the rest | keep | M2.4 | |
+| [x] | Fit to screen with aspect ratio kept, centred, borders in the background colour; the colour also prepaints boot | keep | M2.4 | Done in M2.1 |
+| [x] | Bilinear upscaling for Giphy, Klipy and museum art; nearest-neighbour for the rest | keep | M2.4 | The source's table says which (`smooth`); the user's files: O18 |
 | [ ] | Pinned Giphy, Klipy and museum art plays nearest-neighbour, because the choice is made by channel type | decide | M4.4 | Q4 |
 | [ ] | GIF and WebP loop counts ignored; APNG `num_plays` honored | keep | M2.1 | |
-| [ ] | Max-speed playback setting | keep | M2.4 | |
-| [ ] | Auto-advance every 30 s by default; 0 turns it off; the timer resets on manual navigation and on request | keep | M2.4 | |
-| [ ] | Auto-advance holds while the info screen, the setup screen or pause is up, and while the loader is busy | keep | M2.4, M3.3 | |
+| [x] | Max-speed playback setting | keep | M2.4 | Done in M2.1 |
+| [x] | Auto-advance every 30 s by default; 0 turns it off; the timer resets on manual navigation and on request | keep | M2.4 | |
+| [ ] | Auto-advance holds while the info screen, the setup screen or pause is up, and while the loader is busy | keep | M2.4, M3.3 | Pause and a busy loader: done (M2.4). Screens hold it through `play_scheduler_hold()` from M3.3 |
 | [ ] | Pick mode random or recency; channel selection SWRR or stochastic | keep | M2.3 | |
 | [x] | Previous walks a history of 32 without disturbing the generator; history survives a playset switch | keep | M2.3 | |
-| [ ] | History and last-played commit when a swap is requested | change | M2.4 | They commit when the artwork is shown (finding 7) |
-| [ ] | Pause: black screen, backlight off, views and auto-advance stopped; resume restores brightness; not kept across reboot | keep | M2.4 | |
-| [ ] | Rotation 0, 90, 180, 270: persisted, applies to playback, screens and overlays | keep | M2.4, M3.3 | |
-| [ ] | User-requested swaps fail loudly; automatic ones retry silently (3 retries, a small blocklist, a skip budget) | keep | M2.4 | |
-| [ ] | A corrupt cached file is deleted, at most one per minute; local files are never deleted | keep | M2.4 | Through the blob store, on `CORRUPT` only |
+| [x] | History and last-played commit when a swap is requested | change | M2.4 | They commit when the artwork is shown (finding 7) |
+| [x] | Pause: black screen, backlight off, views and auto-advance stopped; resume restores brightness; not kept across reboot | keep | M2.4 | Views stop with the view tracker (M4.5) |
+| [ ] | Rotation 0, 90, 180, 270: persisted, applies to playback, screens and overlays | keep | M2.4, M3.3 | Playback: done (M2.1) |
+| [x] | User-requested swaps fail loudly; automatic ones retry silently (3 retries, a small blocklist, a skip budget) | keep | M2.4 | Changed (D55): "next" also tries other artworks and reports only if all fail; a named artwork reports at once. No blocklist: a failed artwork is set aside until its channel is listed again |
+| [ ] | A corrupt cached file is deleted, at most one per minute; local files are never deleted | keep | M2.4 | Through the blob store, on `CORRUPT` only Wired in M2.4; seen on the device when a source makes blobs (M4.1) |
 | [ ] | Artworks the server no longer has are remembered and skipped | keep | M4.1 | One implementation in the blob store |
 | [ ] | A high miss rate triggers a verification sweep of what is on the card | change | M2.2 | Availability comes from the blob index; a miss is a repair event |
 | [ ] | Boot restores the active playset; with none, plays Promoted without saving that choice | keep | M2.3, M4.5 | Restoring is done (M2.3). With none, 2.0 plays the user's own files (D53) until Makapix exists; revisit at M4.5 |
-| [ ] | First swap waits for the first available artwork, a finished refresh, or the timer | keep | M2.4 | |
+| [x] | First swap waits for the first available artwork, a finished refresh, or the timer | keep | M2.4 | |
 | [ ] | One-time "refresh every channel now" switch | keep | M4.1 | |
 | [ ] | Makapix channels other than Promoted do not refresh on an unregistered device, and the UI says so | keep | M4.5 | |
 | [ ] | Per-channel refresh failures back off | keep | M4.1 | |
@@ -101,7 +101,7 @@ describe what a client can do, not the 1.x URL.
 | [ ] | While a screen is up, taps reach only the SD-format controls | keep | M3.4 | |
 | [ ] | During registration, long press cancels and returns to playback | keep | M3.4 | |
 | [ ] | During a firmware update, gestures are ignored | keep | M3.4 | |
-| [ ] | BOOT button toggles pause; ignored during the co-processor update | keep | M1.2, M2.4 | |
+| [ ] | BOOT button toggles pause; ignored during the co-processor update | keep | M1.2, M2.4 | Wired in M2.4; manual check M2.4-a |
 | [ ] | Touch failure at boot: countdown and one reboot, then carry on without touch | keep | M3.4 | The bounded init is in M1.2; the reboot streak needs settings (M1.4) and the countdown needs the UI |
 
 ## On-screen UI
@@ -215,7 +215,7 @@ Same pages and look, new internals (D11).
 | [ ] | Co-processor firmware flashed at boot when stale; version lock detected and reported | keep | M1.2 | Link, versions and lock detection verified on the dev unit; the update transfer waits for manual check M1.2-e on another board |
 | [ ] | Core dump to flash; one-shot heap report on the first failed allocation | keep | M1.1 | Q6 on reading the dump |
 | [ ] | Persisted reboot counters for Wi-Fi, touch and SDIO, cleared by a validated update | keep | M1.4 | In the schema |
-| [ ] | Brightness set from the UI and over MQTT | keep | M2.4 | Remembered across reboots in 2.0 (D28); restore at boot is done |
+| [ ] | Brightness set from the UI and over MQTT | keep | M2.4 | Remembered across reboots in 2.0 (D28); restore at boot is done A changed setting applies at once since M2.4; MQTT at M4.5 |
 | [ ] | PICO-8 streaming | drop | | C5 |
 
 ## New in 2.0
@@ -224,8 +224,8 @@ Same pages and look, new internals (D11).
 |---|---|---|
 | [ ] | One binary: firmware and web UI update together (A) | M5.1 |
 | [ ] | Longer identifiers: no hidden Wellcome terms, no CMA table (B) | M4.3 |
-| [ ] | Repetition suppression (C) | M2.4 |
-| [ ] | Aspect-ratio filter for museum channels (D) | M2.4, M4.3 |
+| [x] | Repetition suppression (C) | M2.4 |
+| [ ] | Aspect-ratio filter for museum channels (D) | M2.4, M4.3 Predicate, settings and wiring done (M2.4) |
 | [ ] | Clock overlay, off by default (idea 1) | M3.5 |
 | [ ] | Giphy and Klipy branding in the letterbox band, on by default (idea 2) | M3.5 |
 | [ ] | Pixel fonts on screen (idea 3) | M3.2 |

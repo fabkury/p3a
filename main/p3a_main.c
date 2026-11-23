@@ -47,6 +47,19 @@ static void boot_step(const char *what, esp_err_t err)
     }
 }
 
+static esp_err_t toggle_pause_job(void *arg)
+{
+    (void)arg;
+    return play_scheduler_set_paused(!play_scheduler_is_paused());
+}
+
+// On the timer task: hand the work to a job.
+static void on_boot_button(void *ctx)
+{
+    (void)ctx;
+    p3a_job_submit(P3A_JOBS_UI, "pause button", toggle_pause_job, NULL, NULL);
+}
+
 void app_main(void)
 {
     const esp_app_desc_t *app = esp_app_get_description();
@@ -104,6 +117,10 @@ void app_main(void)
     // the normal case; a missing image is not an error.
     esp_err_t c6 = slave_ota_check_and_update();
     boot_step("co-processor", c6 == ESP_ERR_NOT_FOUND ? ESP_OK : c6);
+
+    // The BOOT button pauses and resumes. Watched only from here on: a press
+    // during the co-processor update above does nothing.
+    boot_step("button", p3a_board_button_init(on_boot_button, NULL));
 
     // Starts joining Wi-Fi and returns; the rest is reported by events.
     boot_step("network", p3a_net_start());

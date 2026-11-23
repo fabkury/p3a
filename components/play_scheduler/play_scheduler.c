@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 // The scheduler. See play_scheduler.h.
 //
+// The decisions are pure code beside this file: which channel and which
+// artwork (sched_core.c, sched_pick.c), what a failure leads to and when
+// the device moves on by itself (sched_turn.c), "back" (sched_history.c).
+// This file is the wiring: the lock, the player, the timer, the indices.
+//
 // One recursive lock guards everything here. It is held for arithmetic and
 // for handing a request to the player, never across a listing (which reads
 // the card or the network): a listing fills an index of its own, and the
@@ -12,12 +17,16 @@
 #include <string.h>
 
 #include "animation_player.h"
+#include "display_renderer.h"
 #include "esp_log.h"
 #include "esp_random.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "p3a_blob.h"
+#include "p3a_board.h"
 #include "p3a_err.h"
+#include "p3a_event.h"
 #include "p3a_index.h"
 #include "p3a_job.h"
 #include "p3a_settings.h"
@@ -26,6 +35,8 @@
 #include "psram_alloc.h"
 #include "sched_core.h"
 #include "sched_history.h"
+#include "sched_pick.h"
+#include "sched_turn.h"
 
 static const char *TAG = "sched";
 
@@ -34,8 +45,11 @@ static const char *TAG = "sched";
 #define RESIDENT_MAX     16
 #define DEFAULT_CAPACITY 1024
 #define OUR_TOKENS       0x80000000u  // the scheduler's requests to the player carry this bit
+#define TICK_MS          250
 
-typedef enum { TURN_NEW, TURN_BACK, TURN_FORWARD } turn_kind_t;
+// What a request is for. NEW was picked from a channel; the others name one
+// artwork. NEW and SHOW enter the history when shown.
+typedef enum { TURN_NEW, TURN_BACK, TURN_FORWARD, TURN_SHOW } turn_kind_t;
 
 typedef struct {
     p3a_index_t index;
@@ -51,6 +65,12 @@ typedef struct {
     uint32_t generation;  // changes with every activation; a listing of an older one is dropped
     sched_core_t core;
     sched_history_t history;
+    sched_recent_t recent;
+    sched_turn_t turn;
+    bool paused;
+    bool advance_queued;     // the job that moves on is waiting to run
+    esp_err_t problem;       // why the last turn a person asked for showed nothing; ESP_OK once something is shown
+    uint32_t problems;
 
     // The request that is with the player, if any.
     uint32_t pending_token;
@@ -74,9 +94,15 @@ typedef struct {
 
 static state_t *s;  // in PSRAM: about 40 KB
 static SemaphoreHandle_t s_lock;
+static esp_timer_handle_t s_tick;
 
 #define LOCK()   xSemaphoreTakeRecursive(s_lock, portMAX_DELAY)
 #define UNLOCK() xSemaphoreGiveRecursive(s_lock)
+
+static int64_t now_ms(void)
+{
+    return esp_timer_get_time() / 1000;
+}
 
 // --- playing a record -----------------------------------------------------------
 
@@ -127,29 +153,94 @@ static void abandon_pending_pick(void)
     s->pending_token = 0;
 }
 
+// An artwork's name in the list of what was shown lately.
+static uint32_t recent_id(const p3a_record_t *record)
+{
+    return record->id32 * 2654435761u + record->source;
+}
+
+static bool describe_candidate(uint32_t ordinal, sched_candidate_t *out, void *ctx)
+{
+    const p3a_index_t *index = ctx;
+    const int32_t position = p3a_index_nth_available(index, ordinal);
+    if (position < 0) {
+        return false;
+    }
+    const p3a_record_t *record = p3a_index_at(index, (uint32_t)position);
+    out->id = recent_id(record);
+    out->width = record->width;
+    out->height = record->height;
+    return true;
+}
+
+// The limit on elongation for a channel, in tenths; 0 for none. Reads
+// s->settings, which the caller has just filled.
+static uint32_t aspect_limit(uint32_t channel)
+{
+    const p3a_source_ops_t *ops = p3a_source_get(s->playset.channels[channel].source);
+    return (ops != NULL && ops->filter_aspect && s->settings.aspect_filter) ? (uint32_t)s->settings.aspect_max_tenths : 0;
+}
+
+// Picks a channel and an artwork of it and hands it to the player, as part
+// of the turn under way. ESP_ERR_NOT_FOUND when nothing can be played.
+// Called with the lock held.
 static esp_err_t pick_new(void)
 {
     p3a_settings_get(&s->settings);
     const sched_select_mode_t select =
         s->settings.channel_select == P3A_CHANNEL_SELECT_SWRR ? SCHED_SELECT_SWRR : SCHED_SELECT_STOCHASTIC;
     const sched_pick_mode_t mode = s->settings.pick_mode == P3A_PICK_MODE_RECENCY ? SCHED_PICK_RECENCY : SCHED_PICK_RANDOM;
-    const uint32_t channel = sched_core_select(&s->core, select);
-    if (channel == SCHED_NONE) {
-        return ESP_ERR_NOT_FOUND;
+    // A channel whose every candidate the filter refused has had its turn,
+    // and the next channel is asked: so a channel of nothing but elongated
+    // artworks cannot stop the others.
+    for (uint32_t tries = 0; tries <= s->playset.count; tries++) {
+        const uint32_t channel = sched_core_select(&s->core, select);
+        if (channel == SCHED_NONE) {
+            return ESP_ERR_NOT_FOUND;
+        }
+        p3a_index_t *index = &s->channels[channel].index;
+        const uint32_t ordinal =
+            sched_pick_artwork(&s->core, channel, mode, &s->recent, aspect_limit(channel), describe_candidate, index);
+        if (ordinal == SCHED_NONE) {
+            continue;
+        }
+        const int32_t position = p3a_index_nth_available(index, ordinal);
+        if (position < 0) {
+            // The core's count and the index disagree; put them back in step.
+            sched_core_undo_select(&s->core);
+            sched_core_set_available(&s->core, channel, index->available_count);
+            return ESP_ERR_NOT_FOUND;
+        }
+        s->picks++;
+        const esp_err_t err = request(TURN_NEW, p3a_index_at(index, (uint32_t)position), channel);
+        if (err != ESP_OK) {
+            sched_core_undo_select(&s->core);
+        }
+        return err;
     }
-    const p3a_index_t *index = &s->channels[channel].index;
-    const uint32_t ordinal = sched_core_pick(&s->core, channel, mode);
-    const int32_t position = ordinal == SCHED_NONE ? -1 : p3a_index_nth_available(index, ordinal);
-    if (position < 0) {
-        // The core's count and the index disagree; put them back in step.
-        sched_core_undo_select(&s->core);
-        sched_core_set_available(&s->core, channel, index->available_count);
-        return ESP_ERR_NOT_FOUND;
-    }
-    s->picks++;
-    const esp_err_t err = request(TURN_NEW, p3a_index_at(index, (uint32_t)position), channel);
+    return ESP_ERR_NOT_FOUND;
+}
+
+// Starts a turn that picks something new. Called with the lock held.
+static esp_err_t begin_new(sched_turn_origin_t origin)
+{
+    abandon_pending_pick();
+    sched_turn_begin(&s->turn, origin);
+    const esp_err_t err = pick_new();
     if (err != ESP_OK) {
-        sched_core_undo_select(&s->core);
+        sched_turn_gave_up(&s->turn, now_ms());
+    }
+    return err;
+}
+
+// Starts a turn for one named artwork. Called with the lock held.
+static esp_err_t begin_this(turn_kind_t kind, const p3a_record_t *record)
+{
+    abandon_pending_pick();
+    sched_turn_begin(&s->turn, SCHED_TURN_THIS);
+    const esp_err_t err = request(kind, record, 0);
+    if (err != ESP_OK) {
+        sched_turn_gave_up(&s->turn, now_ms());
     }
     return err;
 }
@@ -160,9 +251,11 @@ esp_err_t play_scheduler_next(void)
         return ESP_ERR_INVALID_STATE;
     }
     LOCK();
-    abandon_pending_pick();
-    p3a_record_t record;
-    const esp_err_t err = sched_history_forward(&s->history, &record) ? request(TURN_FORWARD, &record, 0) : pick_new();
+    esp_err_t err = ESP_ERR_INVALID_STATE;
+    if (!s->paused) {
+        p3a_record_t record;
+        err = sched_history_forward(&s->history, &record) ? begin_this(TURN_FORWARD, &record) : begin_new(SCHED_TURN_ANY);
+    }
     UNLOCK();
     return err;
 }
@@ -174,32 +267,92 @@ esp_err_t play_scheduler_back(void)
     }
     LOCK();
     p3a_record_t record;
-    esp_err_t err = ESP_ERR_NOT_FOUND;
-    if (sched_history_back(&s->history, &record)) {
-        abandon_pending_pick();
-        err = request(TURN_BACK, &record, 0);
+    esp_err_t err = s->paused ? ESP_ERR_INVALID_STATE : ESP_ERR_NOT_FOUND;
+    if (!s->paused && sched_history_back(&s->history, &record)) {
+        err = begin_this(TURN_BACK, &record);
     }
+    UNLOCK();
+    return err;
+}
+
+esp_err_t play_scheduler_show(const p3a_record_t *record)
+{
+    if (s == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (record == NULL || p3a_record_check(record) != ESP_OK) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    LOCK();
+    const esp_err_t err = s->paused ? ESP_ERR_INVALID_STATE : begin_this(TURN_SHOW, record);
     UNLOCK();
     return err;
 }
 
 // --- the player's reports -------------------------------------------------------
 
-static void on_ready(uint32_t token, void *ctx)
+// The pending pick's record in its channel's index, or NULL: when the
+// request named one artwork, or the playset has changed since.
+static p3a_record_t *pending_in_index(int32_t *position)
+{
+    if (s->pending_kind != TURN_NEW || s->pending_generation != s->generation) {
+        return NULL;
+    }
+    channel_t *ch = &s->channels[s->pending_channel];
+    const int32_t at = ch->has_index ? p3a_index_find_record(&ch->index, &s->pending_record) : -1;
+    if (position != NULL) {
+        *position = at;
+    }
+    return at >= 0 ? p3a_index_at(&ch->index, (uint32_t)at) : NULL;
+}
+
+// "ready": the picture is decoded and its size known, and it is not on the
+// panel yet. The size is remembered, and an artwork too elongated for its
+// channel's filter is passed over here.
+static bool on_ready(uint32_t token, const animation_player_loaded_t *loaded, void *ctx)
 {
     (void)ctx;
-    if (!(token & OUR_TOKENS) && s->foreign.ready) {
-        s->foreign.ready(token, s->foreign_ctx);
+    if (!(token & OUR_TOKENS)) {
+        return s->foreign.ready ? s->foreign.ready(token, loaded, s->foreign_ctx) : true;
     }
+    bool wanted = true;
+    LOCK();
+    if (token == s->pending_token && loaded->width != 0) {
+        const uint16_t width = loaded->width > UINT16_MAX ? UINT16_MAX : (uint16_t)loaded->width;
+        const uint16_t height = loaded->height > UINT16_MAX ? UINT16_MAX : (uint16_t)loaded->height;
+        s->pending_record.width = width;
+        s->pending_record.height = height;
+        p3a_record_t *record = pending_in_index(NULL);
+        if (record != NULL) {
+            record->width = width;  // in memory only: measured again after a restart
+            record->height = height;
+            p3a_settings_get(&s->settings);
+            if (sched_aspect_too_long(width, height, aspect_limit(s->pending_channel))) {
+                ESP_LOGI(TAG, "passed over, too elongated: %ux%u", (unsigned)width, (unsigned)height);
+                wanted = false;
+                s->pending_token = 0;
+                // Not a failure: no retry is spent, nothing is set aside, and
+                // the channel keeps its turn for another of its artworks.
+                sched_core_undo_select(&s->core);
+                if (!sched_turn_skip(&s->turn) || pick_new() != ESP_OK) {
+                    sched_turn_gave_up(&s->turn, now_ms());
+                }
+            }
+        }
+    }
+    UNLOCK();
+    return wanted;
 }
 
 static void on_shown(uint32_t token, void *ctx)
 {
     (void)ctx;
     if (!(token & OUR_TOKENS)) {
-        // Something else put a picture on the panel (a test, for now).
+        // Something else put a picture on the panel (a test). The scheduler
+        // leaves it there until it is asked for something.
         LOCK();
         s->playing = false;
+        sched_turn_stopped(&s->turn);
         UNLOCK();
         if (s->foreign.shown) {
             s->foreign.shown(token, s->foreign_ctx);
@@ -212,12 +365,29 @@ static void on_shown(uint32_t token, void *ctx)
         s->current = s->pending_record;
         s->playing = true;
         s->shown++;
-        if (s->pending_kind == TURN_NEW) {
+        s->problem = ESP_OK;
+        if (s->pending_kind == TURN_NEW || s->pending_kind == TURN_SHOW) {
             // Only now is it history: it reached the panel.
             sched_history_add(&s->history, &s->current);
         }
+        sched_recent_add(&s->recent, recent_id(&s->current));
+        sched_turn_shown(&s->turn, now_ms());
     }
     UNLOCK();
+}
+
+static sched_fail_t classify(esp_err_t err)
+{
+    switch (err) {
+    case P3A_ERR_MISSING:
+        return SCHED_FAIL_MISSING;
+    case P3A_ERR_CORRUPT:
+        return SCHED_FAIL_CORRUPT;
+    case P3A_ERR_NOT_PLAYABLE:
+        return SCHED_FAIL_NOT_PLAYABLE;
+    default:
+        return SCHED_FAIL_OTHER;
+    }
 }
 
 static void on_failed(uint32_t token, esp_err_t err, void *ctx)
@@ -230,24 +400,52 @@ static void on_failed(uint32_t token, esp_err_t err, void *ctx)
         return;
     }
     LOCK();
-    if (token == s->pending_token) {  // a request already replaced by a newer one is nobody's concern
-        s->pending_token = 0;
-        s->failed++;
-        s->last_error = err;
-        const bool same_playset = s->pending_generation == s->generation;
-        if (s->pending_kind == TURN_NEW && same_playset) {
-            sched_core_undo_select(&s->core);  // the channel is not charged for a turn that showed nothing
-            channel_t *ch = &s->channels[s->pending_channel];
-            if (err == P3A_ERR_MISSING && ch->has_index) {
-                // Its bytes are not there after all: stop offering it until
-                // the channel is listed again.
-                const int32_t at = p3a_index_find_record(&ch->index, &s->pending_record);
-                if (at >= 0) {
-                    p3a_index_set_available(&ch->index, (uint32_t)at, false);
-                    sched_core_set_available(&s->core, s->pending_channel, ch->index.available_count);
-                }
-            }
+    if (token != s->pending_token) {  // a request already replaced by a newer one is nobody's concern
+        UNLOCK();
+        return;
+    }
+    s->pending_token = 0;
+    int32_t at = -1;
+    p3a_record_t *record = pending_in_index(&at);
+    if (s->pending_kind == TURN_NEW && s->pending_generation == s->generation) {
+        sched_core_undo_select(&s->core);  // the channel is not charged for a turn that showed nothing
+    }
+    if (err == ESP_ERR_NOT_FINISHED) {
+        // Replaced by something that is not the scheduler's (a test playing
+        // a file directly). Nothing is wrong with the artwork.
+        sched_turn_gave_up(&s->turn, now_ms());
+        UNLOCK();
+        return;
+    }
+    s->failed++;
+    s->last_error = err;
+    const sched_turn_verdict_t verdict = sched_turn_failed(&s->turn, classify(err), now_ms());
+    if (verdict.delete_blob && !(s->pending_record.flags & P3A_RECORD_IN_PLACE) &&
+        p3a_record_has_blob(&s->pending_record)) {
+        // Damaged bytes in the store are of no use and would fail again.
+        // A user's own file is never deleted, whatever is wrong with it.
+        const esp_err_t removed = p3a_blob_remove(s->pending_record.blob_ref, (p3a_format_t)s->pending_record.format);
+        ESP_LOGW(TAG, "a damaged blob was deleted: %s", p3a_err_to_name(removed));
+        if (record != NULL) {
+            memset(record->blob_ref, 0, sizeof(record->blob_ref));  // to be fetched again
         }
+    }
+    if (verdict.set_aside && record != NULL) {
+        // Not offered again until its channel is listed anew.
+        channel_t *ch = &s->channels[s->pending_channel];
+        p3a_index_set_available(&ch->index, (uint32_t)at, false);
+        sched_core_set_available(&s->core, s->pending_channel, ch->index.available_count);
+    }
+    bool report = verdict.report;
+    if (verdict.retry && pick_new() != ESP_OK) {
+        // Nothing else to try.
+        report = s->turn.origin != SCHED_TURN_AUTO;
+        sched_turn_gave_up(&s->turn, now_ms());
+    }
+    if (report) {
+        s->problem = err;
+        s->problems++;
+        ESP_LOGW(TAG, "nothing was shown: %s", p3a_err_to_name(err));
     }
     UNLOCK();
 }
@@ -320,7 +518,7 @@ static esp_err_t list_job(void *arg)
             sched_core_set_available(&s->core, at, ch->index.available_count);
             ESP_LOGI(TAG, "channel %s (%s): %u records, %u playable", ch->id, ops->name, (unsigned)ch->index.count,
                      (unsigned)ch->index.available_count);
-            if ((s->start_wanted || !s->playing) && s->pending_token == 0 && pick_new() == ESP_OK) {
+            if ((s->start_wanted || !s->playing) && s->pending_token == 0 && begin_new(SCHED_TURN_AUTO) == ESP_OK) {
                 s->start_wanted = false;  // the first thing to play has arrived
             }
         }
@@ -438,6 +636,10 @@ void play_scheduler_get_status(play_scheduler_status_t *out)
     out->shown = s->shown;
     out->failed = s->failed;
     out->last_error = s->last_error;
+    out->paused = s->paused;
+    out->advance_in_s = sched_turn_remaining_s(&s->turn, now_ms());
+    out->problem = s->problem;
+    out->problems = s->problems;
     UNLOCK();
 }
 
@@ -449,6 +651,111 @@ void play_scheduler_get_playset(playset_t *out)
     }
     LOCK();
     *out = s->playset;
+    UNLOCK();
+}
+
+// --- moving on, pause, settings ---------------------------------------------------
+
+static uint32_t playable_total(void)
+{
+    uint32_t total = 0;
+    for (uint32_t i = 0; i < s->core.count; i++) {
+        total += s->core.channels[i].available;
+    }
+    return total;
+}
+
+static esp_err_t advance_job(void *arg)
+{
+    (void)arg;
+    LOCK();
+    s->advance_queued = false;
+    // Asked again: a person may have acted since the timer saw it was time.
+    if (sched_turn_due(&s->turn, now_ms(), playable_total())) {
+        begin_new(SCHED_TURN_AUTO);
+    }
+    UNLOCK();
+    return ESP_OK;
+}
+
+// On the timer task, four times a second: only looks, and leaves the work
+// to a job.
+static void tick(void *arg)
+{
+    (void)arg;
+    if (xSemaphoreTakeRecursive(s_lock, 0) != pdTRUE) {
+        return;  // busy; the next tick is soon enough
+    }
+    if (!s->advance_queued && sched_turn_due(&s->turn, now_ms(), playable_total())) {
+        s->advance_queued = p3a_job_submit(P3A_JOBS_UI, "next artwork", advance_job, NULL, NULL) == ESP_OK;
+    }
+    UNLOCK();
+}
+
+esp_err_t play_scheduler_set_paused(bool paused)
+{
+    if (s == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    LOCK();
+    if (paused != s->paused) {
+        s->paused = paused;
+        sched_turn_set_paused(&s->turn, paused, now_ms());
+        if (paused) {
+            display_renderer_set_blank(true);
+            p3a_board_set_brightness(0);  // the backlight too: a black picture still glows
+        } else {
+            p3a_settings_get(&s->settings);
+            display_renderer_set_blank(false);
+            p3a_board_set_brightness((int)s->settings.brightness);
+        }
+        ESP_LOGI(TAG, "%s", paused ? "paused" : "resumed");
+    }
+    UNLOCK();
+    return ESP_OK;
+}
+
+bool play_scheduler_is_paused(void)
+{
+    if (s == NULL) {
+        return false;
+    }
+    LOCK();
+    const bool paused = s->paused;
+    UNLOCK();
+    return paused;
+}
+
+void play_scheduler_hold(void)
+{
+    if (s != NULL) {
+        LOCK();
+        sched_turn_hold(&s->turn);
+        UNLOCK();
+    }
+}
+
+void play_scheduler_release(void)
+{
+    if (s != NULL) {
+        LOCK();
+        sched_turn_release(&s->turn, now_ms());
+        UNLOCK();
+    }
+}
+
+static void on_setting_changed(const p3a_event_t *event, void *ctx)
+{
+    (void)ctx;
+    if (event->payload.i32 != P3A_SET_DWELL_S && event->payload.i32 != P3A_SET_BRIGHTNESS) {
+        return;
+    }
+    LOCK();
+    p3a_settings_get(&s->settings);
+    sched_turn_set_dwell(&s->turn, (uint32_t)s->settings.dwell_s);
+    if (event->payload.i32 == P3A_SET_BRIGHTNESS && !s->paused) {
+        p3a_board_set_brightness((int)s->settings.brightness);  // while paused it waits for the resume
+    }
     UNLOCK();
 }
 
@@ -466,6 +773,13 @@ esp_err_t play_scheduler_start(void)
         return ESP_ERR_NO_MEM;
     }
     s = state;
+    p3a_settings_get(&s->settings);
+    sched_turn_init(&s->turn, (uint32_t)s->settings.dwell_s);
+    p3a_event_subscribe(P3A_EVENT_SETTING_CHANGED, on_setting_changed, NULL);
+    const esp_timer_create_args_t timer = {.callback = tick, .name = "sched_tick"};
+    if (esp_timer_create(&timer, &s_tick) == ESP_OK) {
+        esp_timer_start_periodic(s_tick, TICK_MS * 1000);
+    }
     static const animation_player_listener_t listener = {.ready = on_ready, .shown = on_shown, .failed = on_failed};
     animation_player_set_listener(&listener, NULL);
 

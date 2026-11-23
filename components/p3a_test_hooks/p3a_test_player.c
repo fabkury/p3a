@@ -60,10 +60,12 @@ static void note(uint32_t token, const char *what, esp_err_t err)
     xSemaphoreGive(s_lock);
 }
 
-static void on_ready(uint32_t token, void *ctx)
+static bool on_ready(uint32_t token, const animation_player_loaded_t *loaded, void *ctx)
 {
+    (void)loaded;
     (void)ctx;
     note(token, "ready", ESP_OK);
+    return true;
 }
 
 static void on_shown(uint32_t token, void *ctx)

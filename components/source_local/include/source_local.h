@@ -38,6 +38,12 @@ void source_local_last_scan(source_local_scan_t *out);
 // reads the real format from the file's bytes.
 p3a_format_t source_local_format_of(const char *filename);
 
+// The record of one file of the folder, as a listing would make it: for
+// showing a file that has just arrived without waiting for a listing.
+// ESP_ERR_NOT_SUPPORTED for a name that is not a picture's,
+// ESP_ERR_INVALID_ARG for one too long for a record.
+esp_err_t source_local_record(const char *filename, uint32_t modified_at, p3a_record_t *out);
+
 #ifdef __cplusplus
 }
 #endif

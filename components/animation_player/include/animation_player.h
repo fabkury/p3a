@@ -3,13 +3,14 @@
 //
 // It plays what it is told to play and reports what became of the request.
 // It does not choose artworks, time them, retry, or delete anything: that is
-// the loader pipeline above it (M2.4). It is the artwork source of the
+// the scheduler above it (play_scheduler.h). It is the artwork source of the
 // display pipeline (display_renderer.h).
 //
 // A request goes through three moments, each reported once:
 //
 //   ready   the file is read, its decoder open, its first frame decoded.
-//           The previous artwork is still on the panel.
+//           The previous artwork is still on the panel. The listener is
+//           told the picture's size and may still say no (a filter).
 //   shown   the display pipeline has drawn the new artwork's first frame.
 //           Only now has the artwork been "played".
 //   failed  the request ended without being shown: the file could not be
@@ -43,7 +44,14 @@ typedef struct {
 // task had even picked it up is reported as failed from inside the
 // animation_player_play() call that replaced it, on that caller's task.
 typedef struct {
-    void (*ready)(uint32_t token, void *ctx);
+    uint32_t width, height;  // the picture's own size in pixels
+    uint32_t frame_count;    // 1 for a still
+} animation_player_loaded_t;
+
+typedef struct {
+    // Return false to end the request here: the artwork is not shown, its
+    // memory is freed, and nothing more is reported for this token.
+    bool (*ready)(uint32_t token, const animation_player_loaded_t *loaded, void *ctx);
     void (*shown)(uint32_t token, void *ctx);
     // err: P3A_ERR_MISSING, P3A_ERR_NOT_PLAYABLE, P3A_ERR_CORRUPT, ESP_ERR_NO_MEM,
     // ESP_FAIL (the card could not be read), or ESP_ERR_NOT_FINISHED (a newer

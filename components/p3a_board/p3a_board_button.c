@@ -19,6 +19,7 @@ static const char *TAG = "p3a_board_button";
 static TimerHandle_t s_debounce_timer;
 static p3a_board_button_cb_t s_on_press;
 static void *s_ctx;
+static uint32_t s_presses;  // written on the timer task only
 
 // Timer task context. The press counts only if the button is still down after
 // the debounce interval (active low: 0 is pressed).
@@ -26,6 +27,7 @@ static void debounce_timer_cb(TimerHandle_t timer)
 {
     (void)timer;
     if (gpio_get_level(BOOT_BUTTON_GPIO) == 0 && s_on_press) {
+        s_presses++;
         s_on_press(s_ctx);
     }
 }
@@ -38,6 +40,11 @@ static void IRAM_ATTR button_isr_handler(void *arg)
     if (woken) {
         portYIELD_FROM_ISR();
     }
+}
+
+uint32_t p3a_board_button_presses(void)
+{
+    return s_presses;
 }
 
 esp_err_t p3a_board_button_init(p3a_board_button_cb_t on_press, void *ctx)

@@ -66,6 +66,11 @@ typedef struct {
     // Whether this source's pictures are scaled smoothly (photographs,
     // paintings) or with sharp pixels (pixel art).
     bool smooth;
+
+    // Whether very elongated artworks of its channels are passed over (the
+    // `aspect_filter` settings): for sources whose pictures come in any
+    // shape and were not chosen one by one by the user.
+    bool filter_aspect;
 } p3a_source_ops_t;
 
 // Registers a source. The table must stay valid for good (make it static).

@@ -60,15 +60,14 @@ def test_an_uploaded_file_is_listed_and_played(api):
     before = wait_player(api, "the folder is listed", lambda s: s["channels"][0]["state"] == "ready")
     count = before["channels"][0]["records"]
     reply = api.call("POST", "/api/v2/files?name=zz-api-a.gif", GIF, timeout=30)
-    assert reply.status == 200 and reply.data == {"name": "zz-api-a.gif", "bytes": len(GIF)}
+    assert reply.status == 200 and reply.data == {"name": "zz-api-a.gif", "bytes": len(GIF), "playing": True}
     reply = api.call("POST", "/api/v2/files?name=zz%20api%20c.PNG", PNG, timeout=30)
     assert reply.data["name"] == "zz api c.PNG", "a space and capitals are kept as sent"
     state = wait_player(api, "both are listed and one plays",
                         lambda s: s["channels"][0]["records"] == count + 2 and s["playing"] and not s["loading"])
     assert state["channels"][0]["available"] == count + 2
-    assert state["current"]["source"] == "local"
-    if count == 0:
-        assert state["current"]["name"] in OURS
+    assert state["current"] == {"source": "local", "name": "zz api c.PNG", "width": 48, "height": 32}, \
+        "what was just sent is what plays"
 
     # The same name again replaces the file; it does not add one.
     assert api.call("POST", "/api/v2/files?name=zz-api-a.gif", PNG + b"\0" * 10, timeout=30).status == 200

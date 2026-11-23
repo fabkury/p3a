@@ -161,10 +161,22 @@ static void serve_request(void)
         }
     }
 
+    // The listener hears "ready" before the artwork is staged, so that its
+    // "no" comes before the display pipeline could adopt it.
+    bool wanted = true;
+    if (err == ESP_OK && s_listener.ready) {
+        const animation_player_loaded_t loaded = {  // all zero for "play nothing"
+            .width = stop ? 0 : (uint32_t)back->info.canvas_width,
+            .height = stop ? 0 : (uint32_t)back->info.canvas_height,
+            .frame_count = stop ? 0 : (uint32_t)back->info.frame_count,
+        };
+        wanted = s_listener.ready(request.token, &loaded, s_listener_ctx);
+    }
+
     LOCK();
     s_busy = false;
-    bool superseded = s_pending;
-    if (err == ESP_OK && !superseded) {
+    const bool superseded = s_pending;
+    if (err == ESP_OK && wanted && !superseded) {
         s_staged = true;
         s_staged_token = request.token;
     }
@@ -172,11 +184,11 @@ static void serve_request(void)
 
     if (err != ESP_OK) {
         report_failed(request.token, err);
+    } else if (!wanted) {
+        player_clip_unload(back);
     } else if (superseded) {
         player_clip_unload(back);
         report_failed(request.token, ESP_ERR_NOT_FINISHED);
-    } else if (s_listener.ready) {
-        s_listener.ready(request.token, s_listener_ctx);
     }
 }
 

@@ -164,6 +164,12 @@ p3a_host_test(test_playset
     SOURCES player/test_playset.c ${SCHEDULER}/playset.c ${UTIL}/p3a_err.c
     INCLUDES ${SCHEDULER}/include ${P3A_STUBS} ${UTIL}/include
     LIBS cjson)
+p3a_host_test(test_sched_turn
+    SOURCES player/test_sched_turn.c ${SCHEDULER}/sched_turn.c
+    INCLUDES ${SCHEDULER})
+p3a_host_test(test_sched_pick
+    SOURCES player/test_sched_pick.c ${SCHEDULER}/sched_pick.c ${SCHEDULER}/sched_core.c
+    INCLUDES ${SCHEDULER})
 p3a_host_test(test_sched_history
     SOURCES player/test_sched_history.c ${SCHEDULER}/sched_history.c ${LIBRARY}/p3a_record.c ${UTIL}/p3a_err.c
     INCLUDES ${SCHEDULER} ${LIBRARY}/include ${P3A_STUBS} ${UTIL}/include)

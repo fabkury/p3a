@@ -8,9 +8,9 @@ times.
 
 | | |
 |---|---|
-| Phase | 2, player and library (Phases 0 and 1 complete) |
-| Current milestone | M2.1 display pipeline and decoders |
-| Next action | M2.4, the loader pipeline. Read PLAN.md M2.4 and `docs/2.0-architecture-review/content-pipeline.md` sections 7 and 8, and in `legacy/`: `play_scheduler_timer.c` (dwell), the silent-retry burst and corrupt-file deletion in what is left of `animation_player.c`, `playback_controller`, and `docs/deferred/aspect-ratio-filter.md`. Build on the scheduler's three reports: the dwell timer (`dwell_s`), failure routing by error (retry another artwork a bounded number of times, delete a blob only on `CORRUPT` and only through the blob store, never a user's file), pause (blank), "show this file" (upload then plays at once), the upscale policy question O18, the decode budget O10, then change C (repetition ring, pure) and change D (aspect predicate, pure) |
+| Phase | 3, on-device UI (Phases 0, 1 and 2 complete) |
+| Current milestone | M3.1 screen model and hook table |
+| Next action | M3.1. Read PLAN.md Phase 3, `docs/2.0-architecture-review/firmware-internals.md` on the seven copies of screen state (finding 11) and decide O7; in `legacy/`: `p3a_core/p3a_state*.c`, `p3a_render.c`, `main/ugfx_ui.c`, `display_processing_notification.c`. Build one pure model of what is on screen with host tests, the hook table `main` fills, and the channel-message surface; the scheduler's `problem` and channel states are its first inputs, and `play_scheduler_hold()` is how a screen stops the dwell timer |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -44,7 +44,7 @@ reopened (why).
 | M2.1 Display pipeline and decoders | done 2026-11-19; manual check M2.1-a cleared 2026-11-23. Tiers: host tests (15 programs), the whole device suite (235 cases on the test build; 6 timing cases on the trace-test build), release, test, trace and trace-test builds, the configuration guard. Timing has a baseline of minutes only; the jitter pass bar waits for the soak (M6.1) |
 | M2.2 Library core | done 2026-11-19. Tiers: host tests (15 programs), the whole device suite (240 cases), release, test and trace builds, the configuration guard. The `refs` table of the plan was not built (D48) |
 | M2.3 Source interface, local source, scheduler | done 2026-11-23. Tiers: host tests (18 programs, under the sanitizers too), the whole device suite (255 cases; one needed its own bound updated for the larger JSON body limit), release, test and trace builds, the configuration guard. Left for later milestones and noted in the entries: uploads do not play at once (M2.4), more than 16 channels (M4.x), weighted shares on the device (needs a second source) |
-| M2.4 Loader pipeline, C and D | not started |
+| M2.4 Loader pipeline, C and D | done 2026-11-23. Tiers: host tests (20 programs, under the sanitizers too), the whole device suite (260 cases pass; the 6 timing cases need the trace build and were not run), release, test and trace builds, the configuration guard. Not seen on the device because nothing produces them yet: deleting a damaged blob (M4.1), the aspect filter (M4.3). Manual check M2.4-a pending |
 | M3.1 Screen model and hook table | not started |
 | M3.2 Text and fonts | not started |
 | M3.3 Screens | not started |
@@ -122,6 +122,10 @@ Open:
   Also worth one try with a wrong password: the unit should offer
   `p3a-setup` again within about a minute. If anything goes wrong,
   `python host/p3a-lab/lab.py provision` puts the unit back online.
+- **M2.4-a, the BOOT button pauses.** With something playing, press the
+  BOOT button on the board once: the panel should go fully dark (backlight
+  off). Press again: the same artwork is back at the brightness it had.
+  `python host/p3a-lab/lab.py cmd "button"` shows the presses counted.
 
 Cleared:
 
@@ -149,7 +153,7 @@ and proposals are in [DECISIONS.md](DECISIONS.md) under "Open decisions".
 | O14 | A second board for the field test | M6.3 |
 | O13 | How `v2` becomes `main` | M6.4 |
 
-The remaining open decisions (O7, O9, O10) may be taken as working decisions
+The remaining open decisions (O7, O9) may be taken as working decisions
 by the agent and are reported when taken.
 
 ## Ports from main
@@ -305,6 +309,72 @@ M1.1, 2026-11-17:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-23: M2.4, the loader pipeline, changes C and D. Phase 2 complete
+
+- **The rules of a turn** are pure code, `sched_turn.c`: when the device
+  moves on by itself, and what a failure leads to depending on who asked
+  (D55). The device's own turns and "next" try another artwork, up to three
+  times; a request for one artwork (back, forward, "show this") does not.
+  What a person asked for and did not get is kept as `problem` in the
+  player's state until something is shown; the UI shows it from M3.1.
+- **The dwell timer.** `dwell_s` seconds after an artwork reaches the
+  panel, the next one is asked for. Not while paused, while a screen holds
+  it (`play_scheduler_hold()`, for M3), while something is loading, or
+  when there is nothing else to show. A change of the setting applies to
+  the artwork on the panel. A device whose first picks all failed tries
+  again after a dwell instead of staying black.
+- **Failures by error.** Missing, damaged and unplayable artworks are set
+  aside until their channel is listed again. A damaged blob is deleted
+  through the blob store, at most one a minute; a user's own file never is.
+- **Pause**: black panel, backlight off, no moving on; resume restores the
+  brightness setting and gives the artwork a full dwell. The BOOT button
+  toggles it (watched after the co-processor update, as in 1.x). Next,
+  back and uploads-that-play are refused while paused (D58). A brightness
+  setting now takes effect at once (it was applied only at boot).
+- **"Show this"**: `play_scheduler_show()` plays one record now and then
+  carries on with the playset. An uploaded file plays at once through it.
+- **Change C, less repetition** (`sched_pick.c`, D56). The last 256
+  artworks shown are remembered in memory. A random pick accepts a
+  candidate with a chance that grows with the square of how long ago it
+  was shown, never below 1 in 16, and never picks the artwork shown last
+  while the channel has another. Measured in the host test: an artwork
+  comes back within a quarter of its channel's length 1.5% to 4.3% of the
+  time, against 22% for the plain random pick, and every artwork keeps its
+  share.
+- **Change D, the aspect filter** (D57). The predicate and its two
+  settings (`aspect_filter`, `aspect_max_tenths`, default 4:1). A source
+  asks for it in its table (`filter_aspect`); none does yet. The player now
+  tells its listener the picture's size at "ready", before the artwork can
+  reach the panel, and the listener may say no: that is how an artwork of
+  unknown size is measured, remembered and passed over without counting as
+  a failure.
+- **O10, the decode budget, moves to M4.3.** In the new pipeline a slow
+  decode holds nothing up but the next artwork: the previous one keeps
+  playing and the timer waits. Sizing a budget needs the slow museum
+  JPEGs, which arrive with the museum source.
+- **O18 is still open** (smooth or sharp scaling for the user's files);
+  2.0 does what 1.x did, sharp.
+- A test build holds the device still from boot (`sched auto off`), so
+  that tests find on the panel what they put there.
+- `!button` now reads a count the board keeps; `app_main` owns the button.
+- Verified, host tests: 20 programs pass, also under ASan and UBSan in
+  WSL; new are `test_sched_turn` (8 cases) and `test_sched_pick` (8).
+- Verified, device tests (5 new cases in `test_pipeline.py`): moving on
+  after the dwell and never to the same artwork, a dwell of 0, pause and
+  resume with the backlight, a damaged file passed over by "next" and left
+  on the card, a named artwork that fails reported with nothing put in its
+  place, an upload playing at once and joining the history.
+- Verified, end of milestone: the whole device suite (260 cases pass; the 6 timing cases need the trace build and were not run), and the
+  release and trace builds with the build checks and the configuration
+  guard.
+- Not verified: deleting a damaged blob and the aspect filter on the
+  device (no source makes blobs or asks for the filter until Phase 4); the
+  BOOT button (manual check M2.4-a); a decode that fails in the middle of
+  an animation; pause while a file is loading.
+- Not carried over from 1.x, on purpose: the on-screen "Playback Error"
+  (the UI's, M3.3, from `problem`), the LRU touch of a played file
+  (eviction, M4.1), the view tracker and current-post calls (M4.5).
 
 ### 2026-11-23: M2.3 part 5, the routes; M2.3 done
 

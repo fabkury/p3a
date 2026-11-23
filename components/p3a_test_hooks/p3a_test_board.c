@@ -35,14 +35,6 @@
 #include "slave_ota.h"
 
 static int s_shown = -1;  // the framebuffer last presented by these commands
-static atomic_int s_button_presses;
-static bool s_button_watched;
-
-static void on_button(void *ctx)
-{
-    (void)ctx;
-    atomic_fetch_add(&s_button_presses, 1);
-}
 
 static void put_pixel(uint8_t *row, int x, uint8_t r, uint8_t g, uint8_t b)
 {
@@ -278,20 +270,12 @@ static void cmd_lcd(const char *args)
     }
 }
 
-// !button   starts counting BOOT presses on first use and reports the count.
+// !button   reports how many BOOT presses the board has seen (app_main watches the button).
 static void cmd_button(const char *args)
 {
     (void)args;
-    if (!s_button_watched) {
-        esp_err_t err = p3a_board_button_init(on_button, NULL);
-        if (err != ESP_OK) {
-            p3a_test_reply_err(p3a_err_to_name(err));
-            return;
-        }
-        s_button_watched = true;
-    }
     char json[48];
-    snprintf(json, sizeof(json), "{\"presses\":%d}", atomic_load(&s_button_presses));
+    snprintf(json, sizeof(json), "{\"presses\":%u}", (unsigned)p3a_board_button_presses());
     p3a_test_reply_ok(json);
 }
 

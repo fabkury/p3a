@@ -5,6 +5,9 @@
 // !sched next | back
 // !sched activate {playset}
 // !sched refresh <source>    lists that source's channels again
+// !sched auto on|off         whether the device moves on by itself. Off from boot in a test
+//                            build, so that tests find on the panel what they put there
+// !sched pause on|off
 //
 //   POST /api/v2/test/local?name=<file name>   body: a file, written into the user's
 //                                              animations folder (no body: the file is removed)
@@ -24,6 +27,8 @@
 #include "playset.h"
 #include "psram_alloc.h"
 #include "sd_path.h"
+
+static bool s_auto = true;  // whether this file's hold is off
 
 static const char *const s_states[] = {"waiting", "listing", "ready", "failed", "no_source", "not_loaded"};
 
@@ -79,8 +84,20 @@ static void cmd_status(void)
     cJSON_AddNumberToObject(out, "shown", st->shown);
     cJSON_AddNumberToObject(out, "failed", st->failed);
     cJSON_AddStringToObject(out, "last_error", st->last_error == ESP_OK ? "" : p3a_err_to_name(st->last_error));
+    cJSON_AddBoolToObject(out, "paused", st->paused);
+    cJSON_AddNumberToObject(out, "advance_in_s", st->advance_in_s);
+    cJSON_AddStringToObject(out, "problem", st->problem == ESP_OK ? "" : p3a_err_to_name(st->problem));
+    cJSON_AddBoolToObject(out, "auto", s_auto);
     free(st);
     reply_json(out);
+}
+
+static void set_auto(bool on)
+{
+    if (on != s_auto) {
+        on ? play_scheduler_release() : play_scheduler_hold();
+        s_auto = on;
+    }
 }
 
 static void cmd_sched(const char *args)
@@ -95,6 +112,11 @@ static void cmd_sched(const char *args)
         reply_result(play_scheduler_next());
     } else if (strcmp(args, "back") == 0) {
         reply_result(play_scheduler_back());
+    } else if (strcmp(args, "auto on") == 0 || strcmp(args, "auto off") == 0) {
+        set_auto(args[6] == 'n');
+        reply_result(ESP_OK);
+    } else if (strcmp(args, "pause on") == 0 || strcmp(args, "pause off") == 0) {
+        reply_result(play_scheduler_set_paused(args[7] == 'n'));
     } else if (sscanf(args, "refresh %u", &source) == 1) {
         reply_result(play_scheduler_refresh_source((uint8_t)source));
     } else if (strncmp(args, "activate ", 9) == 0) {
@@ -108,7 +130,7 @@ static void cmd_sched(const char *args)
         free(playset);
         reply_result(err);
     } else {
-        p3a_test_reply_err("sched status|next|back|activate {playset}|refresh <source>");
+        p3a_test_reply_err("sched status|next|back|activate {playset}|refresh <source>|auto on|off|pause on|off");
     }
 }
 
@@ -171,4 +193,5 @@ static const p3a_http_route_t s_routes[] = {
 void p3a_test_sched_start(void)
 {
     p3a_http_add_routes(s_routes, sizeof(s_routes) / sizeof(s_routes[0]));
+    set_auto(false);
 }

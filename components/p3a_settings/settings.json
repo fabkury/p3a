@@ -31,6 +31,8 @@
     {"key": "indicator_size", "type": "int", "default": 64, "min": 16, "max": 256, "group": "display", "label": "Processing indicator size", "was": "proc_notif_size"},
 
     {"key": "dwell_s", "type": "int", "default": 30, "min": 0, "max": 86400, "group": "playback", "label": "Seconds per artwork (0 never advances)", "was": "dwell_time_ms"},
+    {"key": "aspect_filter", "type": "bool", "default": true, "group": "playback", "label": "Skip very elongated museum artworks"},
+    {"key": "aspect_max_tenths", "type": "int", "default": 40, "min": 25, "max": 100, "group": "playback", "label": "Most elongated shape shown, in tenths (40 is 4:1)"},
     {"key": "pick_mode", "type": "enum", "default": "random", "values": ["random", "recency"], "group": "playback", "label": "Order within a channel"},
     {"key": "channel_select", "type": "enum", "default": "stochastic", "values": ["swrr", "stochastic"], "group": "playback", "label": "How channels take turns", "was": "channel_select_mode"},
     {"key": "playback_max_speed", "type": "bool", "default": false, "group": "playback", "label": "Ignore frame delays", "was": "max_speed_playback"},

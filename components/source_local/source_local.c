@@ -34,6 +34,22 @@ static int by_recency(const void *a, const void *b)
     return strcmp(ra->identity.local.filename, rb->identity.local.filename);
 }
 
+esp_err_t source_local_record(const char *filename, uint32_t modified_at, p3a_record_t *out)
+{
+    const p3a_format_t format = source_local_format_of(filename);
+    if (format == P3A_FORMAT_UNKNOWN) {
+        return ESP_ERR_NOT_SUPPORTED;
+    }
+    const esp_err_t err = p3a_record_init_local(out, filename);
+    if (err != ESP_OK) {
+        return err;
+    }
+    out->format = (uint8_t)format;
+    out->flags = P3A_RECORD_IN_PLACE;
+    out->sort_at = modified_at;
+    return ESP_OK;
+}
+
 static esp_err_t local_refresh(const p3a_channel_ref_t *channel, p3a_index_t *index)
 {
     (void)channel;  // the local source has one channel: the folder
@@ -77,7 +93,7 @@ static esp_err_t local_refresh(const p3a_channel_ref_t *channel, p3a_index_t *in
             continue;
         }
         p3a_record_t made;
-        if (p3a_record_init_local(&made, entry->d_name) != ESP_OK) {
+        if (source_local_record(entry->d_name, (uint32_t)st.st_mtime, &made) != ESP_OK) {
             scan.name_too_long++;
             continue;
         }
@@ -87,9 +103,6 @@ static esp_err_t local_refresh(const p3a_channel_ref_t *channel, p3a_index_t *in
         }
         p3a_record_t *r = &records[count];
         *r = made;
-        r->format = (uint8_t)format;
-        r->flags = P3A_RECORD_IN_PLACE;
-        r->sort_at = (uint32_t)st.st_mtime;
         r->modified_at = (uint32_t)st.st_mtime;
         count++;
     }

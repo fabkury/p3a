@@ -5,13 +5,16 @@
 //   GET    /api/v2/player                 what is playing, the active playset's channels, counters
 //   POST   /api/v2/player/next            play the next artwork
 //   POST   /api/v2/player/back            play the one before
+//   POST   /api/v2/player/pause           black panel, backlight off, no moving on
+//   POST   /api/v2/player/resume
 //   GET    /api/v2/player/playset         the active playset
 //   PUT    /api/v2/player/playset         make a playset active: a whole playset, or {"saved": "<name>"}
 //   GET    /api/v2/playsets               the saved playsets
 //   GET    /api/v2/playsets/{name}        one of them
 //   PUT    /api/v2/playsets/{name}        save one (the body's "name", if given, must agree)
 //   DELETE /api/v2/playsets/{name}
-//   POST   /api/v2/files?name=<file>      upload a picture into the user's folder; the body is the file
+//   POST   /api/v2/files?name=<file>      upload a picture into the user's folder; the body is the file.
+//                                         It plays at once
 //
 // Every handler calls the scheduler or the playset store and says what they
 // said. The commands a Makapix message can give (M4.5) are the same calls.
@@ -19,6 +22,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "esp_log.h"
@@ -81,6 +85,14 @@ static void get_player(p3a_http_request_t *req)
     cJSON *data = cJSON_CreateObject();
     cJSON_AddBoolToObject(data, "playing", st->playing);
     cJSON_AddBoolToObject(data, "loading", st->loading);
+    cJSON_AddBoolToObject(data, "paused", st->paused);
+    if (st->advance_in_s >= 0) {
+        cJSON_AddNumberToObject(data, "advance_in_s", st->advance_in_s);  // absent: it will not move on by itself
+    }
+    if (st->problem != ESP_OK) {
+        // What was asked for and could not be shown; gone once something is.
+        cJSON_AddStringToObject(data, "problem", p3a_err_to_name(st->problem));
+    }
     if (st->playing) {
         cJSON_AddItemToObject(data, "current", record_json(&st->current));
     }
@@ -106,6 +118,7 @@ static void get_player(p3a_http_request_t *req)
     cJSON_AddNumberToObject(counters, "picks", st->picks);
     cJSON_AddNumberToObject(counters, "shown", st->shown);
     cJSON_AddNumberToObject(counters, "failed", st->failed);
+    cJSON_AddNumberToObject(counters, "problems", st->problems);
     if (st->last_error != ESP_OK) {
         cJSON_AddStringToObject(data, "last_error", p3a_err_to_name(st->last_error));
     }
@@ -117,6 +130,8 @@ static void answer_step(p3a_http_request_t *req, esp_err_t err, const char *noth
 {
     if (err == ESP_ERR_NOT_FOUND) {
         p3a_http_fail(req, 409, "NOTHING_TO_PLAY", "%s", nothing);
+    } else if (err == ESP_ERR_INVALID_STATE) {
+        p3a_http_fail(req, 409, "PAUSED", "the player is paused; resume it first (POST /api/v2/player/resume)");
     } else if (err != ESP_OK) {
         p3a_http_fail_err(req, err, "asking the player");
     } else {
@@ -132,6 +147,18 @@ static void post_next(p3a_http_request_t *req)
 static void post_back(p3a_http_request_t *req)
 {
     answer_step(req, play_scheduler_back(), "there is nothing earlier in the history");
+}
+
+static void post_pause(p3a_http_request_t *req)
+{
+    const esp_err_t err = play_scheduler_set_paused(true);
+    err == ESP_OK ? p3a_http_ok(req, NULL) : p3a_http_fail_err(req, err, "pausing");
+}
+
+static void post_resume(p3a_http_request_t *req)
+{
+    const esp_err_t err = play_scheduler_set_paused(false);
+    err == ESP_OK ? p3a_http_ok(req, NULL) : p3a_http_fail_err(req, err, "resuming");
 }
 
 // --- playsets -------------------------------------------------------------------
@@ -387,10 +414,17 @@ static void post_file(p3a_http_request_t *req)
         }
         return;
     }
+    // It plays at once, as the person who sent it expects, and the folder is
+    // listed again so that it also takes its place in the rotation. While
+    // paused it is only listed.
+    p3a_record_t record;
+    const bool shown = source_local_record(name, (uint32_t)time(NULL), &record) == ESP_OK &&
+                       play_scheduler_show(&record) == ESP_OK;
     (void)play_scheduler_refresh_source(P3A_SOURCE_LOCAL);
     cJSON *data = cJSON_CreateObject();
     cJSON_AddStringToObject(data, "name", name);  // through the JSON builder: quotes and all (audit M7)
     cJSON_AddNumberToObject(data, "bytes", (double)len);
+    cJSON_AddBoolToObject(data, "playing", shown);
     p3a_http_ok(req, data);
 }
 
@@ -398,6 +432,8 @@ static const p3a_http_route_t s_routes[] = {
     {P3A_HTTP_GET, 0, "/api/v2/player", get_player},
     {P3A_HTTP_POST, 0, "/api/v2/player/next", post_next},
     {P3A_HTTP_POST, 0, "/api/v2/player/back", post_back},
+    {P3A_HTTP_POST, 0, "/api/v2/player/pause", post_pause},
+    {P3A_HTTP_POST, 0, "/api/v2/player/resume", post_resume},
     {P3A_HTTP_GET, 0, "/api/v2/player/playset", get_active_playset},
     {P3A_HTTP_PUT, P3A_HTTP_BODY_JSON, "/api/v2/player/playset", put_active_playset},
     {P3A_HTTP_GET, 0, "/api/v2/playsets", get_playsets},

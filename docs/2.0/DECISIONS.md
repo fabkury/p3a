@@ -81,6 +81,10 @@ Set before the architecture review and taken as given by everything since.
 | D52 | 2026-11-23 | Working | The user's files in `animations/` are listed in place and never moved into the blob store. Their records carry the file name and the `IN_PLACE` flag | Someone browsing the card over USB must find their files under their names |
 | D53 | 2026-11-23 | Working | A device with no active playset plays the user's own files. History holds whole records, is written only when the player reports an artwork shown, and survives a change of playset | A fresh device should do something sensible with a card of pictures; finding 7 |
 | D54 | 2026-11-23 | Working | No `player_commands` module: the scheduler's public functions are the command surface for HTTP and, later, Makapix. Uploads are a raw request body with the name in the query; a name the card cannot hold is refused, not changed | A forwarding layer adds nothing (finding 13). Multipart parsing is 250 lines the new UI does not need |
+| D55 | 2026-11-23 | Working | A failed turn is handled by who asked. The device's own turns and "next" try another artwork, up to three times, quietly; "next" reports only if all fail. A request for one artwork (back, forward, "show this") tries nothing else and reports | 1.x showed an error for every failed manual swap. A person who presses "next" wants the next artwork that plays |
+| D56 | 2026-11-23 | Working | Change C: repetition is measured in artworks shown, not in time; the last 256 are remembered; the chance of accepting a candidate grows with the square of how long ago it was shown, floor 1 in 16; the artwork shown last is never picked while the channel has another | Counting plays is indifferent to the dwell setting and to pauses. Rejection sampling needs no list of the channel in memory |
+| D57 | 2026-11-23 | Working | Change D: a source asks for the aspect filter in its table; the player reports "ready" with the picture's size before staging it and its listener may refuse. Tall counts like wide. Settings `aspect_filter` and `aspect_max_tenths` (25 to 100, default 40) | The scheduler names no source. Refusing before staging is the only point at which an unmeasured artwork can be kept off the panel |
+| D58 | 2026-11-23 | Working | While paused, next, back and "show this" are refused (409 `PAUSED`); an upload is saved and listed but does not play | A dark panel that lights up because of a command is a surprise. Revisit for Makapix commands at M4.5 |
 
 ## 1.x decisions that stay in force
 
@@ -149,7 +153,7 @@ are not missed.
 | O6 | Branding overlay: minimum band height and clear space from the Giphy and Klipy terms; bottom band only, or side bands too | M3.5 | See idea 2 |
 | O7 | The screen model: `p3a_state` becomes the single owner, or it is deleted in favour of one UI model plus a small playback struct | M3.1 | Working decision allowed; the review offers both |
 | O9 | The internal-RAM measures from `docs/known-issues.md`: packet mode, refresh concurrency, the Option E items, load shedding thresholds | M4.1 | Needs measurements on the 2.0 build, then a soak |
-| O10 | A wall-clock budget for slow software JPEG decodes, and what a timed-out image becomes | M2.4 | The `NOT_PLAYABLE` error gives it a clean home |
+| O10 | A wall-clock budget for slow software JPEG decodes, and what a timed-out image becomes | M4.3 | Moved from M2.4: in the new pipeline a slow decode delays only the next artwork, and sizing a budget needs the museum JPEGs. `NOT_PLAYABLE` is its home |
 | O12 | OTA hardening from audit item M23: post-boot self-test before marking an image valid, anti-rollback, minimum-version gate | M5.2 | |
 | O13 | How `v2` becomes `main` at release: merge, or replace | M6.4 | |
 | O14 | A second unit for the end-to-end field test (web flasher on a fresh board) | M6.3 | Needs hardware from Fab |

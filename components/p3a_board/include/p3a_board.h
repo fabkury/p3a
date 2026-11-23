@@ -101,6 +101,9 @@ typedef void (*p3a_board_button_cb_t)(void *ctx);
 // reports the press; what a press means is the caller's business.
 esp_err_t p3a_board_button_init(p3a_board_button_cb_t on_press, void *ctx);
 
+// Presses seen since boot.
+uint32_t p3a_board_button_presses(void);
+
 #ifdef __cplusplus
 }
 #endif

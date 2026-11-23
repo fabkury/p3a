@@ -155,8 +155,11 @@ All in `components/p3a_util`; each header explains itself at the top.
   `shown`, never off the request.
 - **What plays next is the scheduler's** (`play_scheduler.h`). Nothing else
   asks the animation player for a file, apart from the test hooks. Its
-  decisions are pure code (`sched_core.c`, `sched_history.c`, `playset.c`)
-  with host tests; change behaviour there, not in the wiring.
+  decisions are pure code with host tests (`sched_core.c` and
+  `sched_pick.c`: which channel, which artwork; `sched_turn.c`: when to
+  move on and what a failure leads to; `sched_history.c`; `playset.c`);
+  change behaviour there, not in the wiring. A screen that covers the
+  artwork stops the dwell timer with `play_scheduler_hold()`.
 - **HTTP endpoints** are rows in a route table (`p3a_http.h`). A handler
   answers once through `p3a_http_ok`, `p3a_http_accepted` or
   `p3a_http_fail` and never writes an envelope, a status line or a header

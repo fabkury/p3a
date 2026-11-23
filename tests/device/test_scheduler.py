@@ -84,7 +84,12 @@ def rig(bring_up):
 def test_the_users_files_are_listed_and_played_in_turn(rig):
     empty = rig.relist(0)
     assert empty["channels"][0]["source"] == "local" and empty["channels"][0]["available"] == 0
-    assert rig.uart.command("sched next")["result"] == "ESP_ERR_NOT_FOUND", "nothing to play is said, not hidden"
+    # An earlier test may have left the history part way back: "next" first
+    # walks forward to the present, and only then has to pick.
+    results = []
+    while len(results) < 40 and (not results or results[-1] == "ok"):
+        results.append(rig.uart.command("sched next")["result"])
+    assert results[-1] == "ESP_ERR_NOT_FOUND", "nothing to play is said, not hidden"
     for name, (source, *_rest) in FILES.items():
         rig.put(name, (CORPUS / "good" / source).read_bytes())
     listed = rig.relist(3)
@@ -121,20 +126,23 @@ def test_an_artwork_that_fails_costs_nothing_and_leaves_the_last_one_playing(rig
     # The files vanish behind the scheduler's back (a USB session, say).
     for name in FILES:
         rig.remove(name)
-    for left in (2, 1, 0):
-        after = rig.step("next")
-        assert after["failed"] == before["failed"] + (3 - left) and after["last_error"] == "MISSING"
-        assert after["channels"][0]["available"] == left, "a missing file is not offered again"
-        assert after["current"] == playing and after["history"] == before["history"], "nothing shown, nothing recorded"
+    # One "next" tries the others by itself: all three are found missing.
+    assert rig.uart.command("sched next") == {"result": "ok"}
+    after = rig.wait("every file was tried", lambda s: s["channels"][0]["available"] == 0 and not s["loading"])
+    assert after["failed"] == before["failed"] + 3 and after["last_error"] == "MISSING"
+    assert after["problem"] == "MISSING", "a person asked, so it is said"
+    assert after["current"] == playing and after["history"] == before["history"], "nothing shown, nothing recorded"
     assert rig.uart.command("sched next")["result"] == "ESP_ERR_NOT_FOUND"
     assert rig.on_panel() == panel, "the last good artwork is still on the panel"
 
-    # A damaged file: reported, and left on the card.
+    # A damaged file of the user's: reported, set aside, and left on the card.
     rig.put("zz-sched-bad.png", (CORPUS / "bad" / "png" / "png_truncated_half.png").read_bytes())
     rig.relist(1)
-    bad = rig.step("next")
-    assert bad["last_error"] == "CORRUPT" and bad["current"] == playing
-    assert rig.relist(1)["channels"][0]["available"] == 1, "still there: deciding what to do with it is not the scheduler's"
+    assert rig.uart.command("sched next") == {"result": "ok"}
+    bad = rig.wait("it was tried", lambda s: s["failed"] == after["failed"] + 1 and not s["loading"])
+    assert bad["last_error"] == "CORRUPT" and bad["problem"] == "CORRUPT" and bad["current"] == playing
+    assert bad["channels"][0]["available"] == 0, "not offered again until the folder is listed anew"
+    assert rig.relist(1)["channels"][0]["available"] == 1, "still on the card: a user's file is never deleted"
     rig.remove("zz-sched-bad.png")
 
 

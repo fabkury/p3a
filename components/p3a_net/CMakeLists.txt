@@ -31,6 +31,7 @@ idf_component_register(
     SRCS "http_envelope.c" "http_route.c" "http_server.c" "http_static.c"
          "${gen_dir}/p3a_static_gen.c"
          "net_api.c"
+         "net_player_api.c"
          ${trace_srcs}
          "net_dns.c"
          "net_link_recovery.c"
@@ -40,6 +41,6 @@ idf_component_register(
          "net_wifi_recovery.c"
     INCLUDE_DIRS "include"
     REQUIRES esp_http_server json p3a_util
-    PRIV_REQUIRES esp_app_format esp_event esp_partition espcoredump p3a_storage esp_netif esp_timer esp_wifi frame_trace lwip nvs_flash p3a_settings p3a_util
+    PRIV_REQUIRES play_scheduler source_local p3a_library esp_app_format esp_event esp_partition espcoredump p3a_storage esp_netif esp_timer esp_wifi frame_trace lwip nvs_flash p3a_settings p3a_util
                   espressif__esp_hosted espressif__esp_wifi_remote espressif__mdns
 )

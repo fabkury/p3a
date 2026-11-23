@@ -10,7 +10,7 @@ times.
 |---|---|
 | Phase | 2, player and library (Phases 0 and 1 complete) |
 | Current milestone | M2.1 display pipeline and decoders |
-| Next action | M2.3 part 5, the last: `player_commands` and the routes. One module that both HTTP and (in M4.5) Makapix call: next, back, activate a playset, save, delete, list. Routes under `/api/v2/`: `GET /playsets`, `GET|PUT|DELETE /playsets/{name}`, `GET|PUT /playsets/active`, `POST /player/next`, `POST /player/back`, `GET /player` (status), and `POST /files` (upload into `animations/`, then `play_scheduler_refresh_source`; audit M7: the file name goes through the JSON builder, never into a string by hand). The upload streams to a temporary file and is renamed into place; read `legacy/components/http_api/http_api_upload.c` for the multipart parsing, or take a raw body with the name in the query, which the new web UI can send just as well (decide). Device tests for each route, then the end of M2.3: the whole device suite and the release and trace builds |
+| Next action | M2.4, the loader pipeline. Read PLAN.md M2.4 and `docs/2.0-architecture-review/content-pipeline.md` sections 7 and 8, and in `legacy/`: `play_scheduler_timer.c` (dwell), the silent-retry burst and corrupt-file deletion in what is left of `animation_player.c`, `playback_controller`, and `docs/deferred/aspect-ratio-filter.md`. Build on the scheduler's three reports: the dwell timer (`dwell_s`), failure routing by error (retry another artwork a bounded number of times, delete a blob only on `CORRUPT` and only through the blob store, never a user's file), pause (blank), "show this file" (upload then plays at once), the upscale policy question O18, the decode budget O10, then change C (repetition ring, pure) and change D (aspect predicate, pure) |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -43,7 +43,7 @@ reopened (why).
 | M1.5 net base | done 2026-11-18. Tiers: host tests (12 programs, under ASan and UBSan too), tool self-tests, device tests (119 cases, on the real Wi-Fi), release and test builds, the configuration guard. Awaiting manual check M1.5-a (the portal from a phone). The Wi-Fi recovery ladders are carried over untested |
 | M2.1 Display pipeline and decoders | done 2026-11-19; manual check M2.1-a cleared 2026-11-23. Tiers: host tests (15 programs), the whole device suite (235 cases on the test build; 6 timing cases on the trace-test build), release, test, trace and trace-test builds, the configuration guard. Timing has a baseline of minutes only; the jitter pass bar waits for the soak (M6.1) |
 | M2.2 Library core | done 2026-11-19. Tiers: host tests (15 programs), the whole device suite (240 cases), release, test and trace builds, the configuration guard. The `refs` table of the plan was not built (D48) |
-| M2.3 Source interface, local source, scheduler | in progress. Done: the scheduler's arithmetic, playsets, the source interface, the local source, and the scheduler proper (it plays the active playset at boot). Not started: `player_commands` and the routes |
+| M2.3 Source interface, local source, scheduler | done 2026-11-23. Tiers: host tests (18 programs, under the sanitizers too), the whole device suite (255 cases; one needed its own bound updated for the larger JSON body limit), release, test and trace builds, the configuration guard. Left for later milestones and noted in the entries: uploads do not play at once (M2.4), more than 16 channels (M4.x), weighted shares on the device (needs a second source) |
 | M2.4 Loader pipeline, C and D | not started |
 | M3.1 Screen model and hook table | not started |
 | M3.2 Text and fonts | not started |
@@ -305,6 +305,45 @@ M1.1, 2026-11-17:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-23: M2.3 part 5, the routes; M2.3 done
+
+- `components/p3a_net/net_player_api.c`: `GET /api/v2/player`, `POST
+  /player/next` and `/player/back`, `GET|PUT /player/playset` (the active
+  one; a whole playset or `{"saved": name}`), `GET /playsets`,
+  `GET|PUT|DELETE /playsets/{name}`, and `POST /files?name=` (upload).
+- **No separate `player_commands` module.** The plan named one for HTTP
+  and Makapix to share. The scheduler's public functions are that surface
+  already (activate, next, back, refresh), and the routes are thin calls
+  to them; a second layer would only forward. Makapix commands (M4.5) call
+  the same functions.
+- **Upload takes the file as the request body** with its name in the
+  query, not a multipart form. The new web UI sends a file that way as
+  easily, and 250 lines of multipart parsing are not carried over. It is
+  written beside its final name and moved into place when complete, so a
+  broken upload leaves no half file among the user's pictures. Checked
+  first: the name (unchanged by the card's rules, at most 119 characters,
+  a picture's extension), the size (16 MiB) and the card's free space.
+- A name the card cannot hold is refused, where 1.x silently changed it.
+  That also settles audit M7: the answer carries the name through the JSON
+  builder, and the characters that would need escaping cannot be in a name.
+- Differences from 1.x to come back to: an uploaded file is listed but
+  does not play at once (needs "show this file", M2.4); uploads are not
+  yet refused while the card is shared over USB (no USB sharing in 2.0
+  yet); the active playset has no ETag (M5.1, if the UI polls it).
+- Errors say what to do: `NOTHING_TO_PLAY`, `TOO_MANY_PLAYSETS`,
+  `UNREADABLE_PLAYSET`, `INVALID_PLAYSET` with the parser's sentence,
+  `CARD_FULL`, `UNSUPPORTED_TYPE`.
+- JSON bodies may now be 32 KB (a 64-channel playset is about 20 KB).
+- Verified, device tests (5 new cases): upload, listing and playing of an
+  uploaded file, replacing by the same name, seven refused uploads, next
+  and back to the far end of the history, playsets saved, read, sent back,
+  refused and deleted, the active playset set whole and by a saved name.
+- Verified, end of milestone: the whole device suite (255 cases; one needed its own bound updated for the larger JSON body limit), and the
+  release and trace builds with the build checks and the configuration
+  guard.
+- Not verified: an upload near 16 MiB (time and memory), an upload cut
+  off half way, and two uploads at once.
 
 ### 2026-11-23: M2.3 part 4, the scheduler proper
 

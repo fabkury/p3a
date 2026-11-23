@@ -80,6 +80,7 @@ Set before the architecture review and taken as given by everything since.
 | D51 | 2026-11-23 | Working | Layer order: `library` below `sources`. The library defines the source interface and registry; sources implement it from above and register at boot | A source must produce the library's records. With the interface in the library, every arrow still points down |
 | D52 | 2026-11-23 | Working | The user's files in `animations/` are listed in place and never moved into the blob store. Their records carry the file name and the `IN_PLACE` flag | Someone browsing the card over USB must find their files under their names |
 | D53 | 2026-11-23 | Working | A device with no active playset plays the user's own files. History holds whole records, is written only when the player reports an artwork shown, and survives a change of playset | A fresh device should do something sensible with a card of pictures; finding 7 |
+| D54 | 2026-11-23 | Working | No `player_commands` module: the scheduler's public functions are the command surface for HTTP and, later, Makapix. Uploads are a raw request body with the name in the query; a name the card cannot hold is refused, not changed | A forwarding layer adds nothing (finding 13). Multipart parsing is 250 lines the new UI does not need |
 
 ## 1.x decisions that stay in force
 

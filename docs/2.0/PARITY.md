@@ -25,8 +25,8 @@ describe what a client can do, not the 1.x URL.
 
 | | Capability | 2.0 | M | Note |
 |---|---|---|---|---|
-| [ ] | Local files from `{root}/animations/` only | keep | M2.3 | |
-| [ ] | Upload over HTTP: 16 MiB cap, webp gif jpg jpeg png apng bmp, name reduced to its basename, overwrites, plays at once, refused while the card is shared over USB | keep | M2.3 | |
+| [x] | Local files from `{root}/animations/` only | keep | M2.3 | |
+| [ ] | Upload over HTTP: 16 MiB cap, webp gif jpg jpeg png apng bmp, name reduced to its basename, overwrites, plays at once, refused while the card is shared over USB | keep | M2.3 | Done in M2.3 except: plays at once (M2.4) and the USB refusal (with USB sharing). A name the card cannot hold is refused, not reduced |
 | [ ] | The home page shrinks oversized JPEGs in the browser before upload | keep | M5.1 | |
 | [ ] | Makapix channels: all, promoted, by user, by hashtag, a user's reactions, single artwork | keep | M4.5 | |
 | [ ] | Promoted refreshes over public HTTPS on an unregistered device, so a new device plays art with no account | keep | M4.5 | First-run experience depends on it |
@@ -61,7 +61,7 @@ describe what a client can do, not the 1.x URL.
 | [ ] | Auto-advance every 30 s by default; 0 turns it off; the timer resets on manual navigation and on request | keep | M2.4 | |
 | [ ] | Auto-advance holds while the info screen, the setup screen or pause is up, and while the loader is busy | keep | M2.4, M3.3 | |
 | [ ] | Pick mode random or recency; channel selection SWRR or stochastic | keep | M2.3 | |
-| [ ] | Previous walks a history of 32 without disturbing the generator; history survives a playset switch | keep | M2.3 | |
+| [x] | Previous walks a history of 32 without disturbing the generator; history survives a playset switch | keep | M2.3 | |
 | [ ] | History and last-played commit when a swap is requested | change | M2.4 | They commit when the artwork is shown (finding 7) |
 | [ ] | Pause: black screen, backlight off, views and auto-advance stopped; resume restores brightness; not kept across reboot | keep | M2.4 | |
 | [ ] | Rotation 0, 90, 180, 270: persisted, applies to playback, screens and overlays | keep | M2.4, M3.3 | |
@@ -69,7 +69,7 @@ describe what a client can do, not the 1.x URL.
 | [ ] | A corrupt cached file is deleted, at most one per minute; local files are never deleted | keep | M2.4 | Through the blob store, on `CORRUPT` only |
 | [ ] | Artworks the server no longer has are remembered and skipped | keep | M4.1 | One implementation in the blob store |
 | [ ] | A high miss rate triggers a verification sweep of what is on the card | change | M2.2 | Availability comes from the blob index; a miss is a repair event |
-| [ ] | Boot restores the active playset; with none, plays Promoted without saving that choice | keep | M2.3, M4.5 | |
+| [ ] | Boot restores the active playset; with none, plays Promoted without saving that choice | keep | M2.3, M4.5 | Restoring is done (M2.3). With none, 2.0 plays the user's own files (D53) until Makapix exists; revisit at M4.5 |
 | [ ] | First swap waits for the first available artwork, a finished refresh, or the timer | keep | M2.4 | |
 | [ ] | One-time "refresh every channel now" switch | keep | M4.1 | |
 | [ ] | Makapix channels other than Promoted do not refresh on an unregistered device, and the UI says so | keep | M4.5 | |
@@ -82,11 +82,11 @@ describe what a client can do, not the 1.x URL.
 | [ ] | Up to 64 channels, each with a weight and an offset; all-zero weights mean equal shares | keep | M2.3 | At most 16 channel indices resident at once |
 | [ ] | Offset honoured for museum, Giphy, local and pinned channels | keep | M2.3 | Review asks for one meaning per source, stated |
 | [ ] | Built-in playsets: all Makapix, Promoted, SD card, Giphy trending | keep | M2.3 to M4.5 | |
-| [ ] | A library of up to 32 saved playsets: list, read, create, update, rename, delete | keep | M2.3 | |
-| [ ] | Playset names of at most 32 characters; identifiers of at most 32 | change | M2.3 | Identifiers grow to 96 bytes |
+| [x] | A library of up to 32 saved playsets: list, read, create, update, rename, delete | keep | M2.3 | Rename is save under the new name, then delete the old |
+| [x] | Playset names of at most 32 characters; identifiers of at most 32 | change | M2.3 | Identifiers grow to 96 bytes |
 | [ ] | Switching is asynchronous, newest request wins, and the result is reported with a sequence number and error code | keep | M2.3 | The web UI depends on this |
-| [ ] | The active playset is readable cheaply (ETag, 304) with its banner flags | keep | M2.3 | |
-| [ ] | A playset file that fails to load is never deleted | keep | M2.3 | |
+| [ ] | The active playset is readable cheaply (ETag, 304) with its banner flags | keep | M2.3 | Readable since M2.3 without the ETag; add it in M5.1 if the UI polls |
+| [x] | A playset file that fails to load is never deleted | keep | M2.3 | |
 
 ## Touch and buttons
 

@@ -95,5 +95,8 @@ const char *net_hostname(void);
 // net_api.c: adds the built-in /api/v2 routes.
 void net_api_register(void);
 
+// net_player_api.c: adds the player, playset and upload routes.
+void net_player_api_register(void);
+
 // net_trace_api.c: adds the frame trace's routes. Only in builds with CONFIG_P3A_FRAME_TRACE.
 void net_trace_api_register(void);

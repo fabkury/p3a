@@ -498,6 +498,7 @@ static const p3a_http_route_t s_routes[] = {
 void net_api_register(void)
 {
     p3a_http_add_routes(s_routes, sizeof(s_routes) / sizeof(s_routes[0]));
+    net_player_api_register();
 #if CONFIG_P3A_FRAME_TRACE
     net_trace_api_register();
 #endif

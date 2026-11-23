@@ -19,7 +19,7 @@
 static const char *TAG = "http";
 
 #define MAX_TABLES     8
-#define MAX_JSON_BODY  (16 * 1024)
+#define MAX_JSON_BODY  (32 * 1024)  // a playset of 64 channels with long identifiers is about 20 KB
 #define MAX_PATH_LEN   256
 
 struct p3a_http_request {

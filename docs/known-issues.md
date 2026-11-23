@@ -162,7 +162,7 @@ commits can cite them.
 | M4 | `artwork_modified_at` is set to `time(NULL)` instead of parsing the stored value | `channel_manager/playlist_manager.c` |
 | M5 | `config_store` has no mutex; concurrent read-modify-writes of the config blob lose settings | `config_store/config_store.c` |
 | M6 | `/static/*` and `/museum/*` map the URI to a path with no `..` check | `http_api/http_api_pages.c` |
-| M7 | Upload response puts the raw filename into JSON unescaped | `http_api/http_api_upload.c` |
+| M7 | Upload response puts the raw filename into JSON unescaped | `http_api/http_api_upload.c` **Fixed in 2.0** (`v2`, M2.3): the name goes through the JSON builder; still open in 1.x |
 | M8 | PICO-8 audio stop clears `s_task` after a fixed 100 ms delay, no handshake | `pico8/pico8_audio.c` |
 | M9 | Event bus calls handlers while holding its dispatch mutex | `event_bus/event_bus.c` |
 | M10 | Parallel upscaler waits for both worker bits with no overall deadline | `main/display_upscaler.c` **Fixed in 2.0** (`v2`, M2.1): the wait has a 2 s deadline; still open in 1.x |

@@ -172,7 +172,7 @@ def test_bodies_that_are_not_a_json_object_are_refused(api, uart):
     before = uart.command("settings get")
     for body in (b"", b"brightness=5", b"[1,2]", b'"x"', b'{"brightness":', b"null"):
         api.call("PATCH", "/api/v2/settings", body).error(400, "INVALID_JSON")
-    too_big = b'{"device_name":"' + b"x" * 17000 + b'"}'
+    too_big = b'{"device_name":"' + b"x" * 33000 + b'"}'
     api.call("PATCH", "/api/v2/settings", too_big).error(413, "TOO_LARGE")
     assert uart.command("settings get") == before
     assert api.get("/api/v2/status").status == 200, "the server is fine afterwards"

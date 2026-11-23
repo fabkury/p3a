@@ -41,7 +41,7 @@ reopened (why).
 | M1.3 storage | done 2026-11-18. Tiers: host tests (8 programs, under ASan and UBSan too), device tests (62 cases), release and test builds, the configuration guard. The repair paths of `sd_repair` cannot be exercised on a healthy card and are carried over on trust |
 | M1.4 settings | done 2026-11-18. Tiers: host tests (9 programs, under ASan and UBSan too), generator self-test (15 cases), device tests (76 cases, 14 of them new), release and test builds, the configuration guard. The touch-recovery restart itself is not exercised (the controller works); its counters and rule are |
 | M1.5 net base | done 2026-11-18. Tiers: host tests (12 programs, under ASan and UBSan too), tool self-tests, device tests (119 cases, on the real Wi-Fi), release and test builds, the configuration guard. Awaiting manual check M1.5-a (the portal from a phone). The Wi-Fi recovery ladders are carried over untested |
-| M2.1 Display pipeline and decoders | done 2026-11-19, awaiting manual check M2.1-a. Tiers: host tests (15 programs), the whole device suite (235 cases on the test build; 6 timing cases on the trace-test build), release, test, trace and trace-test builds, the configuration guard. Timing has a baseline of minutes only; the jitter pass bar waits for the soak (M6.1) |
+| M2.1 Display pipeline and decoders | done 2026-11-19; manual check M2.1-a cleared 2026-11-23. Tiers: host tests (15 programs), the whole device suite (235 cases on the test build; 6 timing cases on the trace-test build), release, test, trace and trace-test builds, the configuration guard. Timing has a baseline of minutes only; the jitter pass bar waits for the soak (M6.1) |
 | M2.2 Library core | done 2026-11-19. Tiers: host tests (15 programs), the whole device suite (240 cases), release, test and trace builds, the configuration guard. The `refs` table of the plan was not built (D48) |
 | M2.3 Source interface, local source, scheduler | in progress. Part 1 done: the scheduler's arithmetic (`sched_core`), host-tested. Playsets, sources, the scheduler proper and the routes are not started |
 | M2.4 Loader pipeline, C and D | not started |
@@ -122,24 +122,12 @@ Open:
   Also worth one try with a wrong password: the unit should offer
   `p3a-setup` again within about a minute. If anything goes wrong,
   `python host/p3a-lab/lab.py provision` puts the unit back online.
-- **M2.1-a, how playback looks.** The tests compare framebuffers; only eyes
-  can judge the glass. With the test build on the unit
-  (`python host/p3a-lab/lab.py up`), play a few files of your own, pixel
-  art and photographs, animated and still:
-  `python host/p3a-lab/lab.py play <file>` (nearest neighbour, for pixel
-  art) and `python host/p3a-lab/lab.py play <file> smooth` (the hardware
-  scaler, as museum and Giphy pictures will use). Look for: smooth motion
-  with no stutter or tearing; clean, square pixels on pixel art; colours
-  that look right, JPEG photographs especially (2.0 fixes the harsh
-  contrast 1.x gave them, D47); transparent parts filled with the
-  background colour; the picture centred with even borders. Also once:
-  change `rotation` in the settings while a picture is up
-  (`python host/p3a-lab/lab.py cmd "settings set" '{"rotation": 90}'`)
-  and see it turn at once.
 
 Cleared:
 
-- None yet.
+- **M2.1-a, how playback looks.** Cleared by Fab on 2026-11-23 (ledger entry of
+  that date): motion, sharpness, JPEG tones, placement, transparency and
+  rotation all look right.
 
 ## Open questions for Fab
 
@@ -310,6 +298,34 @@ M1.1, 2026-11-17:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-23: manual check M2.1-a cleared
+
+Run by the agent with Fab at the panel, one picture at a time, on the test
+build.
+
+| What was shown | What Fab saw |
+|---|---|
+| A generated 64 px pixel-art scene, 20 fps, nearest neighbour | Smooth motion, no stutter or tearing; clean square pixels |
+| `images/pico-8/pico-8-gameplay.webp` (500 px, 250 frames) | Picture correct; plays slower than the file asks (see below) |
+| A wide museum JPEG (1263 by 745), smooth scaler | Natural tones; centred with even bands |
+| A transparent PNG over a dark blue background colour | Uniform blue, the soft glow fades straight into it |
+| The same JPEG, then rotation set to 90 | Turned a quarter at once, looks as good |
+
+- **Slow heavy WebP, measured.** The PICO-8 file asks for 10 fps and the
+  unit shows about 5.7: decoding one 500 px lossy frame with alpha takes
+  140 to 270 ms in libwebp (measured through the decode hook). Every frame
+  is shown; none is dropped. The WebP component is byte-identical to
+  `main`'s and the optimisation settings are the same, so 1.x should be as
+  slow, but 1.x was not measured on this file.
+- **Fab restated a design rule: p3a never drops frames.** A file that
+  cannot be decoded in time plays slower. 2.0 keeps this (D49).
+- A first transparent test picture showed a faint dark ring around the
+  glow. The ring was in the file (its colour had been blurred together
+  with its opacity). A corrected file showed none. No firmware change.
+- Not covered by this look: Giphy-sized GIFs through the smooth scaler in
+  motion, and long viewing. The soak (M6.1) is where rare stutter would
+  show.
 
 ### 2026-11-23: the 1.2.5 picture fixes checked on a device
 

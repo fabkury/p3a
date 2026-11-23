@@ -9,8 +9,8 @@ times.
 | | |
 |---|---|
 | Phase | 3, on-device UI (Phases 0, 1 and 2 complete) |
-| Current milestone | M3.3 screens (M3.2 awaits Fab's choice of font; M3.4 awaits real fingers) |
-| Next action | M3.3: the remaining screens on the model and the text path. From `legacy/`: the information screen's full content (`main/ugfx_ui.c`), the registration code (with M4.5), the SD error and format flow (`main/sd_format.c`, taps through `ui_route`), the repair notice (`sd_repair_fat_stats()`), the fatal error, the boot logo and the 22 intro animations (`p3a_core/intro_anims`, `host/intro-anim-lab` must keep working), the touch-failure countdown. Then M3.5 overlays and M3.6 USB. When Fab has answered O3 and O4: regenerate `components/p3a_ui/fonts/ui.p3afont`, tune `ui_style_default()`, close M3.2 |
+| Current milestone | M3.3 screens (M3.4 awaits real fingers) |
+| Next action | M3.3: the remaining screens on the model and the text path. From `legacy/`: the information screen's full content (`main/ugfx_ui.c`), the registration code (with M4.5), the SD error and format flow (`main/sd_format.c`, taps through `ui_route`), the repair notice (`sd_repair_fat_stats()`), the fatal error, the boot logo and the 22 intro animations (`p3a_core/intro_anims`, `host/intro-anim-lab` must keep working), the touch-failure countdown. Then M3.5 overlays and M3.6 USB. |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -46,7 +46,7 @@ reopened (why).
 | M2.3 Source interface, local source, scheduler | done 2026-11-23. Tiers: host tests (18 programs, under the sanitizers too), the whole device suite (255 cases; one needed its own bound updated for the larger JSON body limit), release, test and trace builds, the configuration guard. Left for later milestones and noted in the entries: uploads do not play at once (M2.4), more than 16 channels (M4.x), weighted shares on the device (needs a second source) |
 | M2.4 Loader pipeline, C and D | done 2026-11-23. Tiers: host tests (20 programs, under the sanitizers too), the whole device suite (260 cases pass; the 6 timing cases need the trace build and were not run), release, test and trace builds, the configuration guard. Not seen on the device because nothing produces them yet: deleting a damaged blob (M4.1), the aspect filter (M4.3). Manual check M2.4-a pending |
 | M3.1 Screen model and hook table | done 2026-11-23. Tiers: host tests (22 programs, under the sanitizers too), device tests (smoke, UI, pipeline and player: 48 cases), test build. Nothing is drawn yet |
-| M3.2 Text and fonts | built 2026-11-23 with a provisional font; open until Fab picks the family (O4) and approves the look. Tiers: host tests (24 programs, under the sanitizers too), device tests (With them the smoke, UI, player, pipeline, scheduler and player-API tests pass (62 cases) on the final firmware; the other tests not marked slow passed (190 cases) on the build just before the last two fixes) |
+| M3.2 Text and fonts | done 2026-11-23: the font is Everyday Ample, Fab's choice (D61). Tiers: host tests, device tests (the panel equals the workstation's rendering pixel for pixel). Manual check M3.2-a (the look on the panel itself) pending; image assets arrive with the screens that need them |
 | M3.3 Screens | not started |
 | M3.4 Touch router and gestures | built 2026-11-23; open for manual check M3.4-a (real fingers), swipe actions (Phase 4) and the SD-format taps (M3.3). Tiers: host tests (26 programs, under the sanitizers too), device tests with scripted fingers (71 cases with the areas around it) |
 | M3.5 Overlays | not started |
@@ -128,10 +128,8 @@ Open:
   fingers a quarter turn (the screen turns; turn it back); start a swipe
   and stop short (nothing should happen). Then press BOOT to pause and
   check that taps do nothing and a long press resumes.
-- **M3.2-a, the look of the screens.** Pick the font family from the
-  specimen sheet (`C:\Users\fab\p3a-2.0-fonts\overview.png`, and one
-  720 by 720 picture per family beside it), then look at a screen on the
-  device itself:
+- **M3.2-a, the look of the screens.** The font is chosen (Everyday
+  Ample). Look at a screen on the device itself:
   `python host/p3a-lab/lab.py cmd "ui screen {\"screen\":6,\"up\":true,\"title\":\"Updating Wi-Fi\",\"text\":\"2.9.1 to 2.9.3. Do not unplug\",\"progress\":64}"`
   (take it down with `\"up\":false`). Sizes, colours and the banner's
   height are the numbers in `ui_style_default()`.
@@ -156,7 +154,6 @@ and proposals are in [DECISIONS.md](DECISIONS.md) under "Open decisions".
 | Q1 to Q10 | Ten 1.x behaviours that look accidental (brightness not restored at boot, API keys readable over the LAN, no update check for 12 hours, and others). Keep or change each? Listed in [PARITY.md](PARITY.md) under "Behaviours to decide" | M1.3 at the earliest; each row names its milestone |
 | O18 | Should the user's own files be scaled smoothly or with sharp pixels? 1.x used sharp pixels for everything on the card, which suits pixel art and makes photographs blocky. Options: keep sharp; go smooth; or decide per file (smooth for JPEG, sharp for the rest) | M2.4 |
 | O2 | Should 1.2.5 carry a notice about 2.0, and with what wording? | 1.2.5 |
-| O4 | Which VEXED font families and sizes? | M3.2 |
 | O3 | Keep uGFX for text, or replace it with a glyph-sheet renderer? | M3.2 |
 | O5 | Clock overlay details (12 or 24 hour, seconds, when hidden) | M3.5 |
 | O6 | Branding overlay rules from the Giphy and Klipy terms | M3.5 |
@@ -322,6 +319,19 @@ M1.1, 2026-11-17:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-23: the font is Everyday Ample (O4 decided)
+
+- Fab chose Everyday Ample from the specimen sheet (D61).
+  `fonts/ui.p3afont` is regenerated from its TTF at 9 px: 157 characters,
+  3 KB. One family for every role; the scales stay 4, 3 and 2 for title,
+  text and band, which gives glyphs 36, 27 and 18 pixels high.
+- O3 stands as decided in D60 unless Fab says otherwise: he was asked and
+  answered the font question only.
+- Verified: host tests (26 programs); on the dev unit the drawing, UI and
+  touch tests, which compare the panel with the workstation's rendering
+  of the new font.
+- Not verified: the look by eye on the panel (M3.2-a stays open for that).
 
 ### 2026-11-23: M3.4 part 2, the touch task and what gestures do
 

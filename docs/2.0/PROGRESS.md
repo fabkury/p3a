@@ -10,7 +10,7 @@ times.
 |---|---|
 | Phase | 3, on-device UI (Phases 0, 1 and 2 complete) |
 | Current milestone | M3.2 text and fonts (the look awaits Fab), then M3.4 |
-| Next action | M3.4: a pure gesture recogniser (drafted and host-tested outside the tree in the session of 2026-11-23: tap, swipe, long press, two-finger rotate, with 1.x's thresholds; rewrite it from `legacy/main/app_touch.c` if the draft is gone), the touch task on class `TOUCH`, a table from the screen on top to what each gesture does, and a touch injection hook for the device tests. Then M3.3's remaining screens (info, registration code, SD format flow, boot logo and intro animations). When Fab has answered O3 and O4: regenerate `components/p3a_ui/fonts/ui.p3afont`, tune `ui_style_default()`, close M3.2 |
+| Next action | M3.4: `ui_gesture.c` (pure, host-tested: tap, swipe, long press, two-finger rotate, with 1.x's thresholds) is in the tree and not yet fed. Write the touch task on class `TOUCH` that samples the GT911 every 20 ms and feeds it, a table from the screen on top to what each gesture does (PARITY.md, "Touch and buttons"), and a touch injection hook for the device tests. Then M3.3's remaining screens (info, registration code, SD format flow, boot logo and intro animations). When Fab has answered O3 and O4: regenerate `components/p3a_ui/fonts/ui.p3afont`, tune `ui_style_default()`, close M3.2 |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -48,7 +48,7 @@ reopened (why).
 | M3.1 Screen model and hook table | done 2026-11-23. Tiers: host tests (22 programs, under the sanitizers too), device tests (smoke, UI, pipeline and player: 48 cases), test build. Nothing is drawn yet |
 | M3.2 Text and fonts | built 2026-11-23 with a provisional font; open until Fab picks the family (O4) and approves the look. Tiers: host tests (24 programs, under the sanitizers too), device tests (With them the smoke, UI, player, pipeline, scheduler and player-API tests pass (62 cases) on the final firmware; the other tests not marked slow passed (190 cases) on the build just before the last two fixes) |
 | M3.3 Screens | not started |
-| M3.4 Touch router and gestures | not started |
+| M3.4 Touch router and gestures | begun 2026-11-23: the gesture recogniser (pure, host tests). The touch task, the table and the injection hook are to do |
 | M3.5 Overlays | not started |
 | M3.6 USB mass storage | not started |
 | M4.1 Fetch, download, refresh, eviction | not started |
@@ -316,6 +316,24 @@ M1.1, 2026-11-17:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-23: M3.4 part 1, the gesture recogniser
+
+- `ui_gesture.c` (pure): one touch sample in, at most one gesture out.
+  Tap (reported on release, placed as the viewer sees a turned screen),
+  swipe up and down (a quarter of the screen, as the viewer sees it), long
+  press (2.25 s, still within 6.5% of the screen), two-finger rotate (45
+  degrees, once per gesture). The thresholds and the order of the checks
+  are those of 1.x's `app_touch.c`, which were tuned with real fingers.
+- One difference from 1.x: when two fingers are lifted one after the
+  other, the finger left on the panel no longer ends as a tap.
+- A touch that drifts further than a tap may and less than a swipe needs
+  is nothing, as in 1.x.
+- Nothing feeds it yet: the touch task and what each gesture does per
+  screen are the rest of M3.4.
+- Verified, host tests: `test_ui_gesture` (8 cases), with the others (25
+  programs), also under the sanitizers. Not on the device: it is not
+  wired.
 
 ### 2026-11-23: M3.2, text on the panel (provisional font)
 

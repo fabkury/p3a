@@ -185,6 +185,10 @@ p3a_host_test(test_ui_player
 p3a_host_test(test_ui_text
     SOURCES ui/test_ui_text.c ${UI}/ui_canvas.c ${UI}/ui_font.c
     INCLUDES ${UI})
+p3a_host_test(test_ui_gesture
+    SOURCES ui/test_ui_gesture.c ${UI}/ui_gesture.c
+    INCLUDES ${UI}
+    LIBS m)
 p3a_host_test(test_ui_draw
     SOURCES ui/test_ui_draw.c ${UI}/ui_draw.c ${UI}/ui_canvas.c ${UI}/ui_font.c ${UTIL}/p3a_ui_hooks.c
     INCLUDES ${UI} ${UTIL}/include)

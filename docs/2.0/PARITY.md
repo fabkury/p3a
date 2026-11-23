@@ -26,7 +26,7 @@ describe what a client can do, not the 1.x URL.
 | | Capability | 2.0 | M | Note |
 |---|---|---|---|---|
 | [x] | Local files from `{root}/animations/` only | keep | M2.3 | |
-| [x] | Upload over HTTP: 16 MiB cap, webp gif jpg jpeg png apng bmp, name reduced to its basename, overwrites, plays at once, refused while the card is shared over USB | keep | M2.3 | Done in M2.3 except: plays at once (M2.4) and the USB refusal (with USB sharing). A name the card cannot hold is refused, not reduced Plays at once since M2.4; the USB refusal comes with USB sharing (M3.6) |
+| [x] | Upload over HTTP: 16 MiB cap, webp gif jpg jpeg png apng bmp, name reduced to its basename, overwrites, plays at once, refused while the card is shared over USB | keep | M2.3 | Done in M2.3 except: plays at once (M2.4) and the USB refusal (with USB sharing). A name the card cannot hold is refused, not reduced Plays at once since M2.4; refused while a computer has the card since M3.6 |
 | [ ] | The home page shrinks oversized JPEGs in the browser before upload | keep | M5.1 | |
 | [ ] | Makapix channels: all, promoted, by user, by hashtag, a user's reactions, single artwork | keep | M4.5 | |
 | [ ] | Promoted refreshes over public HTTPS on an unregistered device, so a new device plays art with no account | keep | M4.5 | First-run experience depends on it |

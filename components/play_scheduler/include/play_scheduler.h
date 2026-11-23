@@ -68,7 +68,8 @@ esp_err_t play_scheduler_refresh_source(uint8_t source);
 // Stops playback for good, until the device restarts: the panel goes
 // black, the file being played is closed, and nothing is asked of the card
 // again. For when the card is about to be taken away (a format, sharing it
-// over USB), which always ends in a restart.
+// over USB), which always ends in a restart. Next, back and show answer
+// ESP_ERR_NOT_ALLOWED from then on.
 void play_scheduler_shutdown(void);
 
 // A screen is up over the artwork (or a test wants the device to stay

@@ -131,7 +131,7 @@ static esp_err_t record_path(const p3a_record_t *record, char *out, size_t len, 
 static esp_err_t request(turn_kind_t kind, const p3a_record_t *record, uint32_t channel)
 {
     if (s->shut_down) {
-        return ESP_ERR_INVALID_STATE;
+        return ESP_ERR_NOT_ALLOWED;
     }
     animation_player_request_t req = {0};
     esp_err_t err = record_path(record, req.path, sizeof(req.path), &req.smooth);

@@ -3,7 +3,7 @@
 
 /**
  * @file usb_descriptors.c
- * @brief TinyUSB device and configuration descriptors for CDC+MSC+Vendor composite
+ * @brief TinyUSB device and configuration descriptors for CDC+MSC composite
  */
 
 #include "usb_descriptors.h"
@@ -18,11 +18,7 @@
 #define P3A_USB_PID 0x80A8
 #define P3A_USB_BCD 0x0200
 
-#if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
-#define P3A_CONFIG_TOTAL_LEN (TUD_CONFIG_DESC_LEN + TUD_CDC_DESC_LEN + TUD_MSC_DESC_LEN + TUD_VENDOR_DESC_LEN)
-#else
 #define P3A_CONFIG_TOTAL_LEN (TUD_CONFIG_DESC_LEN + TUD_CDC_DESC_LEN + TUD_MSC_DESC_LEN)
-#endif
 
 static tusb_desc_device_t const s_device_descriptor = {
     .bLength = sizeof(tusb_desc_device_t),
@@ -46,10 +42,6 @@ static uint8_t const s_full_speed_configuration[] = {
     TUD_CDC_DESCRIPTOR(P3A_ITF_NUM_CDC_COMM, P3A_STRID_CDC_INTERFACE, P3A_USB_EP_CDC_NOTIF, 8,
                        P3A_USB_EP_CDC_OUT, P3A_USB_EP_CDC_IN, 64),
     TUD_MSC_DESCRIPTOR(P3A_ITF_NUM_MSC, P3A_STRID_MSC_INTERFACE, P3A_USB_EP_MSC_OUT, P3A_USB_EP_MSC_IN, 64),
-#if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
-    TUD_VENDOR_DESCRIPTOR(P3A_ITF_NUM_VENDOR, P3A_STRID_VENDOR_INTERFACE,
-                          P3A_USB_EP_VENDOR_OUT, P3A_USB_EP_VENDOR_IN, 64),
-#endif
 };
 
 #if TUD_OPT_HIGH_SPEED
@@ -58,10 +50,6 @@ static uint8_t const s_high_speed_configuration[] = {
     TUD_CDC_DESCRIPTOR(P3A_ITF_NUM_CDC_COMM, P3A_STRID_CDC_INTERFACE, P3A_USB_EP_CDC_NOTIF, 8,
                        P3A_USB_EP_CDC_OUT, P3A_USB_EP_CDC_IN, 512),
     TUD_MSC_DESCRIPTOR(P3A_ITF_NUM_MSC, P3A_STRID_MSC_INTERFACE, P3A_USB_EP_MSC_OUT, P3A_USB_EP_MSC_IN, 512),
-#if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
-    TUD_VENDOR_DESCRIPTOR(P3A_ITF_NUM_VENDOR, P3A_STRID_VENDOR_INTERFACE,
-                          P3A_USB_EP_VENDOR_OUT, P3A_USB_EP_VENDOR_IN, 512),
-#endif
 };
 
 static tusb_desc_device_qualifier_t const s_device_qualifier = {
@@ -87,9 +75,6 @@ static const char *const s_string_desc_base[] = {
     NULL,  // Serial: filled dynamically from s_usb_serial
     "P3A CDC Console",
     "P3A SD Drive",
-#if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
-    "P3A PICO-8 Stream",
-#endif
 };
 
 // Writable copy that points to s_usb_serial for the serial string

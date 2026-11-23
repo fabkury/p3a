@@ -10,6 +10,10 @@
 //                                      the panel's coordinates; answers at once
 // !ui touched                          whether that script still runs, and the last
 //                                      gesture recognised and what it did
+// !ui usb mounted|unmounted|suspended|resumed    what the USB bus would report, as if a
+//                                      computer were there (it cannot then read the
+//                                      card, but the device behaves as if it could)
+// !ui usb                              whether the card is handed over
 //
 // The numbers are p3a_screen_t and p3a_notice_t. What is then on the screen
 // is read from GET /api/v2/ui.
@@ -22,6 +26,7 @@
 #include "p3a_test_internal.h"
 #include "p3a_ui.h"
 #include "p3a_ui_hooks.h"
+#include "p3a_usb.h"
 
 static int number(const cJSON *json, const char *key, int fallback)
 {
@@ -84,6 +89,16 @@ static void cmd_ui(const char *args)
     }
     if (strcmp(args, "touched") == 0) {
         cmd_touched();
+        return;
+    }
+    if (strncmp(args, "usb", 3) == 0) {
+        static const char *const events[] = {"mounted", "unmounted", "suspended", "resumed"};
+        for (int i = 0; i < 4; i++) {
+            if (strcmp(args + 3, " ") != 0 && args[3] == ' ' && strcmp(args + 4, events[i]) == 0) {
+                p3a_usb_session_event((p3a_usb_event_t)i);
+            }
+        }
+        p3a_test_reply_ok(p3a_usb_is_sharing() ? "{\"sharing\":true}" : "{\"sharing\":false}");
         return;
     }
     const bool screen = strncmp(args, "screen ", 7) == 0;

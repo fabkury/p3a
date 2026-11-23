@@ -91,6 +91,20 @@ dependencies:
       registry_url: https://components.espressif.com/
       type: service
     version: 1.1.2
+  espressif/esp_tinyusb:
+    component_hash: 6a50305bc61c7a361da8c0833642be824e92dacb0a6001719a832a4e96e471bf
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.0'
+    - name: espressif/tinyusb
+      registry_url: https://components.espressif.com
+      require: public
+      version: '>=0.14.2'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.7.6~2
   espressif/esp_wifi_remote:
     component_hash: 655ca258940f71c102e035af65181f24f4bd989e0b60c8e96a1c70513b81fb25
     dependencies:
@@ -131,6 +145,20 @@ dependencies:
       registry_url: https://components.espressif.com/
       type: service
     version: 1.9.1
+  espressif/tinyusb:
+    component_hash: 7f73a4159dc95325ceaa4ade5e88734c4e1f5124746a3765cf61dc6157d78798
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.0'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    targets:
+    - esp32s2
+    - esp32s3
+    - esp32p4
+    version: 0.17.0~2
   espressif/wifi_remote_over_eppp:
     component_hash: 06d8bc15348bbd21f1390daace36ed5adcf6026c93c5b69decc55fa04df2711a
     dependencies:
@@ -222,15 +250,17 @@ direct_dependencies:
 - espressif/esp_lcd_touch_gt911
 - espressif/esp_lvgl_port
 - espressif/esp_serial_slave_link
+- espressif/esp_tinyusb
 - espressif/esp_wifi_remote
 - espressif/libjpeg-turbo
 - espressif/mdns
+- espressif/tinyusb
 - espressif/wifi_remote_over_eppp
 - espressif/zlib
 - idf
 - lvgl/lvgl
 - waveshare/esp32_p4_wifi6_touch_lcd_4b
 - waveshare/esp_lcd_st7703
-manifest_hash: 8a376a23a643966cc8cf5cd0e8fab6e30de1de8492f1f8acebda2f85ae93933f
+manifest_hash: 811d85c275f2c41b5a37f8be1a63e07c406a016b893ace2f4eaccb4de36ec45a
 target: esp32p4
 version: 2.0.0

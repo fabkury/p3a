@@ -23,6 +23,7 @@ display_renderer player
 animation_player player
 play_scheduler player
 p3a_ui         ui
+p3a_usb        ui
 animated_gif   player vendored
 libpng         player vendored
 libwebp_decoder player vendored

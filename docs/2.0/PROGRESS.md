@@ -8,9 +8,9 @@ times.
 
 | | |
 |---|---|
-| Phase | 3, on-device UI (Phases 0, 1 and 2 complete) |
-| Current milestone | M3.6 USB mass storage |
-| Next action | M3.6 USB mass storage. From `legacy/main`: `app_usb.c`, `usb_descriptors.*`, `tusb_config.h`, and the parked USB options at the bottom of `sdkconfig.defaults`. The card is handed to the computer with `play_scheduler_shutdown()`, `P3A_SCREEN_USB` says so, uploads are refused meanwhile, and every session ends in a restart (memory: USB-MSC always reboots). Its check is manual (a computer must mount the card). Then Phase 4, starting with M4.1 (fetch, download, refresh, eviction) |
+| Phase | 4, remote sources (Phases 0 to 3 complete but for their manual checks) |
+| Current milestone | M4.1 fetch, download, refresh, eviction |
+| Next action | M4.1. Read PLAN.md M4.1 and O9, `docs/2.0-architecture-review/content-pipeline.md` sections 1 and 3, and in `legacy/components`: `http_fetch` (with its TLS gate), `storage_eviction`, and the download and refresh parts of `channel_manager` and `play_scheduler_refresh.c`. Build: `http_fetch` moved under a new `net`-or-below home that sources may use (the layer order has sources below net: decide where fetching lives), hashing into the blob store as bytes arrive, one download task and one refresh task with `refresh_state_t` (pure, host-tested), back-off on `p3a_mem_level()` and a full card, eviction told about pins by data. Device tests arrive with the first source (M4.2) |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -50,7 +50,7 @@ reopened (why).
 | M3.3 Screens | done 2026-11-23 except the registration code (M4.5) and the USB screen (M3.6). Tiers: host tests (27 programs, under the sanitizers too), the whole device suite (278 cases passed and 6 timing cases were skipped; 3 failed in the touch tests, whose expectation of a tap on the information screen was out of date, and pass since), including a real format of the dev unit's card. Manual check M3.3-a pending |
 | M3.4 Touch router and gestures | built 2026-11-23; open for manual check M3.4-a (real fingers), swipe actions (Phase 4) and the SD-format taps (M3.3). Tiers: host tests (26 programs, under the sanitizers too), device tests with scripted fingers (71 cases with the areas around it) |
 | M3.5 Overlays | done 2026-11-23 except source branding, which moves to M4.2 where its sources and their terms are (O6). Tiers: host tests (29 programs, under the sanitizers too), device tests (the overlays equal the workstation's rendering). Manual check M3.5-a pending |
-| M3.6 USB mass storage | not started |
+| M3.6 USB mass storage | built 2026-11-23; open for manual check M3.6-a (a real computer). Tiers: host tests (30 programs, under the sanitizers too), device tests with the bus's reports injected (with it every test not marked slow passes: 267 cases), release, test and trace builds, the configuration guard, a from-scratch configure in the CI container |
 | M4.1 Fetch, download, refresh, eviction | not started |
 | M4.2 Giphy and Klipy | not started |
 | M4.3 Museums | not started |
@@ -122,6 +122,14 @@ Open:
   Also worth one try with a wrong password: the unit should offer
   `p3a-setup` again within about a minute. If anything goes wrong,
   `python host/p3a-lab/lab.py provision` puts the unit back online.
+- **M3.6-a, the card on a computer.** Plug a cable from the board's USB
+  port marked for the P4's own USB (not the one the lab's serial console
+  uses) into a computer. The device's screen should say the card is in use
+  by the computer, and the computer should show a drive (labelled P3A
+  after a format on the device). Copy a picture into its `p3a/animations`
+  folder, eject the drive, unplug: the device should say it is restarting,
+  restart, and play the picture in rotation. Worth one try of pulling the
+  cable without ejecting.
 - **M3.5-a, the overlays by eye.** Turn the clock on
   (`python host/p3a-lab/lab.py cmd "settings set {\"clock_enabled\":true,\"timezone\":\"EST5EDT,M3.2.0,M11.1.0\"}"`)
   and judge its size, place and outline over a few artworks; swipe up on
@@ -347,10 +355,52 @@ M3.5, 2026-11-23:
   the pictures are now `components/p3a_ui/images/*.png` with their
   generated `.p3aimg` files.
 
+M3.6, 2026-11-23:
+
+- `main/app_usb.c` and `main/include/app_usb.h`: rewritten as
+  `components/p3a_usb/p3a_usb.c` and `usb_session.c`. The PICO-8 stream
+  and touch report parts are gone with PICO-8.
+
 ## Session log
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-23: M3.6, the SD card as a USB drive. Phase 3 built
+
+- New component `p3a_usb` (layer `ui`: a session takes the card away from
+  everything below it). TinyUSB as 1.x had it, a serial interface plus
+  mass storage, without the PICO-8 vendor interface; the descriptors and
+  `tusb_config.h` moved from `legacy/main`. `esp_tinyusb` 1.7.6~2 and
+  `tinyusb` 0.17.0~2 are pinned to what 1.x shipped.
+- **The session's rules are pure** (`usb_session.c`): a session begins
+  when a computer configures the device and always ends in a restart; a
+  mount within 1.5 s of an unmount is a suspected bounce and is looked at
+  again; an ended session has 2 s to come back; a suspend that lasts ends
+  it too. 1.x had the same rules as three timers, two worker tasks and
+  five flags in `app_usb.c`.
+- **Taking the card**: `play_scheduler_shutdown()`, then
+  `p3a_storage_hand_over()`, after which every write through the storage
+  layer is refused until the restart; the computer is told "no medium"
+  until both are done. `P3A_SCREEN_USB` says the card is in use, and then
+  that the device is restarting.
+- Uploads, next and back answer 409 `CARD_IN_USE` meanwhile (1.x refused
+  uploads only).
+- The configuration guard lists one new difference from 1.x, the vendor
+  interface.
+- Verified, host tests: 30 programs, also under the sanitizers; new is
+  `test_usb_session` (5 cases).
+- Verified, device test (`test_usb.py`, the bus's reports injected through
+  `!ui usb`): the card is taken, playback stops, the screen says so,
+  uploads, next and a playset save are refused, gestures do nothing, and
+  two seconds after the computer lets go the device announces the
+  restart, restarts, and has its card back in service. with it every test not marked slow passes: 267 cases.
+- Verified, builds: release, test and trace with the build checks and the
+  configuration guard; a from-scratch configure in the CI container, since
+  a managed component was added.
+- **Not verified: anything a real computer does.** No sector was served
+  to a host, on any operating system. That is manual check M3.6-a, and
+  until it is done this milestone is built, not done.
 
 ### 2026-11-23: M3.5, the overlays
 

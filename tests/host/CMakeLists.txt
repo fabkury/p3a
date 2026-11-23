@@ -192,6 +192,9 @@ p3a_host_test(test_ui_gesture
 p3a_host_test(test_ui_card
     SOURCES ui/test_ui_card.c ${UI}/ui_card.c ${UTIL}/p3a_ui_hooks.c
     INCLUDES ${UI} ${UTIL}/include)
+p3a_host_test(test_usb_session
+    SOURCES ui/test_usb_session.c ${P3A_COMPONENTS}/p3a_usb/usb_session.c
+    INCLUDES ${P3A_COMPONENTS}/p3a_usb)
 p3a_host_test(test_ui_route
     SOURCES ui/test_ui_route.c ${UI}/ui_route.c
     INCLUDES ${UI} ${UTIL}/include)

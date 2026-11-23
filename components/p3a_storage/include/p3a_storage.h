@@ -85,6 +85,13 @@ p3a_card_state_t p3a_storage_card_probe(void);
 // Slow: call from a job.
 esp_err_t p3a_storage_format(void);
 
+// The card is being given to a computer over USB. From this call until the
+// restart every write through this layer is refused (fs_atomic fails
+// fast), because the computer now owns the file system and the device's
+// view of it is stale. There is no way back but a restart.
+void p3a_storage_hand_over(void);
+bool p3a_storage_is_handed_over(void);
+
 // --- free space -------------------------------------------------------------------
 
 typedef struct {

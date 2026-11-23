@@ -1,0 +1,6 @@
+## TinyUSB, pinned to the versions p3a 1.x shipped with
+## (legacy/dependencies.lock). Bump one on purpose, never by letting the
+## resolver drift.
+dependencies:
+  espressif/esp_tinyusb: "1.7.6~2"
+  espressif/tinyusb: "0.17.0~2"

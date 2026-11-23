@@ -33,6 +33,7 @@ EXPECTED = {
     "CONFIG_IDF_INIT_VERSION": "informational: the IDF version that first generated the file",
     "CONFIG_HTTPD_WS_SUPPORT": "WebSocket support was only for PICO-8, which 2.0 drops",
     "CONFIG_BSP_SPIFFS_MOUNT_POINT": "1.x pointed the BSP's SPIFFS mount at /webui; 2.0 has no such partition",
+    "CONFIG_TINYUSB_VENDOR_COUNT": "the USB vendor interface carried the PICO-8 stream, which 2.0 drops",
 }
 
 

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Bringing the SD card into service, and the cached free-space figure.
 
+#include <stdatomic.h>
 #include "p3a_storage.h"
 
 #include "esp_log.h"
@@ -62,6 +63,18 @@ static esp_err_t s_mount_error = ESP_OK;
 static p3a_card_state_t state_of_mount_error(esp_err_t err)
 {
     return err == ESP_OK ? P3A_CARD_IN_SERVICE : err == ESP_FAIL ? P3A_CARD_NO_FILESYSTEM : P3A_CARD_ABSENT;
+}
+
+static atomic_bool s_handed_over;
+
+void p3a_storage_hand_over(void)
+{
+    atomic_store(&s_handed_over, true);
+}
+
+bool p3a_storage_is_handed_over(void)
+{
+    return atomic_load(&s_handed_over);
 }
 
 p3a_card_state_t p3a_storage_card_state(void)

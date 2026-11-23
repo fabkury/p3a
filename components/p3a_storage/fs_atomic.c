@@ -7,6 +7,7 @@
  */
 
 #include "fs_atomic.h"
+#include "p3a_storage.h"
 #include "sd_health.h"
 #include "sd_repair.h"
 #include "esp_log.h"
@@ -33,7 +34,7 @@ static bool is_sd_path(const char *path)
 // Fail-fast when the SD-failure latch has tripped: don't touch a dead card.
 static bool refuse_latched(const char *final_path)
 {
-    if (sd_health_is_failed() && is_sd_path(final_path)) {
+    if ((sd_health_is_failed() || p3a_storage_is_handed_over()) && is_sd_path(final_path)) {
         ESP_LOGW(TAG, "SD failure latched, refusing write: %s", final_path);
         return true;
     }

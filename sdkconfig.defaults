@@ -78,8 +78,9 @@ CONFIG_ESP_HOSTED_SDIO_TX_Q_SIZE=40
 CONFIG_ESP_HOSTED_SDIO_RX_Q_SIZE=40
 CONFIG_ESP_HOSTED_TRANSPORT_RESTART_ON_FAILURE=n
 
+# USB (components/p3a_usb): the SD card as a mass storage device, and the
+# serial interface 1.x also had. No vendor interface: that was PICO-8's.
+CONFIG_TINYUSB_MSC_ENABLED=y
+CONFIG_TINYUSB_CDC_ENABLED=y
+
 # --- Parked until their component arrives -----------------------------------
-# M3.6 USB mass storage (esp_tinyusb):
-# CONFIG_TINYUSB_MSC_ENABLED=y
-# CONFIG_TINYUSB_CDC_ENABLED=y
-# CONFIG_TINYUSB_VENDOR_COUNT=1

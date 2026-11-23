@@ -3,7 +3,7 @@
 
 /**
  * @file tusb_config.h
- * @brief TinyUSB stack configuration for ESP32-P4 CDC+MSC+Vendor
+ * @brief TinyUSB stack configuration for ESP32-P4 CDC+MSC
  */
 
 #pragma once
@@ -30,11 +30,7 @@ extern "C" {
 
 #define CFG_TUD_CDC             1
 #define CFG_TUD_MSC             1
-#if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
-#define CFG_TUD_VENDOR          1
-#else
 #define CFG_TUD_VENDOR          0
-#endif
 
 #define CFG_TUD_CDC_RX_BUFSIZE  512
 #define CFG_TUD_CDC_TX_BUFSIZE  512
@@ -44,11 +40,6 @@ extern "C" {
 #define CFG_TUD_MSC_TX_BUFSIZE  512
 #define CFG_TUD_MSC_RX_BUFSIZE  512
 
-#if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
-#define CFG_TUD_VENDOR_TX_BUFSIZE 8192
-#define CFG_TUD_VENDOR_RX_BUFSIZE 8192
-#define CFG_TUD_VENDOR_EP_BUFSIZE 512
-#endif
 
 #define CFG_TUSB_MEM_ALIGN          __attribute__((aligned(16)))
 #define CFG_TUSB_MEM_SECTION

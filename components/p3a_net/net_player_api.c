@@ -132,6 +132,8 @@ static void answer_step(p3a_http_request_t *req, esp_err_t err, const char *noth
         p3a_http_fail(req, 409, "NOTHING_TO_PLAY", "%s", nothing);
     } else if (err == ESP_ERR_INVALID_STATE) {
         p3a_http_fail(req, 409, "PAUSED", "the player is paused; resume it first (POST /api/v2/player/resume)");
+    } else if (err == ESP_ERR_NOT_ALLOWED) {
+        p3a_http_fail(req, 409, "CARD_IN_USE", "the SD card is in use by a computer or being formatted; the device restarts when that ends");
     } else if (err != ESP_OK) {
         p3a_http_fail_err(req, err, "asking the player");
     } else {
@@ -379,6 +381,10 @@ static void post_file(p3a_http_request_t *req)
     }
     if (source_local_format_of(name) == P3A_FORMAT_UNKNOWN) {
         p3a_http_fail(req, 415, "UNSUPPORTED_TYPE", "the name must end in .webp, .gif, .png, .apng, .jpg, .jpeg or .bmp");
+        return;
+    }
+    if (p3a_storage_is_handed_over()) {
+        p3a_http_fail(req, 409, "CARD_IN_USE", "a computer has the SD card over USB; copy the file there, or unplug it first");
         return;
     }
     const size_t len = raw->content_len;

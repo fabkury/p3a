@@ -31,6 +31,7 @@
 #include "p3a_settings.h"
 #include "p3a_storage.h"
 #include "p3a_ui.h"
+#include "p3a_usb.h"
 #include "sdio_bus.h"
 #include "slave_ota.h"
 #include "sdkconfig.h"
@@ -220,6 +221,9 @@ void app_main(void)
     // the normal case; a missing image is not an error.
     esp_err_t c6 = slave_ota_check_and_update();
     boot_step("co-processor", c6 == ESP_ERR_NOT_FOUND ? ESP_OK : c6);
+
+    // The SD card as a USB drive for a computer that is plugged in.
+    boot_step("usb", p3a_usb_start());
 
     // The BOOT button pauses and resumes. Watched only from here on: a press
     // during the co-processor update above does nothing.

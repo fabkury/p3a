@@ -10,5 +10,5 @@ idf_component_register(
     SRCS ${srcs}
     INCLUDE_DIRS "include"
     PRIV_REQUIRES animation_decoder animation_player display_renderer esp_driver_uart esp_app_format esp_lcd espressif__esp_lcd_touch esp_timer fatfs nvs_flash sdmmc
-                  bootloader_support esp_http_server esp_netif esp_partition json lwip espressif__esp_wifi_remote esp_wifi p3a_board p3a_library p3a_net p3a_ui play_scheduler source_local p3a_settings p3a_storage p3a_util sd_idle_wait sdio_bus slave_ota
+                  bootloader_support esp_http_server esp_netif esp_partition json lwip espressif__esp_wifi_remote esp_wifi p3a_board p3a_library p3a_net p3a_ui p3a_usb play_scheduler source_local p3a_settings p3a_storage p3a_util sd_idle_wait sdio_bus slave_ota
 )

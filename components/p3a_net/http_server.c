@@ -18,7 +18,7 @@
 
 static const char *TAG = "http";
 
-#define MAX_TABLES     8
+#define MAX_TABLES     16
 #define MAX_JSON_BODY  (32 * 1024)  // a playset of 64 channels with long identifiers is about 20 KB
 #define MAX_PATH_LEN   256
 
@@ -380,6 +380,10 @@ esp_err_t p3a_http_add_routes(const p3a_http_route_t *routes, size_t count)
         return ESP_ERR_INVALID_ARG;
     }
     if (s_table_count >= MAX_TABLES) {
+        // Nobody checks this call's answer: without this line the routes are
+        // simply not there (found when the ninth table was added).
+        ESP_LOGE(TAG, "no room for another route table (%d): %s and its neighbours are not served", MAX_TABLES,
+                 routes[0].pattern);
         return ESP_ERR_NO_MEM;
     }
     // Written before the count, so that the server task never sees a slot

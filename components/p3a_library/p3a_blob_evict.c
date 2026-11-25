@@ -15,6 +15,7 @@
 #include "freertos/task.h"
 #include "p3a_blob.h"
 #include "p3a_clock.h"
+#include "p3a_pins.h"
 #include "p3a_err.h"
 #include "p3a_evict.h"
 #include "p3a_storage.h"
@@ -63,7 +64,8 @@ static void walk(char *path, size_t cap, int depth, walk_t *w)
         entry.format = (uint8_t)format;
         entry.modified_at = st.st_mtime > 0 ? (uint32_t)st.st_mtime : 0;
         entry.size = (uint32_t)st.st_size;
-        entry.keep = w->keep != NULL && w->keep(entry.ref, w->ctx);
+        // A pinned artwork is never evicted, whoever asks and whatever they pass.
+        entry.keep = p3a_pins_keeps(entry.ref) || (w->keep != NULL && w->keep(entry.ref, w->ctx));
         w->entries[w->count++] = entry;
         if (w->count % 64 == 0) {
             vTaskDelay(1);  // thousands of files: the others must run
@@ -98,6 +100,9 @@ esp_err_t p3a_blob_evict(uint64_t need_bytes, uint32_t min_age_s, p3a_blob_keep_
         const uint32_t n = p3a_evict_choose(w.entries, w.count, need_bytes, (uint32_t)time(NULL), min_age_s, NULL);
         for (uint32_t i = 0; i < n; i++) {
             const p3a_evict_entry_t *e = &w.entries[i];
+            if (p3a_pins_keeps(e->ref)) {
+                continue;  // pinned since the walk
+            }
             if (p3a_blob_remove(e->ref, (p3a_format_t)e->format) == ESP_OK) {
                 result.deleted++;
                 result.freed_bytes += e->size;

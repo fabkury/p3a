@@ -40,6 +40,7 @@ typedef enum {
     P3A_FRAME_SCHEMA_TEST = 1,  // used by tests only
     P3A_FRAME_SCHEMA_INDEX = 2, // p3a_record_t records in channel order (p3a_index.h)
     P3A_FRAME_SCHEMA_PLAYSET = 3, // a name record, then playset_channel_t records (playset.h)
+    P3A_FRAME_SCHEMA_PIN_TABLE = 4, // p3a_pin_list_t records: the pin lists (p3a_pins.h)
     // Added by the milestone that brings the owner:
     //   playset, active playset. (Channel indices, the local scan and pin
     //   orders are all P3A_FRAME_SCHEMA_INDEX.)

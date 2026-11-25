@@ -131,6 +131,12 @@ All in `components/p3a_util`; each header explains itself at the top.
   `p3a_record_init_*` functions, hands finished downloads to
   `p3a_blob_adopt()`, and never builds a path under `blobs/` or deletes a
   file there itself.
+- **A pin is a record in a pin list** (`p3a_pins.h`), never a copy of
+  the bytes. The pin keeps its blob in the store: eviction asks
+  `p3a_pins_keeps()` itself. A list plays as a channel of source
+  `pinned`, and each record in it is still its own source's artwork.
+  Code that changes a list goes through `p3a_pins_*`; who needs to know
+  subscribes to `P3A_EVENT_PINS_CHANGED`.
 - **A source is a `p3a_source_ops_t` table** (`p3a_source.h`) registered at
   boot. Code outside a source never names one: it asks
   `p3a_source_get()` and calls through the table. Adding a source is adding
@@ -195,7 +201,8 @@ All in `components/p3a_util`; each header explains itself at the top.
   answers once through `p3a_http_ok`, `p3a_http_accepted` or
   `p3a_http_fail` and never writes an envelope, a status line or a header
   for them by hand. Everything is under `/api/v2/`. Anything slower than a
-  few milliseconds is a job answered with 202.
+  few milliseconds is a job answered with 202. A new file of routes is a
+  new table: check `MAX_TABLES` in `http_server.c`.
 - **HTTP requests go through `http_fetch`** (`components/p3a_fetch`), into
   memory or onto the card. Nothing else opens an HTTP client, apart from
   the firmware update. Its answers are `p3a_err.h`'s: act on `MISSING`,

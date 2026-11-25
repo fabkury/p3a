@@ -32,6 +32,7 @@ idf_component_register(
          "${gen_dir}/p3a_static_gen.c"
          "net_api.c"
          "net_player_api.c"
+         "net_pins_api.c"
          "net_sources_api.c"
          "net_ui_api.c"
          ${trace_srcs}

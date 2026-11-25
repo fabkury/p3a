@@ -30,7 +30,13 @@ typedef enum {
     // payload.i32: its p3a_setting_id_t. Read the value with p3a_settings_get().
     P3A_EVENT_SETTING_CHANGED,
 
-    // --- sources 0x0400, library 0x0500: none yet ---
+    // --- sources 0x0400: none yet ---
+
+    // --- library (0x0500) ---
+    // The pin lists have changed: an artwork pinned or unpinned, a list
+    // made, renamed, deleted or made the active one. No payload: ask
+    // p3a_pins.h.
+    P3A_EVENT_PINS_CHANGED = 0x0500,
 
     // --- player (0x0600) ---
     // Something about playback that others show or report has changed: what

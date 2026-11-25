@@ -41,10 +41,10 @@ describe what a client can do, not the 1.x URL.
 | [x] | Museums: Rijks resolved lazily in the background; refresh interval and cache size settings | keep | M4.3 | M4.3. Resolved when the picture is fetched (D75); the settings were already there |
 | [ ] | Museums: 429 cooldown shared between device and browser | keep | M4.3, M5.1 | The device's waits are the content task's (D66); the browser's half comes with the web page, M5.1 |
 | [x] | Museums: long identifiers handled by truncation tables (CMA) and hidden terms (Wellcome) | change | M4.3 | M4.3. Gone: a term is 95 characters |
-| [ ] | Pin lists: up to 64 lists of 4096; one active list; "My Pins" created and recreated automatically; the active list cannot be deleted | keep | M4.4 | |
-| [ ] | Pin lists: create, rename, set active, delete, pin, unpin, is-pinned, page through, entry detail, fetch the artwork file, play as a channel | keep | M4.4 | |
-| [ ] | Pinning copies the artwork bytes into the list's folder | change | M4.4 | A pin becomes a reference in the blob store |
-| [ ] | Pinnable: Makapix, Giphy, Klipy, museum. Not local files | keep | M4.4 | |
+| [x] | Pin lists: up to 64 lists of 4096; one active list; "My Pins" created and recreated automatically; the active list cannot be deleted | keep | M4.4 | |
+| [x] | Pin lists: create, rename, set active, delete, pin, unpin, is-pinned, page through, entry detail, fetch the artwork file, play as a channel | keep | M4.4 | Done in M4.4 over `/api/v2/pins`. Fetching an entry's file for the browser comes with the page (M5.1) |
+| [x] | Pinning copies the artwork bytes into the list's folder | change | M4.4 | A pin becomes a reference in the blob store |
+| [x] | Pinnable: Makapix, Giphy, Klipy, museum. Not local files | keep | M4.4 | Any record whose bytes are in the store; Makapix is seen at M4.5 |
 | [ ] | Show a URL: http or https, 16 MiB, saved to `animations/`, with or without an on-screen progress bar; refused while the card is shared | keep | M4.4 | |
 | [ ] | Swap to a named local file or a specific Makapix post | keep | M4.4 | Used by the Makapix site |
 
@@ -55,7 +55,7 @@ describe what a client can do, not the 1.x URL.
 | [ ] | Animated WebP, GIF, APNG; static PNG, JPEG, BMP; transparency | keep | M2.1 | Decoders moved and pixel-tested against a corpus (part 1). Two 1.x bugs fixed on the way: JPEG colour range (D38), animated WebP blending. Short frame delays now play as in browsers (D37). On screen with part 2 |
 | [x] | Fit to screen with aspect ratio kept, centred, borders in the background colour; the colour also prepaints boot | keep | M2.4 | Done in M2.1 |
 | [x] | Bilinear upscaling for Giphy, Klipy and museum art; nearest-neighbour for the rest | keep | M2.4 | The source's table says which (`smooth`); the user's files: O18 |
-| [ ] | Pinned Giphy, Klipy and museum art plays nearest-neighbour, because the choice is made by channel type | decide | M4.4 | Q4 |
+| [x] | Pinned Giphy, Klipy and museum art plays nearest-neighbour, because the choice is made by channel type | decide | M4.4 | Q4, D78: it follows the art's own source |
 | [ ] | GIF and WebP loop counts ignored; APNG `num_plays` honored | keep | M2.1 | |
 | [x] | Max-speed playback setting | keep | M2.4 | Done in M2.1 |
 | [x] | Auto-advance every 30 s by default; 0 turns it off; the timer resets on manual navigation and on request | keep | M2.4 | |
@@ -94,7 +94,7 @@ describe what a client can do, not the 1.x URL.
 |---|---|---|---|---|
 | [x] | Tap right or left half: next or previous, in rotated coordinates | keep | M3.4 | |
 | [x] | A touch that drifts without becoming a swipe is discarded, not a tap | keep | M3.4 | |
-| [ ] | Swipe up: pin; also Like on Makapix art, click on Giphy art. Swipe down undoes it. Error indicator on local files | keep | M3.4, M4.4, M4.5 | Recognised since M3.4; what it does arrives with the sources |
+| [ ] | Swipe up: pin; also Like on Makapix art, click on Giphy art. Swipe down undoes it. Error indicator on local files | keep | M3.4, M4.4, M4.5 | Pin, unpin and Giphy's click done (M4.2, M4.4); Makapix's like at M4.5 |
 | [x] | Two-finger rotate past 45 degrees turns the screen 90 degrees, once per gesture | keep | M3.4 | |
 | [ ] | Long press (2.25 s): info screen, or the setup screen in setup mode; dismisses any screen | keep | M3.4 | Done in M3.4 for the information screen and for closing; in setup mode the setup screen is up by itself in 2.0 |
 | [x] | While paused, only long press works, and it resumes | keep | M3.4 | |
@@ -155,7 +155,7 @@ Same pages and look, new internals (D11).
 | [ ] | Read and write settings, with partial update | change | M1.4, M1.5 | Validated by the schema; unknown keys rejected; one settings surface |
 | [ ] | The settings read returns stored API keys in clear | decide | M1.5 | Q2 |
 | [ ] | Actions: next, previous, pause, resume, reboot, reset the advance timer | keep | M2.3 | |
-| [ ] | Actions: show URL, swap to, react, pin, unpin (checked against what is on screen) | keep | M4.4, M4.5 | |
+| [ ] | Actions: show URL, swap to, react, pin, unpin (checked against what is on screen) | keep | M4.4, M4.5 | Show URL, pin and unpin done in M4.4; swap to and react at M4.5 |
 | [ ] | Actions: start or cancel registration, unregister, reset the Giphy analytics id | keep | M4.2, M4.5 | |
 | [ ] | Rotation read and set | keep | M2.4 | Sets; never toggles |
 | [x] | Intro animation list and choice | keep | M3.3 | The choice is the `intro_animation` setting (M3.3); listing the names over the API is to do |
@@ -243,7 +243,7 @@ also listed in the ledger.
 | Q1 | Brightness is saved by the web UI but never read at boot, so the device always starts at 100 | Decided 2026-11-18 (D28): remembered and restored at boot | done |
 | Q2 | Reading settings returns the stored API keys in clear to anyone on the LAN. The browser-side museum browse reads the Harvard and Smithsonian keys this way | Decided 2026-11-18 (D33): always masked; one narrow call for the two museum keys only | done |
 | Q3 | The first update check happens 12 hours after boot, never at boot | Add a check shortly after boot? | M5.2 |
-| Q4 | Pinned Giphy, Klipy and museum art is upscaled nearest-neighbour, while the same art in its own channel is bilinear. The user guide documents this | In 2.0 the record knows its source, so bilinear would follow the art. Which is wanted? | M4.4 |
+| Q4 | Pinned Giphy, Klipy and museum art is upscaled nearest-neighbour, while the same art in its own channel is bilinear. The user guide documents this | Decided 2026-11-25 (D78), for Fab to overturn: the scaling follows the art's own source | M4.4 |
 | Q5 | There is no factory reset a user can reach; only "erase Wi-Fi" and "unregister" | Decided 2026-11-18 (D28): added, API and web UI. The store side is done; the API call is M1.5 and the button M5.1 | done |
 | Q6 | Core dumps are written to flash but nothing can read them without a cable | Decided 2026-11-18 (D34): summary in status, download and erase calls, a warning in the web UI | done |
 | Q7 | Giphy rendition, format and prefer-downsized, the view-ack flag and the processing-indicator switch are settable only through the API | Decided 2026-11-18 (D29): kept as settings, hidden from the page | done |

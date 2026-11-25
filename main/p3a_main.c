@@ -25,6 +25,8 @@
 #include "source_klipy.h"
 #include "source_local.h"
 #include "source_museum.h"
+#include "source_pinned.h"
+#include "p3a_pins.h"
 #include "p3a_err.h"
 #include "p3a_source.h"
 #include "p3a_event.h"
@@ -267,6 +269,8 @@ void app_main(void)
     // An sd_root setting that is no longer acceptable falls back to the default.
     boot_step("storage", p3a_storage_start(s_settings.sd_root));
     p3a_ui_card_check();  // no usable card: the screen says so and offers to format one
+    boot_step("pin lists", p3a_pins_start());
+    boot_step("pinned source", source_pinned_start());
     boot_step("local source", source_local_start());
     boot_step("giphy source", source_giphy_start());
     boot_step("klipy source", source_klipy_start());

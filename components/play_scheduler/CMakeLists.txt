@@ -10,7 +10,9 @@ idf_component_register(
          "sched_pick.c"
          "sched_refresh.c"
          "sched_turn.c"
+         "show_url.c"
+         "show_url_name.c"
     INCLUDE_DIRS "include"
     REQUIRES animation_player json p3a_library p3a_settings
-    PRIV_REQUIRES display_renderer esp_hw_support esp_timer p3a_board p3a_fetch p3a_storage p3a_util
+    PRIV_REQUIRES display_renderer esp_hw_support esp_timer p3a_board p3a_fetch p3a_storage p3a_util source_local
 )

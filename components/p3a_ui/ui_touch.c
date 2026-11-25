@@ -7,6 +7,7 @@
 // that the task then reads instead of the controller, at the same pace, so
 // the whole path from sample to action is the one real fingers take.
 
+#include <stdlib.h>
 #include <string.h>
 
 #include "display_renderer.h"
@@ -17,11 +18,15 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "p3a_board.h"
+#include "p3a_err.h"
+#include "p3a_job.h"
+#include "p3a_pins.h"
 #include "p3a_settings.h"
 #include "p3a_source.h"
 #include "p3a_task.h"
 #include "p3a_ui.h"
 #include "play_scheduler.h"
+#include "psram_alloc.h"
 #include "ui_gesture.h"
 #include "ui_internal.h"
 #include "ui_route.h"
@@ -120,6 +125,8 @@ static void turn(int by)
     p3a_settings_set_int(P3A_SET_ROTATION, rotation);
 }
 
+static void swiped(bool down);
+
 static void act(ui_action_t action, p3a_screen_t screen, const ui_gesture_t *gesture)
 {
     switch (action) {
@@ -160,28 +167,100 @@ static void act(ui_action_t action, p3a_screen_t screen, const ui_gesture_t *ges
         ui_card_cancel();
         break;
     case UI_ACTION_LIKE:
-    case UI_ACTION_UNLIKE: {
-        // What a swipe up or down means is the business of the artwork's
-        // source. One with nothing to say (a user's own file) gets the
-        // error icon, as in 1.x. Pinning joins here with the pin lists.
-        static const p3a_icon_t icons[] = {[P3A_REACTION_NONE] = P3A_ICON_ERROR,
-                                           [P3A_REACTION_LIKED] = P3A_ICON_LIKE,
-                                           [P3A_REACTION_UNLIKED] = P3A_ICON_UNLIKE,
-                                           [P3A_REACTION_NOTED] = P3A_ICON_CLICK};
-        p3a_record_t record;
-        p3a_reaction_t reaction = P3A_REACTION_NONE;
-        if (play_scheduler_current(&record)) {
-            const p3a_source_ops_t *ops = p3a_source_get(record.source);
-            if (ops != NULL && ops->react != NULL) {
-                reaction = ops->react(&record, action == UI_ACTION_UNLIKE);
-            }
-        }
-        p3a_ui_icon_show(icons[reaction <= P3A_REACTION_NOTED ? reaction : P3A_REACTION_NONE], P3A_ICON_TOP_RIGHT);
+    case UI_ACTION_UNLIKE:
+        swiped(action == UI_ACTION_UNLIKE);
         break;
-    }
     default:
         break;
     }
+}
+
+// --- a swipe up or down on an artwork -----------------------------------------------
+//
+// Two things, each with its own corner, as in 1.x. Top right: what the
+// artwork's source made of it (a like on Makapix, a click on Giphy). Top
+// left: the pin, into the active list on a swipe up and out of it on a
+// swipe down. A swipe that neither could do anything with (a user's own
+// file; a swipe down on an artwork that is not pinned and has nothing to
+// take back) gets the error icon, so that the gesture is always answered.
+//
+// The pin writes to the card, so it is a job; its icon comes when it is done.
+
+typedef struct {
+    p3a_record_t record;
+    bool unpin;
+    bool reacted;  // the source already answered the gesture
+} pin_job_t;
+
+static esp_err_t pin_job(void *arg)
+{
+    pin_job_t *job = arg;
+    p3a_icon_t icon = P3A_ICON_NONE;
+    p3a_icon_place_t place = P3A_ICON_TOP_LEFT;
+    esp_err_t err;
+    if (job->unpin) {
+        err = p3a_pins_unpin(NULL, &job->record);
+        if (err == ESP_OK) {
+            icon = P3A_ICON_UNPIN;
+        } else if (err == ESP_ERR_NOT_FOUND) {
+            err = ESP_OK;  // it was not pinned: nothing to say, unless nothing else answered
+            if (!job->reacted) {
+                icon = P3A_ICON_ERROR;
+                place = P3A_ICON_TOP_RIGHT;
+            }
+        } else {
+            icon = P3A_ICON_ERROR;
+        }
+    } else {
+        err = p3a_pins_pin(NULL, &job->record);
+        if (err == ESP_ERR_INVALID_STATE) {
+            err = ESP_OK;  // pinned already: the icon says that it is
+        }
+        icon = err == ESP_OK ? P3A_ICON_PIN : P3A_ICON_ERROR;
+    }
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "%s failed: %s", job->unpin ? "unpinning" : "pinning", p3a_err_to_name(err));
+    }
+    if (icon != P3A_ICON_NONE) {
+        p3a_ui_icon_show(icon, place);
+    }
+    free(job);
+    return err;
+}
+
+static void swiped(bool down)
+{
+    static const p3a_icon_t icons[] = {[P3A_REACTION_NONE] = P3A_ICON_NONE,
+                                       [P3A_REACTION_LIKED] = P3A_ICON_LIKE,
+                                       [P3A_REACTION_UNLIKED] = P3A_ICON_UNLIKE,
+                                       [P3A_REACTION_NOTED] = P3A_ICON_CLICK};
+    p3a_record_t record;
+    if (!play_scheduler_current(&record) || (record.flags & P3A_RECORD_IN_PLACE) != 0) {
+        p3a_ui_icon_show(P3A_ICON_ERROR, P3A_ICON_TOP_RIGHT);  // nothing shown, or a file of the user's own
+        return;
+    }
+    p3a_reaction_t reaction = P3A_REACTION_NONE;
+    const p3a_source_ops_t *ops = p3a_source_get(record.source);
+    if (ops != NULL && ops->react != NULL) {
+        reaction = ops->react(&record, down);
+    }
+    if (reaction > P3A_REACTION_NOTED) {
+        reaction = P3A_REACTION_NONE;
+    }
+    if (reaction != P3A_REACTION_NONE) {
+        p3a_ui_icon_show(icons[reaction], P3A_ICON_TOP_RIGHT);
+    }
+    pin_job_t *job = psram_calloc(1, sizeof(*job));
+    if (job != NULL) {
+        job->record = record;
+        job->unpin = down;
+        job->reacted = reaction != P3A_REACTION_NONE;
+        if (p3a_job_submit(P3A_JOBS_IO, down ? "unpin" : "pin", pin_job, job, NULL) == ESP_OK) {
+            return;
+        }
+        free(job);
+    }
+    p3a_ui_icon_show(P3A_ICON_ERROR, P3A_ICON_TOP_LEFT);
 }
 
 static void touch_task(void *arg)

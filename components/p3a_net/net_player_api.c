@@ -8,6 +8,8 @@
 //   POST   /api/v2/player/pause           black panel, backlight off, no moving on
 //   POST   /api/v2/player/resume
 //   POST   /api/v2/player/refresh         list every channel of the active playset again, now
+//   POST   /api/v2/player/show            {"url"}: fetch the picture at that address, keep it among the
+//                                         user's files and play it; answers 202 with the job
 //   GET    /api/v2/player/playset         the active playset
 //   PUT    /api/v2/player/playset         make a playset active: a whole playset, or {"saved": "<name>"}
 //   GET    /api/v2/playsets               the saved playsets
@@ -35,6 +37,7 @@
 #include "p3a_limits.h"
 #include "p3a_storage.h"
 #include "play_scheduler.h"
+#include "show_url.h"
 #include "playset.h"
 #include "playset_store.h"
 #include "psram_alloc.h"
@@ -44,7 +47,7 @@
 static const char *const s_channel_states[] = {"waiting", "listing", "ready", "failed", "no_source", "not_loaded"};
 
 // A record as the API shows it: where it is from and what it is called there.
-static cJSON *record_json(const p3a_record_t *r)
+cJSON *net_record_json(const p3a_record_t *r)
 {
     cJSON *o = cJSON_CreateObject();
     cJSON_AddStringToObject(o, "source", p3a_source_name(r->source));
@@ -101,7 +104,7 @@ static void get_player(p3a_http_request_t *req)
         cJSON_AddStringToObject(data, "problem", p3a_err_to_name(st->problem));
     }
     if (st->playing) {
-        cJSON_AddItemToObject(data, "current", record_json(&st->current));
+        cJSON_AddItemToObject(data, "current", net_record_json(&st->current));
     }
     cJSON_AddStringToObject(data, "playset", st->playset);
     cJSON *channels = cJSON_AddArrayToObject(data, "channels");
@@ -454,6 +457,33 @@ static void post_file(p3a_http_request_t *req)
     p3a_http_ok(req, data);
 }
 
+// "Show this": a picture at an address, fetched, saved among the user's
+// files and played (show_url.h). The answer is the job that does it.
+static void post_show(p3a_http_request_t *req)
+{
+    const cJSON *url = cJSON_GetObjectItemCaseSensitive(p3a_http_body(req), "url");
+    if (!cJSON_IsString(url) || !show_url_ok(url->valuestring)) {
+        p3a_http_fail(req, 400, "INVALID_URL", "give \"url\": an http:// or https:// address of a picture, under %d characters",
+                      SHOW_URL_MAX_LEN);
+        return;
+    }
+    if (play_scheduler_is_paused()) {
+        p3a_http_fail(req, 409, "PAUSED", "the player is paused; resume it first (POST /api/v2/player/resume)");
+        return;
+    }
+    if (p3a_storage_is_handed_over()) {
+        p3a_http_fail(req, 409, "CARD_IN_USE", "a computer has the SD card over USB; unplug it first");
+        return;
+    }
+    if (!p3a_net_is_up()) {
+        p3a_http_fail(req, 409, "OFFLINE", "the device has no network to fetch it over");
+        return;
+    }
+    p3a_job_id_t job = P3A_JOB_ID_NONE;
+    const esp_err_t err = play_scheduler_show_url(url->valuestring, &job);
+    err == ESP_OK ? p3a_http_accepted(req, job) : p3a_http_fail_err(req, err, "starting the fetch");
+}
+
 static const p3a_http_route_t s_routes[] = {
     {P3A_HTTP_GET, 0, "/api/v2/player", get_player},
     {P3A_HTTP_POST, 0, "/api/v2/player/next", post_next},
@@ -461,6 +491,7 @@ static const p3a_http_route_t s_routes[] = {
     {P3A_HTTP_POST, 0, "/api/v2/player/pause", post_pause},
     {P3A_HTTP_POST, 0, "/api/v2/player/resume", post_resume},
     {P3A_HTTP_POST, 0, "/api/v2/player/refresh", post_refresh},
+    {P3A_HTTP_POST, P3A_HTTP_BODY_JSON, "/api/v2/player/show", post_show},
     {P3A_HTTP_GET, 0, "/api/v2/player/playset", get_active_playset},
     {P3A_HTTP_PUT, P3A_HTTP_BODY_JSON, "/api/v2/player/playset", put_active_playset},
     {P3A_HTTP_GET, 0, "/api/v2/playsets", get_playsets},

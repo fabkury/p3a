@@ -8,8 +8,10 @@ idf_component_register(
          "p3a_evict.c"
          "p3a_index.c"
          "p3a_index_file.c"
+         "p3a_pin_table.c"
+         "p3a_pins.c"
          "p3a_record.c"
          "p3a_source.c"
     INCLUDE_DIRS "include"
-    PRIV_REQUIRES mbedtls p3a_storage p3a_util
+    PRIV_REQUIRES esp_timer mbedtls p3a_storage p3a_util
 )

@@ -9,8 +9,8 @@ times.
 | | |
 |---|---|
 | Phase | 4, remote sources (Phases 0 to 3 complete but for their manual checks) |
-| Current milestone | M4.4 Pinned lists and "show this" |
-| Next action | M4.4. Read PLAN.md M4.4, Q4 in PARITY.md, and in `legacy/`: the pin code (`grep -ril pin legacy/components legacy/main`), `show_url`, and the swipe handling for pins. Build: pin lists as indices of records that keep their own source (channel source `pinned`, `P3A_FRAME_USER_DATA`), the set of pinned blobs handed to eviction's `keep` (`sched_content.c`, `make_room`), pin and unpin on swipe up and down through `ui_route` (a source's `react` answers first; a pin is the UI's own), and "show this": a URL fetched and played once (`play_scheduler_show`). Then M4.5 (Makapix) |
+| Current milestone | M4.5 Makapix |
+| Next action | M4.5. Read PLAN.md M4.5, the Makapix rows of PARITY.md, O15, `docs/reference/` (the MQTT protocol and the player API), and in `legacy/`: `components/makapix*`, `p3a_core/p3a_reaction_dispatcher.c`, `p3a_current_post.c`, and what the deletion log says was left for M4.5 (`makapix_show_artwork`, `player_commands`). Build: the Makapix source (`source_makapix`: registration and its own NVS namespace, MQTT, listing a channel into records, `url`, `react` for likes), the commands a Makapix message can give as the same calls the HTTP player API makes (next, back, show, show URL through `play_scheduler_show_url`, playsets), and view reporting off the player's `shown`. A Makapix artwork pins like any other (M4.4); check it on the device |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -54,7 +54,7 @@ reopened (why).
 | M4.1 Fetch, download, refresh, eviction | done 2026-11-25. Tiers: host tests (32 programs), the whole device suite on the M4.1 commit (297 pass, 6 skipped), CI green, release and trace builds (made on the tree with M4.2 part 1 in it). Manual: none. Not verified: listed in the log entry of 2026-11-23; O9's measurements moved to M4.2 |
 | M4.2 Giphy and Klipy | done 2026-11-25. Tiers: host tests (35 programs), device tests (the whole suite: 309 passed, 6 skipped), CI, test, release and trace builds. Manual: M4.2-a. Not verified: listed in the log entries of 2026-11-25. O6 (the services' own marks) stays open and holds nothing |
 | M4.3 Museums | done 2026-11-25. Tiers: host tests (36 programs, also under the sanitizers), device tests (the whole suite on the last build: 322 passed, 6 skipped), CI, test, release and trace builds. Manual: none. Not verified: listed in the log entries of 2026-11-25. O20 (what p3a tells the museums it is) stays open and holds nothing |
-| M4.4 Pinned lists and "show this" | not started |
+| M4.4 Pinned lists and "show this" | done 2026-11-25. Tiers: host tests (38 programs, also under the sanitizers), device tests (the whole suite: 330 passed, 6 skipped; the pin tests again on the last build), test, release and trace builds. Manual: M4.4-a. Not verified: listed in the log entry |
 | M4.5 Makapix | not started |
 | M5.1 Embedded web UI | not started |
 | M5.2 Firmware OTA for 2.x | not started |
@@ -73,6 +73,13 @@ check reopens its milestone.
 
 Open:
 
+- **M4.4-a, the pin icons.** With a Giphy, Klipy or museum artwork
+  playing, swipe up: a pin icon should flash in the top left corner for
+  four seconds (with Giphy art, the click icon top right as well). Swipe
+  down: the unpin icon, top left. Swipe down again on the same artwork:
+  the error icon, top right (there is nothing left to undo). On a file
+  of your own, either swipe gives the error icon top right. The tests
+  check what each swipe does to the list, not which icon is drawn.
 - **M4.2-a, the credit under a Giphy artwork.** With a Giphy key set and a
   Giphy channel playing, wait for a GIF that is wider than it is tall.
   "Powered by GIPHY" should stand centred in the black band under it, in
@@ -225,6 +232,20 @@ its own commit on `main`; nothing else of 2.0 goes there.
 
 What was deleted from `legacy/` without being moved, and why. Filled from
 M0.1 on.
+
+M4.4, 2026-11-25:
+
+- `components/pin_lists/` (all of it): rewritten as `p3a_pins.c` and
+  `p3a_pin_table.c` in `p3a_library`. Its three file formats (state,
+  order, entry) and its copy of every artwork are one index file per
+  list and a table; its garbage collector of orphaned copies has nothing
+  to collect.
+- `components/p3a_core/p3a_pin_dispatcher.c` and its header: what to pin
+  is the record on the screen (`play_scheduler_current`), whatever its
+  source; the per-source branches are gone.
+- `components/show_url/` (all of it): rewritten as `show_url.c` and
+  `show_url_name.c` in `play_scheduler`. Its task, its globals and its
+  cancel flag are a job.
 
 M0.1, 2026-11-17 (paths relative to the 1.x tree):
 
@@ -412,6 +433,81 @@ M4.3, 2026-11-25:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-25: M4.4, pin lists and "show this". M4.4 done
+
+- **A pin is a record in a list, and nothing is copied** (D77;
+  `p3a_pins.h`). A list is an index file like a channel's, flagged as
+  the user's data, under `{root}/pins/`; a table beside them holds each
+  list's slug and name and which one is active. 1.x copied every pinned
+  artwork into the list's folder: a sixth store. What a pin does to the
+  bytes now is keep them: the set of blob references that any list
+  names is held in memory (sorted, counted per pinning), and eviction
+  asks it for every blob, whoever called and whatever they passed, and
+  again just before deleting.
+- The table of lists and the kept set are pure (`p3a_pin_table.c`),
+  with host tests: slugs never shared, names checked, the active list
+  never deleted, 64 lists, a table from a file checked whole (eight
+  kinds of damage each refuse it), the kept set through a thousand adds
+  and removes.
+- **A list plays as a channel** (`components/source_pinned`): source
+  `pinned`, identifier the slug, empty for the active list. Each record
+  keeps its own source, so it is drawn, credited and reacted to as that
+  source's artworks are (D78, which answers Q4: pinned museum and Giphy
+  art is scaled smoothly, as in its own channel). The pin store emits
+  `P3A_EVENT_PINS_CHANGED` and the scheduler lists a playing list again.
+- **Over HTTP** (`net_pins_api.c`): the lists, a list's pins by page,
+  make, rename, make active, delete, pin and unpin what is on the
+  screen, unpin an entry. An entry is named by its position and its key
+  together and an unpin whose two do not match is refused: 1.x filtered
+  by a number that could collide (audit M16).
+- **A swipe up pins, a swipe down unpins** (`ui_touch.c`), beside what
+  the artwork's source makes of the swipe: the source's icon top right
+  at once, the pin's top left when the card has been written (a job). A
+  swipe nothing could act on gets the error icon.
+- **"Show this"** (D79; `show_url.h`): `POST /api/v2/player/show` with
+  an address answers 202 with a job that fetches into the temporary
+  folder, looks at the bytes, and moves the picture among the user's own
+  files under a name made from the address, then plays it. What is not
+  a picture never reaches the user's folder. The bytes decide the
+  extension, so an address with no extension works (1.x refused it).
+  Each request is its own job with its own copy of the address (audit
+  M11). The naming is pure with a host test.
+- **Fixed, found on the way: route tables were dropped without a word.**
+  The HTTP server held eight tables and the pins table was the ninth:
+  the test hooks' routes, registered last, were simply not served. Room
+  for sixteen, and a refused table is now an error in the log.
+- Audit H18 (a header describing an older format) goes with the header.
+- Verified, host tests: 2 new programs (`test_pin_table`,
+  `test_show_url`), also under gcc with ASan and UBSan.
+- Verified, device tests (`test_pins.py`, 8 cases; one more in
+  `test_giphy.py`): there is always a list; lists made, renamed,
+  deleted, the active one never; the artwork on the screen pinned once,
+  a file of one's own refused; swipes down and up; a list playing as a
+  channel and following an unpin; a list that does not exist is a failed
+  channel; eviction asked for everything leaves the pinned blob; the
+  lists and what they keep after a restart; unpinned, the blob goes like
+  any other; a picture at an address fetched, kept and played, a web
+  page and a missing file refused, bad addresses and a paused player
+  refused. Suite: the whole suite: 330 passed, 6 skipped; the pin tests again on the last build.
+- Not verified: which icon a swipe draws (M4.4-a); a full list (4096)
+  and 64 lists on the device (host-tested limits); pinning with the card
+  handed to a computer; a Makapix artwork pinned (M4.5); "show this"
+  with a large file, a redirect, or the device short of memory.
+- Seen once, not explained: Giphy's analytics server answered 400 to the
+  click in `test_giphy.py` in one run and 200 in the next.
+- Not done, and where it goes:
+  - A pinned artwork whose bytes turn out damaged is deleted like any
+    damaged blob and its pin then cannot play; nothing fetches it again
+    unless its own channel does (the same bytes get the same reference,
+    and the pin plays again). Fetching for a pin list itself: with the
+    web page's pin dialogs, M5.1.
+  - The browser fetching a pinned artwork's file for a preview, and the
+    pin dialogs: M5.1.
+  - Progress of a "show this" fetch on the device's screen (1.x drew it
+    when asked to): the job reports its percentage; drawing it is
+    M5.1's, with the page that asks.
+  - Makapix's "show URL" command: M4.5, through the same call.
 
 ### 2026-11-25: M4.3 part 4, the Rijksmuseum and AIC; O10. M4.3 done
 

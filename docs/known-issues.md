@@ -149,7 +149,7 @@ commits can cite them.
 | H13 | Disconnect handler `vTaskDelete`s the status-publish task, which may be inside `esp_mqtt_client_publish()` | `makapix/makapix_connection.c` | Let the task exit on a flag |
 | H14 | Public RGBA `animation_decoder_decode_next` has no callers and writes `W*H*4` into buffers sized `W*H*3` | `animation_decoder/include/animation_decoder.h` and the four decoders | Delete the RGBA entry point **Fixed in 2.0** (`v2`, M2.1); still open in 1.x |
 | H16 | REST routes span three naming eras with no version prefix; `GET /api/museum/rate-limits` skips the `{ok,data}` envelope | `http_api/http_api.c`, `http_api_rest_museum.c` | Decide and document the frozen surface |
-| H18 | `pin_lists.h` still documents v1 behavior (post_id 0, monotonic ids); the code rejects `original_post_id <= 0` | `pin_lists/include/pin_lists.h` | Rewrite the header for v2 |
+| H18 | `pin_lists.h` still documents v1 behavior (post_id 0, monotonic ids); the code rejects `original_post_id <= 0` | `pin_lists/include/pin_lists.h` | Rewrite the header for v2. **Fixed in 2.0** (`v2`, M4.4): rewritten as `p3a_pins.h` |
 | H19 | No build CI and no tests; the only workflow publishes to Pages | `.github/workflows/` | A build-on-push job, then host tests for pure logic |
 
 ### Medium severity
@@ -166,12 +166,12 @@ commits can cite them.
 | M8 | PICO-8 audio stop clears `s_task` after a fixed 100 ms delay, no handshake | `pico8/pico8_audio.c` |
 | M9 | Event bus calls handlers while holding its dispatch mutex | `event_bus/event_bus.c` |
 | M10 | Parallel upscaler waits for both worker bits with no overall deadline | `main/display_upscaler.c` **Fixed in 2.0** (`v2`, M2.1): the wait has a 2 s deadline; still open in 1.x |
-| M11 | `show_url` hands off a request through unlocked globals and a binary semaphore; a queued URL can be dropped | `show_url/show_url.c` |
+| M11 | `show_url` hands off a request through unlocked globals and a binary semaphore; a queued URL can be dropped | `show_url/show_url.c` **Fixed in 2.0** (`v2`, M4.4): each request is a job with its own copy of the address |
 | M12 | Fresh-boot NVS erase list includes the unused `p3a_boot` and omits `ota` | `p3a_core/fresh_boot.c` (~line 149) |
 | M13 | HAM and Smithsonian BYOK keys go into URLs unencoded | `art_institution/museums/ham.c`, `smithsonian.c` |
 | M14 | AIC POST DSL inserts `term_id` into the Elasticsearch body without validation (AIC is currently disabled) | `art_institution/museums/artic.c` |
 | M15 | Web UI OTA state fields written without the mutex `webui_ota_get_status` takes | `ota_manager/ota_manager_webui.c` |
-| M16 | `pin_list_unpin` filters `order.bin` by `post_id`, which can collide | `pin_lists/pin_lists.c` |
+| M16 | `pin_list_unpin` filters `order.bin` by `post_id`, which can collide | `pin_lists/pin_lists.c` **Fixed in 2.0** (`v2`, M4.4): a record is found by its whole identity, and the API names an entry by position and key together |
 | M18 | `schedulePollSoon` does not track its timeout; overlapping calls stack pollers | `webui/index.html` |
 | M19 | Rijks browse fires all set fetches at once, and its cursor loop does not stop on an empty page | `webui/museum/rijksmuseum.js` |
 | M20 | NVS namespaces are an undocumented contract; `ota` keys are macros in one file and literals in another | `ota_manager_webui.c`, `p3a_board_ep44b/p3a_board_fs.c` |

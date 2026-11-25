@@ -125,6 +125,22 @@ def test_a_swipe_up_on_a_gif_is_told_to_giphy(rig):
     assert rig.uart.command("ui touched")["last_action"] == "like"
     assert "told to Giphy" in text and "not told" not in text, text[-300:]
 
+    # The same swipe pins it into the active list, and a swipe down takes it out again.
+    def pinned():
+        return [entry.get("id") for entry in rig.api.get("/api/v2/pins/active").data["pins"]]
+    shown = rig.status()["current"]
+    deadline = time.monotonic() + 10
+    while shown not in pinned() and time.monotonic() < deadline:
+        time.sleep(0.3)
+    assert shown in pinned()
+    down = [[1, 360, 260 + 30 * i, 0, 0, 30] for i in range(9)] + [[0, 0, 0, 0, 0, 60]]
+    assert rig.uart.command("ui touch", down) == {"result": "ok"}
+    deadline = time.monotonic() + 10
+    while shown in pinned() and time.monotonic() < deadline:
+        time.sleep(0.3)
+    assert shown not in pinned()
+    assert rig.uart.command("ui touched")["last_action"] == "unlike"
+
 
 def test_the_id_giphy_gave_can_be_forgotten_and_a_new_one_is_asked_for(rig):
     _, mark = log_since(rig, 0)

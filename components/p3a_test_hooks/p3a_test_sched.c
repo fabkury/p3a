@@ -79,8 +79,9 @@ static void cmd_status(void)
         cJSON_AddStringToObject(out, "current_source", p3a_source_name(st->current.source));
         cJSON_AddStringToObject(out, "current",
                                 st->current.source == P3A_SOURCE_LOCAL   ? st->current.identity.local.filename
-                                : st->current.source == P3A_SOURCE_GIPHY ? st->current.identity.giphy.id
-                                                                         : "");
+                                : st->current.source == P3A_SOURCE_GIPHY  ? st->current.identity.giphy.id
+                                : st->current.source == P3A_SOURCE_MUSEUM ? st->current.identity.museum.iiif_key
+                                                                          : "");
     }
     cJSON_AddNumberToObject(out, "history", st->history_count);
     cJSON_AddNumberToObject(out, "position", st->history_position);

@@ -10,7 +10,7 @@ times.
 |---|---|
 | Phase | 4, remote sources (Phases 0 to 3 complete but for their manual checks) |
 | Current milestone | M4.3 Museums |
-| Next action | M4.3. Read PLAN.md M4.3, `docs/art-institutions/finalized-design.md` (sections 4, 7, 9, 10, 11.1), O10, and `legacy/components/art_institution` (the dispatch table in `art_institution.c`, `museums/*.c`, the resolver, the rate limit). The pattern is M4.2's: one component in `sources` (`source_museum`), the requests in one file and each museum's reading of its answers pure, host-tested on recorded responses with a second reading in `tests/assets/sources/make_expected.py`; `filter_aspect` set; records are `p3a_record_init_museum()`; a record that needs a second request to find its image is flagged `P3A_RECORD_UNRESOLVED` and resolved in `ops->url`. The museum keys (Harvard, Smithsonian) are in the secrets file. Start with the two simplest IIIF museums end to end, then the rest |
+| Next action | M4.3 part 2: the other museums, one at a time, each as V&A and SMK were done: read its section of `docs/art-institutions/finalized-design.md` and its file under `legacy/components/art_institution/museums/`; record its listing with the request the device makes (`tests/assets/sources/`, with its reading in `make_expected.py`); write `museum_<id>.c` (pure: `list_url`, `parse_page`, `image_url`), add it to the table in `museum_util.c` and to `test_museums.c`; add its channel to `CHANNELS` in `tests/device/test_museum.py`; delete its legacy file with a line in the deletion log. Order: Wellcome, Cleveland, Minneapolis (no key), then Harvard and the Smithsonian (keys from the secrets file; `MUSEUM_KEY_*`), then Rijksmuseum (a record needs a second request to find its picture: `P3A_RECORD_UNRESOLVED`, resolved in `ops->url`; pages by token: `museum_page_t.next`), then AIC (kept in the table, `unavailable` set). Then O10 and the milestone end |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -53,7 +53,7 @@ reopened (why).
 | M3.6 USB mass storage | built 2026-11-23; open for manual check M3.6-a (a real computer). Tiers: host tests (30 programs, under the sanitizers too), device tests with the bus's reports injected (with it every test not marked slow passes: 267 cases), release, test and trace builds, the configuration guard, a from-scratch configure in the CI container |
 | M4.1 Fetch, download, refresh, eviction | done 2026-11-25. Tiers: host tests (32 programs), the whole device suite on the M4.1 commit (297 pass, 6 skipped), CI green, release and trace builds (made on the tree with M4.2 part 1 in it). Manual: none. Not verified: listed in the log entry of 2026-11-23; O9's measurements moved to M4.2 |
 | M4.2 Giphy and Klipy | done 2026-11-25. Tiers: host tests (35 programs), device tests (the whole suite: 309 passed, 6 skipped), CI, test, release and trace builds. Manual: M4.2-a. Not verified: listed in the log entries of 2026-11-25. O6 (the services' own marks) stays open and holds nothing |
-| M4.3 Museums | not started |
+| M4.3 Museums | in progress: the source and its first two museums (V&A, SMK) list, download and play; the aspect filter (D) is seen on the device (2026-11-25). Seven museums to do |
 | M4.4 Pinned lists and "show this" | not started |
 | M4.5 Makapix | not started |
 | M5.1 Embedded web UI | not started |
@@ -186,15 +186,15 @@ and proposals are in [DECISIONS.md](DECISIONS.md) under "Open decisions".
 | O2 | Should 1.2.5 carry a notice about 2.0, and with what wording? | 1.2.5 |
 | O5 | Clock overlay: built with working answers (24 hour by default with a 12 hour setting, no seconds, hidden under any screen, one font). Say if any should differ | when convenient |
 | O19 | How does a person tell the device its time zone? The setting is a POSIX TZ string, which nobody types. The web page could offer a list of regions, or send the browser's own zone | M5.1 |
-| O6 | Branding overlay rules from the Giphy and Klipy terms | M4.2 |
+| O6 | May p3a ship Giphy's and Klipy's own marks, and which? The source is credited in words meanwhile (D72) | when Fab has an answer; holds nothing |
+| O20 | What should 2.0 tell the museums it is? 1.x sent "p3a/{version}" with a contact e-mail address. 2.0 sends "p3a/{version}" alone for now. Museums like a way to reach whoever runs a client; the choices are an address, the project's public page, or nothing | M4.3 ends; holds nothing |
 | O15 | Does Makapix need any server-side change for 2.0 devices? | M4.5 |
 | O1 | Exact name of the 2.x firmware asset | M5.2 |
 | O12 | OTA hardening choices | M5.2 |
 | O14 | A second board for the field test | M6.3 |
 | O13 | How `v2` becomes `main` | M6.4 |
 
-The remaining open decision (O9) may be taken as working decisions
-by the agent and are reported when taken.
+O9 was taken as a working decision (D73) on 2026-11-25.
 
 ## Ports from main
 
@@ -387,10 +387,61 @@ M4.2, 2026-11-25:
 - `components/channel_manager/download_manager.c` and
   `include/download_manager.h`: replaced by the content task (M4.1).
 
+M4.3, 2026-11-25:
+
+- `components/art_institution/museums/vam.c` and `smk.c`: rewritten as
+  `components/source_museum/museum_vam.c` and `museum_smk.c`. Their page
+  loops are the one in `source_museum.c`.
+
 ## Session log
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-25: M4.3 part 1, the museum source with V&A and SMK; D on the device
+
+- `components/source_museum` (layer `sources`), registered in `app_main`.
+  **One loop lists a channel for every museum** (`source_museum.c`): the
+  pages, the key, the offset, the pause between pages. 1.x had that loop
+  nine times, about 250 lines each.
+- **A museum is a row in a table with three pure functions** in its own
+  file (`museum.h`): the address of a page of a listing, that page read
+  into records, and where a record's picture is. V&A (`museum_vam.c`) and
+  SMK (`museum_smk.c`) are in; each is about 100 lines where its 1.x file
+  was 400.
+- A channel is kind `{museum}:{axis}` with the term as its identifier, as
+  in 1.x. A museum or an axis this firmware lacks is the channel's error.
+- A record's key goes into the picture's address as it is, so only keys
+  made of letters, digits and `- . _ ~` become records. When the listing
+  gives the original's size (SMK), the record gets the size of the
+  720-pixel picture that will be fetched: the aspect filter then passes
+  an elongated artwork over before it is downloaded.
+- Downloads follow redirects by hand for a source that says so
+  (`redirects` in the source table), as 1.x did for the museums.
+- **The museums are told "p3a/{version}" and nothing else.** 1.x sent a
+  contact address with it; what 2.0 sends is O20.
+- **Item D, seen on the device.** The test source serves a 5:1 strip (cut
+  from a V&A image by its IIIF server): with the filter on it is loaded,
+  measured, logged as "too elongated: 720x144" and never shown in 8
+  turns; with the filter off it plays.
+- Verified, host tests (1 new program, 36 in all, also under gcc with
+  ASan and UBSan): both museums' recorded listings against the Python
+  reading; kinds and axes; every address, with a term that tries to add a
+  parameter or close SMK's filter bracket; keys; sizes; what is not a
+  listing; cut and mutated listings.
+- Verified, device tests against the museums (4 new cases in
+  `test_museum.py`, 1 in `test_content.py`): a V&A category and an SMK
+  collection are listed (32 records), pictures are fetched and play as
+  stills no larger than the panel, as JPEG; unknown museums and axes are
+  refused; D as above. With the smoke and content tests: 20 pass.
+- Not verified: a listing of more than one page on the device; an offset;
+  a museum's rate limit; a redirected download (neither museum's image
+  server redirected); the whole device suite on this build (it runs at
+  the end of the milestone).
+- Found on the way: SMK's server leaves an intermediate certificate out
+  of its chain. Python on the workstation refuses it; the device's
+  certificate bundle accepts it (the listing and the downloads work), as
+  does curl.
 
 ### 2026-11-25: M4.2 part 2, internal memory under a listing (O9). M4.2 done
 

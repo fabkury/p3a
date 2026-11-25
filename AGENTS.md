@@ -136,7 +136,9 @@ All in `components/p3a_util`; each header explains itself at the top.
   `p3a_source_get()` and calls through the table. Adding a source is adding
   a component in the `sources` layer and one registration in `app_main`.
 - **A remote source is two files**: the requests (`source_giphy.c`) and
-  what the answers mean (`giphy_parse.c`, pure). The pure file is tested
+  what the answers mean (`giphy_parse.c`, pure). The museums are one
+  source with a file per museum (`museum.h`): adding a museum is adding
+  `museum_<id>.c` with its three functions and a row in the table. The pure file is tested
   on responses recorded from the service (`tests/assets/sources/`, with a
   second reading of them in `make_expected.py`) and on mutated copies.
   An address taken from a response is checked before it is fetched, and

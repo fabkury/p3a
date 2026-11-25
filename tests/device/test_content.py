@@ -250,3 +250,33 @@ def test_a_playset_whose_blobs_all_went_starts_when_the_first_is_fetched_again(r
         assert time.monotonic() - started < 60, "at once, not when the old artwork's ten minutes were up"
     finally:
         rig.remove("zz-content-local.png")
+
+
+def test_a_very_elongated_picture_is_passed_over_unless_the_filter_is_off(rig):
+    """Item D on the device. The elongated picture is a 5:1 strip cut from a museum's image by its
+    IIIF server (720 by 144); the filter's limit is 4:1."""
+    uart = rig.uart
+    strip = "https://framemark.vam.ac.uk/collections/2016JL6674/0,0,2000,400/!720,720/0/default.jpg"
+    uart.command("settings set", {"aspect_filter": True, "aspect_max_tenths": 40})
+    uart.command("content set", {"items": items("a", strip=strip), "result": "ok"})
+    relist(rig, "listed", lambda s: channel(s)["records"] == 2)
+    rig.wait("both fetched", lambda s: channel(s)["available"] == 2 and not s["downloading"], timeout=90)
+    mark = rig.api.get("/api/v2/test/log").data["next"]
+    seen = set()
+    for _ in range(8):
+        status = rig.step("next")
+        seen.add(status["current"])
+    assert seen == {"a"}, "the strip is never shown"
+    text = " ".join(str(line) for line in rig.api.get(f"/api/v2/test/log?since={mark}").data["lines"])
+    assert "too elongated: 720x144" in text, "it was loaded, measured and passed over, not skipped by luck"
+    try:
+        uart.command("settings set", {"aspect_filter": False})
+        for _ in range(12):
+            status = rig.step("next")
+            seen.add(status["current"])
+            if "strip" in seen:
+                break
+        assert "strip" in seen, "with the filter off it plays like any other"
+        assert rig.on_panel()[:2] == (720, 144)
+    finally:
+        uart.command("settings set", {"aspect_filter": True})

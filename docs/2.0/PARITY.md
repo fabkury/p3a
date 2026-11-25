@@ -225,7 +225,7 @@ Same pages and look, new internals (D11).
 | [ ] | One binary: firmware and web UI update together (A) | M5.1 |
 | [ ] | Longer identifiers: no hidden Wellcome terms, no CMA table (B) | M4.3 |
 | [x] | Repetition suppression (C) | M2.4 |
-| [ ] | Aspect-ratio filter for museum channels (D) | M2.4, M4.3 Predicate, settings and wiring done (M2.4) |
+| [x] | Aspect-ratio filter for museum channels (D) | M2.4, M4.3. Seen on the device with a 5:1 picture: passed over with the filter on, played with it off |
 | [ ] | Clock overlay, off by default (idea 1) | M3.5 |
 | [x] | Giphy and Klipy branding in the letterbox band, on by default (idea 2) | M4.2, in words (D72); the marks wait on O6 |
 | [ ] | Pixel fonts on screen (idea 3) | M3.2 |

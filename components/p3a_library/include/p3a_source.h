@@ -72,6 +72,9 @@ typedef struct {
     const char *credit;
     // What its downloads say they are; NULL for "p3a".
     const char *user_agent;
+    // Its downloads may be sent on to another address (up to five times).
+    // Followed by hand, as 1.x did for the museums' image servers.
+    bool redirects;
     // A person swiped up on this artwork while it played (down, with
     // `undo`). Answers at once: anything that takes time is the source's
     // own job, and its outcome is not waited for. NULL for a source with

@@ -98,7 +98,57 @@ def klipy(name: str, webp: bool) -> None:
     print(name, suffix, len(page["data"]), "items,", len(lines), "records")
 
 
+KEY = re.compile(r"^[0-9A-Za-z._~-]{1,95}$")
+
+
+def fitted(width, height) -> tuple:
+    """An original's size as the 720-pixel picture p3a asks a museum for."""
+    w, h = size_up_to(width, 100000), size_up_to(height, 100000)
+    if not w or not h:
+        return 0, 0
+    longest = max(w, h)
+    if longest > SCREEN:
+        w, h = w * SCREEN // longest, h * SCREEN // longest
+    return max(w, 1), max(h, 1)
+
+
+def size_up_to(v, limit) -> int:
+    return v if isinstance(v, int) and not isinstance(v, bool) and 0 < v <= limit else 0
+
+
+def museum(name: str, items: int, more: bool, records: list) -> None:
+    """records: (key, original width, original height)"""
+    lines = []
+    for key, w, h in records:
+        if isinstance(key, str) and KEY.match(key) and key not in (".", ".."):
+            fw, fh = fitted(w, h)
+            lines.append(f"{key} {fw} {fh}")
+    (HERE / f"{name}.expected").write_text(f"{items} {1 if more else 0}\n" + "\n".join(lines) + "\n", newline="\n")
+    print(name, items, "items,", len(lines), "records, more" if more else "records")
+
+
+def vam(name: str) -> None:
+    d = json.loads((HERE / f"{name}.json").read_bytes())
+    info = d.get("info", {})
+    museum(name, len(d["records"]), bool(d["records"]) and info.get("page", 0) < info.get("pages", 0),
+           [(r.get("_primaryImageId"), 0, 0) for r in d["records"]])
+
+
+def smk(name: str) -> None:
+    d = json.loads((HERE / f"{name}.json").read_bytes())
+    records = []
+    for item in d["items"]:
+        iiif = item.get("image_iiif_id")
+        if isinstance(iiif, str) and "/iiif/jp2/" in iiif:
+            records.append((iiif.rsplit("/iiif/jp2/", 1)[1], item.get("image_width"), item.get("image_height")))
+    museum(name, len(d["items"]), bool(d["items"]) and d.get("offset", 0) + len(d["items"]) < d.get("found", 0), records)
+
+
 if __name__ == "__main__":
+    for listing in ("vam_category_p1", "vam_category_p3", "vam_empty"):
+        vam(listing)
+    for listing in ("smk_collection_p1", "smk_empty"):
+        smk(listing)
     for listing in ("klipy_gifs_trending", "klipy_stickers_search", "klipy_gifs_item"):
         klipy(listing, False)
         klipy(listing, True)

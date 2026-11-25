@@ -171,6 +171,13 @@ p3a_host_test(test_klipy_parse
     INCLUDES ${P3A_COMPONENTS}/source_klipy ${LIBRARY}/include ${UTIL}/include ${P3A_STUBS}
     LIBS cjson)
 target_compile_definitions(test_klipy_parse PRIVATE P3A_SOURCE_ASSETS="${P3A_ROOT}/tests/assets/sources")
+set(MUSEUM "${P3A_COMPONENTS}/source_museum")
+p3a_host_test(test_museums
+    SOURCES sources/test_museums.c ${MUSEUM}/museum_util.c ${MUSEUM}/museum_vam.c ${MUSEUM}/museum_smk.c
+            ${LIBRARY}/p3a_record.c ${UTIL}/p3a_err.c
+    INCLUDES ${MUSEUM} ${LIBRARY}/include ${UTIL}/include ${P3A_STUBS}
+    LIBS cjson)
+target_compile_definitions(test_museums PRIVATE P3A_SOURCE_ASSETS="${P3A_ROOT}/tests/assets/sources")
 
 # --- scheduler --------------------------------------------------------------
 set(SCHEDULER "${P3A_COMPONENTS}/play_scheduler")

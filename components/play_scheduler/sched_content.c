@@ -476,6 +476,8 @@ static esp_err_t fetch(const p3a_source_ops_t *ops, const p3a_record_t *record, 
                                       .user_agent = ops->user_agent ? ops->user_agent : "p3a",
                                       .max_size = P3A_MAX_ARTWORK_BYTES,
                                       .leave_temp = true,  // the blob store moves it into place
+                                      .redirect_mode = ops->redirects ? HTTP_FETCH_REDIRECT_MANUAL : HTTP_FETCH_REDIRECT_AUTO,
+                                      .max_redirects = 5,
                                       .treat_empty_as_not_found = true,
                                       .wait_on_sdio = true,  // not while the Wi-Fi chip's firmware is being written
                                       .hash_file = true,

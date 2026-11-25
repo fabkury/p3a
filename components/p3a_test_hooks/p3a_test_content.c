@@ -93,6 +93,8 @@ static const p3a_source_ops_t s_ops = {
     .refresh_interval_s = interval,
     .index_capacity = capacity,
     .smooth = true,
+    .filter_aspect = true,  // so that the aspect filter can be tested with a picture of a known shape
+    .redirects = true,
 };
 
 void p3a_test_sources_register(void)

@@ -10,6 +10,7 @@
 //   list_url     the address of one page of a channel's listing
 //   parse_page   that page, read into records
 //   image_url    where a record's picture is, at most 720 pixels a side
+//                (or `walk`, for the one museum that must be asked)
 //
 // Everything else is shared and lives in source_museum.c: the loop over
 // pages, the key, the waits. 1.x had that loop nine times, once per museum,
@@ -82,13 +83,25 @@ typedef struct {
     uint32_t response_bytes;  // room for one page
     museum_key_t key;
     const char *unavailable;  // why its channels cannot be played now, or NULL
+    const char *axes;         // its axes, separated by spaces, in the order a person is offered them
     bool (*axis_ok)(const char *axis);
     // ESP_ERR_INVALID_SIZE when it does not fit. Holds the key, for a museum that has one.
     esp_err_t (*list_url)(const museum_query_t *query, char *out, size_t len);
     // P3A_ERR_CORRUPT when the answer is not a listing.
     esp_err_t (*parse_page)(const char *json, museum_page_t *page);
+    // Where a record's picture is. NULL for a museum that must be asked (`walk`).
     esp_err_t (*image_url)(const p3a_record_t *record, char *out, size_t len);
+    // For a museum whose records do not say where their picture is: the
+    // walk to it, one document at a time. Step 0 gives the address of the
+    // first document; each later step is given the document the step
+    // before asked for (`json`) and gives the next address. When `*done`
+    // is set, `out` is the picture's address. At most MUSEUM_WALK_STEPS.
+    //   P3A_ERR_CORRUPT   the document does not name what the step needs
+    esp_err_t (*walk)(const p3a_record_t *record, int step, const char *json, char *out, size_t len, bool *done);
+    const char *accept;  // what its API is asked to answer in; NULL for "application/json"
 } museum_t;
+
+#define MUSEUM_WALK_STEPS 6
 
 // The museum of a channel's kind ("vam:category"), with the axis; NULL for
 // a museum this firmware does not have or an axis the museum does not.
@@ -125,7 +138,8 @@ void museum_page_add(museum_page_t *page, uint16_t museum, const char *key, uint
 esp_err_t museum_iiif_url(const char *base, const p3a_record_t *record, char *out, size_t len);
 
 // The museums.
-extern const museum_t museum_vam, museum_smk, museum_wellcome, museum_cma, museum_mia, museum_ham, museum_si;
+extern const museum_t museum_vam, museum_smk, museum_wellcome, museum_cma, museum_mia, museum_ham, museum_si,
+    museum_rijks, museum_artic;
 
 #ifdef __cplusplus
 }

@@ -1,0 +1,94 @@
+{
+  "@context": "https://linked.art/ns/v1/linked-art.json",
+  "id": "https://id.rijksmuseum.nl/202107829",
+  "type": "VisualItem",
+  "digitally_shown_by": [
+    {
+      "id": "https://id.rijksmuseum.nl/5001081161007973755270",
+      "type": "DigitalObject"
+    }
+  ],
+  "represents_instance_of_type": [
+    {
+      "id": "https://id.rijksmuseum.nl/221875",
+      "type": "Type",
+      "equivalent": [
+        {
+          "id": "https://iconclass.org/92C421",
+          "type": "Type"
+        }
+      ]
+    }
+  ],
+  "shown_by": [
+    {
+      "id": "https://id.rijksmuseum.nl/200107829",
+      "type": "HumanMadeObject",
+      "equivalent": [
+        {
+          "id": "http://hdl.handle.net/10934/RM0001.COLLECT.4922",
+          "type": "HumanMadeObject"
+        }
+      ]
+    }
+  ],
+  "subject_of": [
+    {
+      "id": "https://data.rijksmuseum.nl/202107829",
+      "type": "LinguisticObject",
+      "classified_as": [
+        {
+          "id": "http://vocab.getty.edu/aat/300379475",
+          "type": "Type"
+        }
+      ],
+      "subject_to": [
+        {
+          "type": "Right",
+          "classified_as": [
+            {
+              "id": "https://creativecommons.org/publicdomain/zero/1.0/",
+              "type": "Type"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "subject_to": [
+    {
+      "type": "Right",
+      "classified_as": [
+        {
+          "id": "https://creativecommons.org/publicdomain/mark/1.0/",
+          "type": "Type",
+          "_label": "Public Domain"
+        }
+      ],
+      "identified_by": [
+        {
+          "type": "Name",
+          "content": "Public Domain",
+          "language": [
+            {
+              "id": "http://vocab.getty.edu/aat/300388277",
+              "type": "Language",
+              "_label": "English"
+            }
+          ]
+        },
+        {
+          "type": "Name",
+          "content": "Publieke domein",
+          "language": [
+            {
+              "id": "http://vocab.getty.edu/aat/300388256",
+              "type": "Language",
+              "_label": "Dutch"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

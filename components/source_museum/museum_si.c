@@ -110,6 +110,7 @@ const museum_t museum_si = {
     .offset_cap = 10000,
     .response_bytes = 1024 * 1024,
     .key = MUSEUM_KEY_SMITHSONIAN,
+    .axes = "unit",
     .axis_ok = axis_ok,
     .list_url = list_url,
     .parse_page = parse_page,

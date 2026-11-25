@@ -178,6 +178,8 @@ static bool load_one(void)
 
 // --- listing a channel --------------------------------------------------------------
 
+static bool should_abort(void *ctx);
+
 static sched_list_result_t list_result(esp_err_t err)
 {
     switch (err) {
@@ -216,7 +218,12 @@ static bool list_one(void)
     sched_changed();
 
     const p3a_source_ops_t *ops = p3a_source_get(spec.source);  // checked when the playset was activated
-    const p3a_channel_ref_t ref = {.kind = spec.kind, .identifier = spec.identifier, .offset = spec.offset};
+    uint32_t listed_for = generation;
+    const p3a_channel_ref_t ref = {.kind = spec.kind,
+                                   .identifier = spec.identifier,
+                                   .offset = spec.offset,
+                                   .stop = should_abort,
+                                   .stop_ctx = &listed_for};
     p3a_index_t fresh = {0};
     esp_err_t err = p3a_index_create(&fresh, capacity_of(ops));
     if (err == ESP_OK) {

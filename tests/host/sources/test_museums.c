@@ -70,7 +70,13 @@ static uint32_t check(const museum_t *museum, const char *name)
         TEST_ASSERT_EQUAL_UINT32(NOW, r->sort_at);
         TEST_ASSERT_EQUAL(ESP_OK, p3a_record_check(r));
         TEST_ASSERT_EQUAL_PTR(museum, museum_of_record(r));
-        TEST_ASSERT_EQUAL(ESP_OK, museum->image_url(r, url, sizeof(url)));
+        if (museum->image_url != NULL) {
+            TEST_ASSERT_EQUAL(ESP_OK, museum->image_url(r, url, sizeof(url)));
+        } else {
+            bool done = true;
+            TEST_ASSERT_EQUAL(ESP_OK, museum->walk(r, 0, NULL, url, sizeof(url), &done));  // where its walk begins
+            TEST_ASSERT_FALSE(done);
+        }
         TEST_ASSERT_NOT_NULL(strstr(url, key));
     }
     TEST_ASSERT_EQUAL_UINT32_MESSAGE(at, page.count, name);
@@ -99,6 +105,98 @@ static void test_recorded_listings_are_read_as_an_independent_reading_expects(vo
     TEST_ASSERT_EQUAL(0, check(&museum_ham, "ham_empty"));
     TEST_ASSERT_TRUE(check(&museum_si, "si_unit_p1") >= 8);
     TEST_ASSERT_EQUAL(0, check(&museum_si, "si_empty"));
+    TEST_ASSERT_TRUE(check(&museum_rijks, "rijks_set_p1") >= 90);
+    TEST_ASSERT_TRUE(check(&museum_rijks, "rijks_set_p2") >= 20);  // the last page of the set
+    TEST_ASSERT_EQUAL(0, check(&museum_rijks, "rijks_empty"));
+    TEST_ASSERT_TRUE(check(&museum_artic, "artic_department_p1") >= 20);
+}
+
+static void test_the_rijksmuseum_is_asked_where_a_picture_is_in_three_steps(void)
+{
+    char *hmo = read_file("rijks_hmo", ".json", NULL), *visual = read_file("rijks_visual", ".json", NULL);
+    char *digital = read_file("rijks_digital", ".json", NULL);
+    p3a_record_t r;
+    char url[256];
+    bool done = true;
+    p3a_record_init_museum(&r, MUSEUM_RIJKS, "200107829");
+    TEST_ASSERT_NULL(museum_rijks.image_url);
+    TEST_ASSERT_EQUAL(ESP_OK, museum_rijks.walk(&r, 0, NULL, url, sizeof(url), &done));
+    TEST_ASSERT_EQUAL_STRING("https://id.rijksmuseum.nl/200107829", url);
+    TEST_ASSERT_FALSE(done);
+    TEST_ASSERT_EQUAL(ESP_OK, museum_rijks.walk(&r, 1, hmo, url, sizeof(url), &done));
+    TEST_ASSERT_EQUAL_STRING("https://id.rijksmuseum.nl/202107829", url);
+    TEST_ASSERT_EQUAL(ESP_OK, museum_rijks.walk(&r, 2, visual, url, sizeof(url), &done));
+    TEST_ASSERT_EQUAL_STRING("https://id.rijksmuseum.nl/5001081161007973755270", url);
+    TEST_ASSERT_FALSE(done);
+    TEST_ASSERT_EQUAL(ESP_OK, museum_rijks.walk(&r, 3, digital, url, sizeof(url), &done));
+    TEST_ASSERT_TRUE(done);
+    TEST_ASSERT_EQUAL_STRING("https://iiif.micr.io/kmGDy/full/!720,720/0/default.jpg", url);
+
+    // A document given to the wrong step, or one that names nothing, ends the walk.
+    TEST_ASSERT_EQUAL(P3A_ERR_CORRUPT, museum_rijks.walk(&r, 1, visual, url, sizeof(url), &done));
+    TEST_ASSERT_EQUAL(P3A_ERR_CORRUPT, museum_rijks.walk(&r, 3, hmo, url, sizeof(url), &done));
+    TEST_ASSERT_EQUAL(P3A_ERR_CORRUPT, museum_rijks.walk(&r, 2, "{}", url, sizeof(url), &done));
+    TEST_ASSERT_EQUAL(P3A_ERR_CORRUPT, museum_rijks.walk(&r, 2, "not json", url, sizeof(url), &done));
+    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG, museum_rijks.walk(&r, 4, digital, url, sizeof(url), &done));
+    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_SIZE, museum_rijks.walk(&r, 3, digital, url, 30, &done));
+    // A document is not trusted to send the device anywhere but the museum's own documents,
+    // or to a picture anywhere but at the image server.
+    TEST_ASSERT_EQUAL(P3A_ERR_CORRUPT, museum_rijks.walk(&r, 1, "{\"shows\":[{\"id\":\"https://example.org/1\"}]}", url,
+                                                         sizeof(url), &done));
+    TEST_ASSERT_EQUAL(P3A_ERR_CORRUPT, museum_rijks.walk(&r, 1, "{\"shows\":[{\"id\":\"https://id.rijksmuseum.nl/../x\"}]}",
+                                                         url, sizeof(url), &done));
+    TEST_ASSERT_EQUAL(P3A_ERR_CORRUPT,
+                      museum_rijks.walk(&r, 3, "{\"access_point\":[{\"id\":\"https://example.org/a/full/max/0/default.jpg\"}]}",
+                                        url, sizeof(url), &done));
+    TEST_ASSERT_EQUAL(ESP_OK,
+                      museum_rijks.walk(&r, 3, "{\"access_point\":[{\"id\":\"https://example.org/a.tif\"},"
+                                               "{\"id\":\"https://iiif.micr.io/AbC12/info.json\"}]}", url, sizeof(url), &done));
+    TEST_ASSERT_EQUAL_STRING("https://iiif.micr.io/AbC12/full/!720,720/0/default.jpg", url);
+    // A key that is not a number begins no walk.
+    p3a_record_init_museum(&r, MUSEUM_RIJKS, "abc");
+    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG, museum_rijks.walk(&r, 0, NULL, url, sizeof(url), &done));
+
+    // The listing: by set number first, then by the address each page gives.
+    museum_query_t q = {.axis = "set", .term = "26118", .api_key = "", .start = 0, .next = ""};
+    TEST_ASSERT_EQUAL(ESP_OK, museum_rijks.list_url(&q, url, sizeof(url)));
+    TEST_ASSERT_EQUAL_STRING("https://data.rijksmuseum.nl/search/collection?memberOfSetId=https%3A%2F%2Fid.rijksmuseum.nl%2F26118"
+                             "&imageAvailable=true",
+                             url);
+    q.term = "26118&x=1";
+    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG, museum_rijks.list_url(&q, url, sizeof(url)));
+    q.term = "26118";
+    q.next = "https://data.rijksmuseum.nl/search/collection?memberOfSetId=x&pageToken=abc";
+    TEST_ASSERT_EQUAL(ESP_OK, museum_rijks.list_url(&q, url, sizeof(url)));
+    TEST_ASSERT_EQUAL_STRING(q.next, url);
+    q.next = "https://example.org/search/collection?pageToken=abc";  // a next page somewhere else is not asked for
+    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG, museum_rijks.list_url(&q, url, sizeof(url)));
+    // The recorded first page names its next page, which is the same search with a token.
+    char *page_json = read_file("rijks_set_p1", ".json", NULL);
+    museum_page_t page = fresh_page();
+    TEST_ASSERT_EQUAL(ESP_OK, museum_rijks.parse_page(page_json, &page));
+    TEST_ASSERT_TRUE(page.more);
+    TEST_ASSERT_NOT_NULL(strstr(page.next, "&pageToken="));
+    TEST_ASSERT_EQUAL(0, strncmp(page.next, "https://data.rijksmuseum.nl/search/collection?", 46));
+    free(page_json);
+    free(hmo);
+    free(visual);
+    free(digital);
+}
+
+static void test_a_museum_that_cannot_be_played_says_why(void)
+{
+    TEST_ASSERT_NOT_NULL(museum_artic.unavailable);
+    TEST_ASSERT_EQUAL_PTR(&museum_artic, museum_of_kind("artic:departments", NULL));  // known, though not playable
+    char url[256];
+    museum_query_t q = {.axis = "departments", .term = "PC-10", .api_key = "", .start = 200, .next = ""};
+    TEST_ASSERT_EQUAL(ESP_OK, museum_artic.list_url(&q, url, sizeof(url)));
+    TEST_ASSERT_EQUAL_STRING("https://api.artic.edu/api/v1/artworks/search?query%5Bterm%5D%5Bdepartment_id%5D=PC-10"
+                             "&page=3&limit=100&fields=id,image_id",
+                             url);
+    for (size_t i = 0; museum_at(i) != NULL; i++) {
+        TEST_ASSERT_TRUE_MESSAGE(museum_at(i) == &museum_artic || museum_at(i)->unavailable == NULL, museum_at(i)->id);
+        TEST_ASSERT_TRUE_MESSAGE((museum_at(i)->image_url != NULL) != (museum_at(i)->walk != NULL), museum_at(i)->id);
+    }
 }
 
 static void test_a_channels_kind_names_a_museum_and_one_of_its_axes(void)
@@ -121,6 +219,15 @@ static void test_a_channels_kind_names_a_museum_and_one_of_its_axes(void)
         TEST_ASSERT_TRUE(m->number < MUSEUM_COUNT_ && !seen[m->number]);
         seen[m->number] = true;
         TEST_ASSERT_TRUE(m->page_items > 0 && m->response_bytes >= 64 * 1024 && m->name[0] != '\0');
+        // Every axis the museum is said to have makes a channel kind that finds it.
+        TEST_ASSERT_TRUE(m->axes != NULL && m->axes[0] != '\0');
+        for (const char *p = m->axes; *p != '\0';) {
+            const size_t n = strcspn(p, " ");
+            char kind[64];
+            snprintf(kind, sizeof(kind), "%s:%.*s", m->id, (int)n, p);
+            TEST_ASSERT_EQUAL_PTR_MESSAGE(m, museum_of_kind(kind, NULL), kind);
+            p += n + (p[n] == ' ' ? 1 : 0);
+        }
         p3a_record_t r;
         TEST_ASSERT_EQUAL(ESP_OK, p3a_record_init_museum(&r, m->number, "abc"));
         TEST_ASSERT_EQUAL_PTR(m, museum_of_record(&r));
@@ -334,8 +441,10 @@ static void mutate(const museum_t *museum, const char *name, int rounds)
             TEST_ASSERT_TRUE(page.count <= page.items && page.count <= ROOM);
             for (uint32_t i = 0; i < page.count; i++) {
                 char url[256];
+                bool done = false;
                 TEST_ASSERT_EQUAL(ESP_OK, p3a_record_check(&s_records[i]));
-                TEST_ASSERT_EQUAL(ESP_OK, museum->image_url(&s_records[i], url, sizeof(url)));
+                TEST_ASSERT_EQUAL(ESP_OK, museum->image_url != NULL ? museum->image_url(&s_records[i], url, sizeof(url))
+                                                                    : museum->walk(&s_records[i], 0, NULL, url, sizeof(url), &done));
                 TEST_ASSERT_EQUAL(0, strncmp(url, "https://", 8));
             }
         }
@@ -353,12 +462,46 @@ static void test_cut_and_mutated_listings_do_no_harm(void)
     mutate(&museum_mia, "mia_classification_p1", 600);
     mutate(&museum_ham, "ham_classification_p1", 1500);
     mutate(&museum_si, "si_unit_p1", 800);
+    mutate(&museum_rijks, "rijks_set_p1", 1500);
+    mutate(&museum_artic, "artic_department_p1", 1500);
+    // The walk's documents too: whatever is changed, a step gives an address of the museum's or none.
+    static const struct {
+        const char *name;
+        int step;
+    } docs[] = {{"rijks_hmo", 1}, {"rijks_visual", 2}, {"rijks_digital", 3}};
+    for (size_t d = 0; d < sizeof(docs) / sizeof(docs[0]); d++) {
+        size_t len = 0;
+        char *json = read_file(docs[d].name, ".json", &len);
+        char *copy = malloc(len + 1);
+        p3a_record_t r;
+        p3a_record_init_museum(&r, MUSEUM_RIJKS, "200107829");
+        uint32_t seed = 99;
+        for (int round = 0; round < 600; round++) {
+            memcpy(copy, json, len + 1);
+            for (int k = 0; k < 1 + round % 5; k++) {
+                seed = seed * 1664525u + 1013904223u;
+                const size_t at = (seed >> 8) % len;
+                seed = seed * 1664525u + 1013904223u;
+                copy[at] = (char)(1 + (seed >> 16) % 255);
+            }
+            char url[256];
+            bool done = false;
+            if (museum_rijks.walk(&r, docs[d].step, copy, url, sizeof(url), &done) == ESP_OK) {
+                TEST_ASSERT_TRUE(strncmp(url, "https://id.rijksmuseum.nl/", 26) == 0 ||
+                                 strncmp(url, "https://iiif.micr.io/", 21) == 0);
+            }
+        }
+        free(copy);
+        free(json);
+    }
 }
 
 int main(void)
 {
     UNITY_BEGIN();
     RUN_TEST(test_recorded_listings_are_read_as_an_independent_reading_expects);
+    RUN_TEST(test_the_rijksmuseum_is_asked_where_a_picture_is_in_three_steps);
+    RUN_TEST(test_a_museum_that_cannot_be_played_says_why);
     RUN_TEST(test_a_channels_kind_names_a_museum_and_one_of_its_axes);
     RUN_TEST(test_the_addresses);
     RUN_TEST(test_keys_and_sizes);

@@ -77,12 +77,17 @@ static esp_err_t klipy_refresh(const p3a_channel_ref_t *channel, p3a_index_t *in
     uint32_t page = (channel->offset % KLIPY_OFFSET_CAP) / KLIPY_PAGE_ITEMS + 1;
     uint32_t pages = 0;
     while (err == ESP_OK && index->count < index->capacity) {
+        if (p3a_channel_stopped(channel)) {
+            err = ESP_ERR_NOT_FINISHED;  // the playset changed: nobody wants this listing
+            break;
+        }
         err = klipy_list_url(settings->klipy_api_key, product, search ? channel->identifier : NULL, page,
                              s_ratings[settings->klipy_rating < 4 ? settings->klipy_rating : 2], url, URL_BYTES);
         if (err != ESP_OK) {
             break;
         }
-        const http_fetch_request_t req = {.url = url, .user_agent = "p3a"};
+        const http_fetch_request_t req = {
+            .url = url, .user_agent = "p3a", .should_abort = channel->stop, .user_ctx = channel->stop_ctx};
         const klipy_parse_opts_t opts = opts_for(settings, product);
         size_t got = 0;
         uint32_t count = 0, items = 0;
@@ -92,7 +97,7 @@ static esp_err_t klipy_refresh(const p3a_channel_ref_t *channel, p3a_index_t *in
             err = klipy_parse_page(body, &opts, page_records, KLIPY_PAGE_ITEMS, &count, &items, &has_next);
         }
         if (err != ESP_OK) {
-            if (pages > 0) {
+            if (pages > 0 && !p3a_channel_stopped(channel)) {
                 ESP_LOGW(TAG, "page %u could not be read (%s); keeping %u records", (unsigned)page, p3a_err_to_name(err),
                          (unsigned)index->count);
                 err = ESP_OK;

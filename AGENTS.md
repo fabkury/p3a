@@ -340,7 +340,7 @@ idf.py fullclean
 | `docs/2.0-architecture-review/` | The design: `README.md` holds the thesis and the 25-row verdict table; one page per area; `target-architecture.md` is the 2.0 skeleton; `ideas.md` is the running list of 2.0 ideas, append new ones there. |
 | `docs/known-issues.md` | Open 1.x problems with root causes. Check it for every file that leaves `legacy/`. |
 | `docs/deferred/` | Parked ideas, one page each. |
-| `docs/art-institutions/finalized-design.md` | Source of truth for the museum channels. |
+| `docs/art-institutions/finalized-design.md` | The museums as 1.x built them: each museum's API and its quirks are still right; the device's side is now `components/source_museum`, whose files say what changed. |
 | `docs/jitter/` | The playback-jitter work: the fixes that must survive the move, the pass bar, the lab tooling. |
 | `docs/reference/` | Makapix MQTT protocol and player API, ESP-IDF 5.5.4 setup. |
 | `docs/infrastructure/`, `docs/HOW-TO-USE.md`, `docs/QUICK-START.md`, `README.md` | 1.x as shipped. Useful for understanding `legacy/`; rewritten at M5.4. |

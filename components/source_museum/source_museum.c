@@ -77,15 +77,24 @@ static esp_err_t museum_refresh(const p3a_channel_ref_t *channel, p3a_index_t *i
     start -= start % museum->page_items;
     uint32_t pages = 0;
     char next[MUSEUM_NEXT_LEN] = "";
-    static const http_fetch_header_t headers[] = {{"Accept", "application/json"}};
+    const http_fetch_header_t headers[] = {{"Accept", museum->accept != NULL ? museum->accept : "application/json"}};
     while (err == ESP_OK && index->count < index->capacity) {
+        if (p3a_channel_stopped(channel)) {
+            err = ESP_ERR_NOT_FINISHED;  // the playset changed: nobody wants this listing
+            break;
+        }
         const museum_query_t query = {
             .axis = axis, .term = channel->identifier, .api_key = key_of(museum, settings), .start = start, .next = next};
         err = museum->list_url(&query, url, URL_BYTES);
         if (err != ESP_OK) {
             break;
         }
-        const http_fetch_request_t req = {.url = url, .user_agent = s_user_agent, .headers = headers, .header_count = 1};
+        const http_fetch_request_t req = {.url = url,
+                                          .user_agent = s_user_agent,
+                                          .headers = headers,
+                                          .header_count = 1,
+                                          .should_abort = channel->stop,
+                                          .user_ctx = channel->stop_ctx};
         size_t got = 0;
         err = http_fetch_to_buffer(&req, body, museum->response_bytes, &got, NULL);
         if (err == ESP_OK) {
@@ -100,7 +109,7 @@ static esp_err_t museum_refresh(const p3a_channel_ref_t *channel, p3a_index_t *i
             continue;
         }
         if (err != ESP_OK) {
-            if (pages > 0) {
+            if (pages > 0 && !p3a_channel_stopped(channel)) {
                 // The pages already read are a listing; the rest comes with the next one.
                 ESP_LOGW(TAG, "%s: a page could not be read (%s); keeping %u records", museum->id, p3a_err_to_name(err),
                          (unsigned)index->count);
@@ -130,13 +139,76 @@ static esp_err_t museum_refresh(const p3a_channel_ref_t *channel, p3a_index_t *i
     return err;
 }
 
+// For a museum that must be asked where a picture is: fetches the documents
+// its walk names, one after another, until the walk gives the picture's
+// address.
+static esp_err_t walk_to_picture(const museum_t *museum, const p3a_record_t *record, char *out, size_t len)
+{
+    char *body = psram_malloc(museum->response_bytes);
+    char *url = psram_malloc(URL_BYTES);
+    esp_err_t err = body != NULL && url != NULL ? ESP_OK : ESP_ERR_NO_MEM;
+    const http_fetch_header_t headers[] = {{"Accept", museum->accept != NULL ? museum->accept : "application/json"}};
+    for (int step = 0; err == ESP_OK && step < MUSEUM_WALK_STEPS; step++) {
+        bool done = false;
+        err = museum->walk(record, step, step == 0 ? NULL : body, url, URL_BYTES, &done);
+        if (err != ESP_OK) {
+            break;
+        }
+        if (done) {
+            const size_t n = strlen(url);
+            err = n < len ? ESP_OK : ESP_ERR_INVALID_SIZE;
+            if (err == ESP_OK) {
+                memcpy(out, url, n + 1);
+            }
+            free(url);
+            free(body);
+            return err;
+        }
+        // The museum's own addresses answer with a redirect to the document.
+        const http_fetch_request_t req = {.url = url,
+                                          .user_agent = s_user_agent,
+                                          .headers = headers,
+                                          .header_count = 1,
+                                          .redirect_mode = HTTP_FETCH_REDIRECT_MANUAL,
+                                          .max_redirects = 5};
+        size_t got = 0;
+        err = http_fetch_to_buffer(&req, body, museum->response_bytes, &got, NULL);
+        vTaskDelay(1);
+    }
+    free(url);
+    free(body);
+    return err != ESP_OK ? err : (esp_err_t)P3A_ERR_CORRUPT;  // a walk that never arrived
+}
+
 static esp_err_t museum_url(const p3a_record_t *record, char *out, size_t len)
 {
     const museum_t *museum = museum_of_record(record);
     if (museum == NULL) {
         return P3A_ERR_MISSING;  // from a museum this firmware no longer has
     }
-    return museum->image_url(record, out, len);
+    if (museum->unavailable != NULL) {
+        return ESP_ERR_NOT_SUPPORTED;
+    }
+    return museum->image_url != NULL ? museum->image_url(record, out, len) : walk_to_picture(museum, record, out, len);
+}
+
+bool source_museum_info(size_t index, source_museum_info_t *out)
+{
+    const museum_t *museum = museum_at(index);
+    if (museum == NULL) {
+        return false;
+    }
+    *out = (source_museum_info_t){.id = museum->id,
+                                  .name = museum->name,
+                                  .axes = museum->axes,
+                                  .needs_key = museum->key != MUSEUM_KEY_NONE,
+                                  .unavailable = museum->unavailable};
+    if (out->needs_key) {
+        p3a_settings_t *settings = settings_now();
+        out->key_set = settings != NULL && key_of(museum, settings)[0] != '\0';
+        free(settings);
+    }
+    return true;
 }
 
 static uint32_t museum_refresh_interval_s(void)

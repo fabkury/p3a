@@ -111,6 +111,7 @@ const museum_t museum_cma = {
     .page_items = PAGE_ITEMS,
     .offset_cap = 40000,  // about as many public-domain works as it has; skip works at any depth
     .response_bytes = 256 * 1024,
+    .axes = "department type",
     .axis_ok = axis_ok,
     .list_url = list_url,
     .parse_page = parse_page,

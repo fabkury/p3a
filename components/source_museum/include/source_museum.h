@@ -13,6 +13,9 @@
 // without it their channels report P3A_ERR_NO_KEY.
 #pragma once
 
+#include <stdbool.h>
+#include <stddef.h>
+
 #include "esp_err.h"
 
 #ifdef __cplusplus
@@ -21,6 +24,20 @@ extern "C" {
 
 // Registers the source. Call once at boot, before the scheduler starts.
 esp_err_t source_museum_start(void);
+
+// What the firmware knows about a museum, for whoever offers them to a
+// person (the web page): the one table, so that no second list is kept.
+typedef struct {
+    const char *id;           // "vam"
+    const char *name;         // "Victoria and Albert Museum"
+    const char *axes;         // "collection category venue"
+    bool needs_key;           // the user's own API key is needed to list its channels
+    bool key_set;             // and one is saved
+    const char *unavailable;  // why it cannot be played now, or NULL
+} source_museum_info_t;
+
+// The museum at `index` (from 0); false past the last.
+bool source_museum_info(size_t index, source_museum_info_t *out);
 
 #ifdef __cplusplus
 }

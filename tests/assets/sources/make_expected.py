@@ -208,7 +208,28 @@ def si(name: str) -> None:
     museum(name, len(rows), len(rows) >= 50, records)
 
 
+def rijks(name: str) -> None:
+    d = json.loads((HERE / f"{name}.json").read_bytes())
+    prefix = "https://id.rijksmuseum.nl/"
+    records = [(i["id"][len(prefix):], 0, 0) for i in d["orderedItems"]
+               if isinstance(i.get("id"), str) and i["id"].startswith(prefix) and i["id"][len(prefix):].isdigit()]
+    nxt = (d.get("next") or {}).get("id", "")
+    more = bool(d["orderedItems"]) and nxt.startswith("https://data.rijksmuseum.nl/search/collection?") and len(nxt) < 384
+    museum(name, len(d["orderedItems"]), more, records)
+
+
+def artic(name: str) -> None:
+    d = json.loads((HERE / f"{name}.json").read_bytes())
+    p = d.get("pagination", {})
+    museum(name, len(d["data"]),
+           bool(d["data"]) and p.get("current_page", 0) < p.get("total_pages", 0) and p.get("current_page", 0) < 10,
+           [(a.get("image_id"), 0, 0) for a in d["data"]])
+
+
 if __name__ == "__main__":
+    for listing in ("rijks_set_p1", "rijks_set_p2", "rijks_empty"):
+        rijks(listing)
+    artic("artic_department_p1")
     for listing in ("ham_classification_p1", "ham_classification_p3", "ham_empty"):
         ham(listing)
     for listing in ("si_unit_p1", "si_empty"):

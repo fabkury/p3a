@@ -28,6 +28,7 @@ CHANNELS = [
     ("mia", "mia:classification", "Paintings", 800),     # no IIIF: the 800-pixel bucket
     ("ham", "ham:classification", "26", 720),            # paintings; needs Harvard's key
     ("si", "si:unit", "SAAM", 720),                      # the American Art Museum; needs the Smithsonian's key
+    ("rijks", "rijks:set", "26118", 720),                # each picture's address is asked for in three steps
 ]
 # museum -> (the setting its key goes in, the key's name in the secrets file)
 KEYS = {"ham": ("harvard_api_key", "ham_api_key"), "si": ("smithsonian_api_key", "si_api_key")}
@@ -97,8 +98,61 @@ def test_a_museums_channel_is_listed_fetched_and_played(rig, museum, kind, term,
         assert lab.load_secrets()["api_keys"][KEYS[museum][1]].encode() not in lines, "the key is in no log line"
 
 
+def test_the_firmware_lists_its_museums(rig):
+    rig.uart.command("settings set", {"harvard_api_key": "", "smithsonian_api_key": ""})  # the tests above set them
+    museums = {m["id"]: m for m in rig.api.get("/api/v2/sources/museums").data["museums"]}
+    assert set(museums) == {"vam", "smk", "wellcome", "cma", "mia", "ham", "si", "rijks", "artic"}
+    assert museums["vam"] == {"id": "vam", "name": "Victoria and Albert Museum",
+                              "axes": ["collection", "category", "venue"], "needs_key": False}
+    assert museums["ham"]["needs_key"] is True and museums["ham"]["key_set"] is False
+    assert "unavailable" in museums["artic"] and "unavailable" not in museums["rijks"]
+    # Every channel the tests play is one the list offers.
+    for museum, kind, _term, _longest in CHANNELS:
+        assert kind.split(":")[1] in museums[museum]["axes"]
+    rig.uart.command("settings set", {"harvard_api_key": "x"})
+    try:
+        again = {m["id"]: m for m in rig.api.get("/api/v2/sources/museums").data["museums"]}
+        assert again["ham"]["key_set"] is True and again["si"]["key_set"] is False
+    finally:
+        rig.uart.command("settings set", {"harvard_api_key": ""})
+
+
+def test_a_museum_that_cannot_be_played_now_is_not_asked(rig):
+    """The Art Institute of Chicago's image server refuses clients that are not web browsers. Its
+    channels say they cannot be played, and the test asks the server from the device whether that
+    is still so: the day this fails, the museum can come back (museum_artic.c)."""
+    assert rig.uart.command("sched activate", playset("artic:departments", "PC-10")) == {"result": "ok"}
+    status = rig.wait("refused", lambda s: channel(s)["listings"] >= 1 and channel(s)["state"] == "failed")
+    assert channel(status)["error"] == "ESP_ERR_NOT_SUPPORTED"
+    picture = "https://www.artic.edu/iiif/2/6644829f-f292-c5c4-a73c-0356a6fdbf0d/full/!720,720/0/default.jpg"
+    got = rig.uart.command("fetch get", {"url": picture}, timeout=90)
+    assert got["result"] == "AUTH" and got["status"] == 403, f"the image server no longer refuses the device: {got}"
+
+
 def test_a_museum_or_an_axis_this_firmware_lacks_is_the_channels_error(rig):
     for kind in ("louvre:collection", "vam:department", "vam"):
         assert rig.uart.command("sched activate", playset(kind, "x")) == {"result": "ok"}
         status = rig.wait("refused", lambda s: channel(s)["listings"] >= 1 and channel(s)["state"] == "failed")
         assert channel(status)["error"] == "ESP_ERR_NOT_SUPPORTED", kind
+
+
+def test_changing_the_playset_does_not_wait_for_a_long_listing_to_end(rig):
+    """Found by the suite: a museum channel of a thousand artworks takes eleven requests to list,
+    and the next playset's channels waited behind it."""
+    from test_decoders import CORPUS
+    rig.put("zz-museum-local.png", (CORPUS / "good" / "png/rgb.png").read_bytes())
+    rig.uart.command("settings set", {"museum_cache_size": 1024})
+    try:
+        assert rig.uart.command("sched activate", playset("cma:department", "Drawings", offset=RUN + 7)) == {"result": "ok"}
+        rig.wait("the long listing has begun", lambda s: channel(s)["state"] == "listing", timeout=10)
+        time.sleep(3.0)
+        assert channel(rig.status())["state"] == "listing", "still at it: a thousand artworks are many pages"
+        started = time.monotonic()
+        assert rig.uart.command("sched activate", LOCAL_ONLY) == {"result": "ok"}
+        rig.wait("the new playset's channel is listed and playing",
+                 lambda s: s["playset"] == "" and channel(s)["state"] == "ready" and s["playing"] and not s["loading"]
+                 and s["current_source"] == "local", timeout=10)
+        assert time.monotonic() - started < 8, "within the time of one request, not of the whole listing"
+    finally:
+        rig.uart.command("settings set", {"museum_cache_size": 32})
+        rig.remove("zz-museum-local.png")

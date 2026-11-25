@@ -83,7 +83,7 @@ def test_no_more_than_32_playsets_are_saved(clean):
 
 def test_the_active_playset_survives_a_restart(clean):
     uart = clean
-    unnamed = {"name": "", "channels": [{"source": "museum", "kind": "cma:department", "identifier": "Japanese Art",
+    unnamed = {"name": "", "channels": [{"source": "makapix", "kind": "cma:department", "identifier": "Japanese Art",
                                          "offset": 200}]}
     assert uart.command("playset active-save", unnamed) == {"result": "ok"}
     start = uart.mark()

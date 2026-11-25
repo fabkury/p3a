@@ -36,11 +36,11 @@ describe what a client can do, not the 1.x URL.
 | [ ] | Giphy: rendition, format and prefer-downsized, settable through the API only | decide | M4.2 | Q7 |
 | [x] | Klipy: GIF or sticker, each as trending, search or category; own key; rating; format; refresh interval; cache size | keep | M4.2 | M4.2. Live device tests for GIF trending and sticker search in both formats; categories are a search by name (host-tested) |
 | [ ] | Klipy: 36 fixed categories offered in the editor | keep | M5.1 | |
-| [ ] | Museums: Rijks, V&A, Wellcome, SMK, Harvard, Smithsonian, Cleveland, Minneapolis; AIC present but marked unavailable, cached AIC art still plays | keep | M4.3 | |
-| [ ] | Museums: Harvard and Smithsonian keys; a channel without its key sleeps and wakes when the key is saved | keep | M4.3 | |
-| [ ] | Museums: Rijks resolved lazily in the background; refresh interval and cache size settings | keep | M4.3 | |
-| [ ] | Museums: 429 cooldown shared between device and browser | keep | M4.3, M5.1 | |
-| [ ] | Museums: long identifiers handled by truncation tables (CMA) and hidden terms (Wellcome) | change | M4.3 | 96-byte identifiers; the workarounds are deleted |
+| [x] | Museums: Rijks, V&A, Wellcome, SMK, Harvard, Smithsonian, Cleveland, Minneapolis; AIC present but marked unavailable, cached AIC art still plays | keep | M4.3 | M4.3. Eight play on the device; AIC is in the table, unavailable, and a device test watches for its image server letting the device in again. AIC art already on the card is not a special case: it plays while its blobs last |
+| [x] | Museums: Harvard and Smithsonian keys; a channel without its key sleeps and wakes when the key is saved | keep | M4.3 | M4.3. Device-tested: no key, a wrong key, the right key |
+| [x] | Museums: Rijks resolved lazily in the background; refresh interval and cache size settings | keep | M4.3 | M4.3. Resolved when the picture is fetched (D75); the settings were already there |
+| [ ] | Museums: 429 cooldown shared between device and browser | keep | M4.3, M5.1 | The device's waits are the content task's (D66); the browser's half comes with the web page, M5.1 |
+| [x] | Museums: long identifiers handled by truncation tables (CMA) and hidden terms (Wellcome) | change | M4.3 | M4.3. Gone: a term is 95 characters |
 | [ ] | Pin lists: up to 64 lists of 4096; one active list; "My Pins" created and recreated automatically; the active list cannot be deleted | keep | M4.4 | |
 | [ ] | Pin lists: create, rename, set active, delete, pin, unpin, is-pinned, page through, entry detail, fetch the artwork file, play as a channel | keep | M4.4 | |
 | [ ] | Pinning copies the artwork bytes into the list's folder | change | M4.4 | A pin becomes a reference in the blob store |

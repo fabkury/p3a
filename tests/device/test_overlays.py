@@ -129,7 +129,13 @@ def test_the_indicator_flashes_red_when_a_request_cannot_be_shown(rig):
         time.sleep(0.4)
         red = (0xFF, 0x30, 0x30)
         seen = shot(api)
-        assert seen.getpixel((719, 719)) == red and seen.getpixel((717, 719)) == red, "the indicator's corner is red"
+        # Seen to fail about once in twenty runs, not yet explained: what the device says goes in the message.
+        if seen.getpixel((719, 719)) != red:
+            settings = {k: v for k, v in uart.command("settings get").items() if "indicator" in k or k == "rotation"}
+            again = shot(api).getpixel((719, 719))
+            pytest.fail(f"the indicator's corner is not red: {seen.getpixel((719, 719))}, and {again} a moment later; "
+                        f"settings {settings}; ui {api.get('/api/v2/ui').data}; player {failed}")
+        assert seen.getpixel((717, 719)) == red
         assert seen.getpixel((718, 719)) != red, "and checkered"
         time.sleep(3.5)
         assert shot(api).getpixel((719, 719)) != red, "three seconds later it is gone"

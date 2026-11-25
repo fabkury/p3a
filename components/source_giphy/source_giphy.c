@@ -131,6 +131,10 @@ static esp_err_t giphy_refresh(const p3a_channel_ref_t *channel, p3a_index_t *in
     uint32_t offset = channel->offset % GIPHY_OFFSET_CAP;
     uint32_t pages = 0;
     while (err == ESP_OK && index->count < index->capacity) {
+        if (p3a_channel_stopped(channel)) {
+            err = ESP_ERR_NOT_FINISHED;  // the playset changed: nobody wants this listing
+            break;
+        }
         const giphy_list_request_t request = {
             .api_key = settings->giphy_api_key,
             .query = search ? channel->identifier : NULL,
@@ -145,7 +149,8 @@ static esp_err_t giphy_refresh(const p3a_channel_ref_t *channel, p3a_index_t *in
         if (err != ESP_OK) {
             break;
         }
-        const http_fetch_request_t req = {.url = url, .user_agent = "p3a"};
+        const http_fetch_request_t req = {
+            .url = url, .user_agent = "p3a", .should_abort = channel->stop, .user_ctx = channel->stop_ctx};
         size_t got = 0;
         err = http_fetch_to_buffer(&req, body, RESPONSE_BYTES, &got, NULL);
         const giphy_parse_opts_t opts = {
@@ -160,7 +165,7 @@ static esp_err_t giphy_refresh(const p3a_channel_ref_t *channel, p3a_index_t *in
             err = giphy_parse_page(body, &opts, page, GIPHY_PAGE_ITEMS, &count, &items);
         }
         if (err != ESP_OK) {
-            if (pages > 0) {
+            if (pages > 0 && !p3a_channel_stopped(channel)) {
                 // The pages already read are a listing; the rest comes with the next one.
                 ESP_LOGW(TAG, "page at %u could not be read (%s); keeping %u records", (unsigned)offset,
                          p3a_err_to_name(err), (unsigned)index->count);

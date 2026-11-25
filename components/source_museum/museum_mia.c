@@ -128,6 +128,7 @@ const museum_t museum_mia = {
     .page_items = PAGE_ITEMS,
     .offset_cap = 9950,  // a whole page inside the index's 10,000
     .response_bytes = 512 * 1024,
+    .axes = "classification department country style",
     .axis_ok = axis_ok,
     .list_url = list_url,
     .parse_page = parse_page,

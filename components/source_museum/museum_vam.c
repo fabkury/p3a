@@ -89,6 +89,7 @@ const museum_t museum_vam = {
     .page_items = PAGE_ITEMS,
     .offset_cap = 9900,  // the search serves no page past 10,000 records
     .response_bytes = 256 * 1024,
+    .axes = "collection category venue",
     .axis_ok = axis_ok,
     .list_url = list_url,
     .parse_page = parse_page,

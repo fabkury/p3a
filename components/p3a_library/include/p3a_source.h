@@ -38,7 +38,20 @@ typedef struct {
     const char *kind;
     const char *identifier;
     uint32_t offset;
+    // Whether the listing is still wanted. A source whose listing takes
+    // several requests asks between them (and hands it to its requests as
+    // their `should_abort`), and answers ESP_ERR_NOT_FINISHED when it is
+    // not: the playset was changed, and its channels should not wait
+    // behind a listing nobody will use. NULL: never stopped.
+    bool (*stop)(void *ctx);
+    void *stop_ctx;
 } p3a_channel_ref_t;
+
+// For a source's listing loop: true when the listing should end now.
+static inline bool p3a_channel_stopped(const p3a_channel_ref_t *channel)
+{
+    return channel->stop != NULL && channel->stop(channel->stop_ctx);
+}
 
 // What a source made of a person's swipe on one of its artworks.
 typedef enum {

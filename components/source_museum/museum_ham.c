@@ -94,6 +94,7 @@ const museum_t museum_ham = {
     .offset_cap = 9900,
     .response_bytes = 128 * 1024,  // two fields per record: a page is small
     .key = MUSEUM_KEY_HARVARD,
+    .axes = "classification century culture period place medium technique worktype group gallery",
     .axis_ok = axis_ok,
     .list_url = list_url,
     .parse_page = parse_page,

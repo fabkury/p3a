@@ -3,9 +3,11 @@
 # museum (source_museum.c); what each museum's answers mean is in its own
 # pure file.
 idf_component_register(
-    SRCS "museum_cma.c"
+    SRCS "museum_artic.c"
+         "museum_cma.c"
          "museum_ham.c"
          "museum_mia.c"
+         "museum_rijks.c"
          "museum_si.c"
          "museum_smk.c"
          "museum_util.c"

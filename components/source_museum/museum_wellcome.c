@@ -126,6 +126,7 @@ const museum_t museum_wellcome = {
     .page_items = PAGE_ITEMS,
     .offset_cap = 9900,  // the catalogue serves no page past 10,000 works
     .response_bytes = 384 * 1024,
+    .axes = "workType genres subjects contributors",
     .axis_ok = axis_ok,
     .list_url = list_url,
     .parse_page = parse_page,

@@ -9,8 +9,8 @@ times.
 | | |
 |---|---|
 | Phase | 4, remote sources (Phases 0 to 3 complete but for their manual checks) |
-| Current milestone | M4.3 Museums |
-| Next action | M4.3 part 4: the last two museums, as the first seven were done (read the museum's section of `docs/art-institutions/finalized-design.md` and its file under `legacy/components/art_institution/museums/`; record its listing into `tests/assets/sources/` with its reading in `make_expected.py`; write `museum_<id>.c`; add it to the table in `museum_util.c`, to `test_museums.c` and to `CHANNELS` in `tests/device/test_museum.py`; delete its legacy file with a line in the deletion log). The Rijksmuseum: a record needs a second request to find its picture (`P3A_RECORD_UNRESOLVED`, resolved in `ops->url`, which may ask the network), and its listing pages by token (`museum_page_t.next`); `legacy/.../art_institution_resolve.c` is its resolver. AIC: kept in the table with `unavailable` set (its image server refuses clients that are not browsers). Then the rest of `legacy/components/art_institution` (deletion log), O10, the whole device suite, release and trace builds, and M4.3 is done |
+| Current milestone | M4.4 Pinned lists and "show this" |
+| Next action | M4.4. Read PLAN.md M4.4, Q4 in PARITY.md, and in `legacy/`: the pin code (`grep -ril pin legacy/components legacy/main`), `show_url`, and the swipe handling for pins. Build: pin lists as indices of records that keep their own source (channel source `pinned`, `P3A_FRAME_USER_DATA`), the set of pinned blobs handed to eviction's `keep` (`sched_content.c`, `make_room`), pin and unpin on swipe up and down through `ui_route` (a source's `react` answers first; a pin is the UI's own), and "show this": a URL fetched and played once (`play_scheduler_show`). Then M4.5 (Makapix) |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -53,7 +53,7 @@ reopened (why).
 | M3.6 USB mass storage | built 2026-11-23; open for manual check M3.6-a (a real computer). Tiers: host tests (30 programs, under the sanitizers too), device tests with the bus's reports injected (with it every test not marked slow passes: 267 cases), release, test and trace builds, the configuration guard, a from-scratch configure in the CI container |
 | M4.1 Fetch, download, refresh, eviction | done 2026-11-25. Tiers: host tests (32 programs), the whole device suite on the M4.1 commit (297 pass, 6 skipped), CI green, release and trace builds (made on the tree with M4.2 part 1 in it). Manual: none. Not verified: listed in the log entry of 2026-11-23; O9's measurements moved to M4.2 |
 | M4.2 Giphy and Klipy | done 2026-11-25. Tiers: host tests (35 programs), device tests (the whole suite: 309 passed, 6 skipped), CI, test, release and trace builds. Manual: M4.2-a. Not verified: listed in the log entries of 2026-11-25. O6 (the services' own marks) stays open and holds nothing |
-| M4.3 Museums | in progress: seven of nine museums list, download and play (V&A, SMK, Wellcome, Cleveland, Minneapolis, Harvard, the Smithsonian); D is seen on the device (2026-11-25). The Rijksmuseum and AIC to do, then O10 and the milestone end |
+| M4.3 Museums | done 2026-11-25. Tiers: host tests (36 programs, also under the sanitizers), device tests (the whole suite on the last build: 322 passed, 6 skipped), CI, test, release and trace builds. Manual: none. Not verified: listed in the log entries of 2026-11-25. O20 (what p3a tells the museums it is) stays open and holds nothing |
 | M4.4 Pinned lists and "show this" | not started |
 | M4.5 Makapix | not started |
 | M5.1 Embedded web UI | not started |
@@ -394,6 +394,16 @@ M4.3, 2026-11-25:
   loops are the one in `source_museum.c`.
 - `museums/ham.c` and `smithsonian.c`: rewritten as `museum_ham.c` and
   `museum_si.c`.
+- `museums/rijksmuseum.c` and `art_institution_resolve.c`: rewritten as
+  `museum_rijks.c` (its walk) and `walk_to_picture()` in
+  `source_museum.c`.
+- `museums/artic.c`: rewritten as `museum_artic.c`, without the second
+  kind of query for deep listings (the museum cannot be played).
+- `museums/common.c`, `art_institution.c`, `art_institution_refresh.c`,
+  `art_institution_download.c`, `art_institution_rate_limit.c`,
+  `art_institution_internal.h`, `include/*`, `CMakeLists.txt`: the
+  dispatch table is `museum_util.c`; merging, eviction of orphans,
+  downloads and cooldowns are the content task's (M4.1).
 - `museums/wellcome.c`, `cma.c` and `mia.c`: rewritten the same way.
   Cleveland's table of cut department names is not needed (a term
   is 95 characters).
@@ -402,6 +412,78 @@ M4.3, 2026-11-25:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-25: M4.3 part 4, the Rijksmuseum and AIC; O10. M4.3 done
+
+- **The Rijksmuseum** (`museum_rijks.c`). Its listing says only which
+  artworks a set holds; where a picture is takes a walk of three Linked
+  Art documents. A museum may now have a `walk` in place of `image_url`:
+  a pure function that, step by step, is given the document it last
+  asked for and names the next address, until it names the picture.
+  `source_museum.c` fetches the documents. Each address is checked to be
+  one of the museum's own before it is fetched, and the picture's to be
+  at its image server.
+- **A Rijksmuseum record keeps the artwork's number as its key** (D75).
+  1.x wrote the picture's id over it once the walk had been done, with
+  markers for "not walked" and "failed". In 2.0 a record's identity must
+  not change (a fresh listing finds what the device has by it), so the
+  walk is done when the picture is fetched, which is once.
+  `P3A_RECORD_UNRESOLVED` has no user.
+- Its listing pages by token: the address each page gives for the next
+  (`museum_page_t.next`), asked only if it is the same search. A
+  channel's offset is not honoured for it.
+- **AIC** (`museum_artic.c`) is in the table with `unavailable` set: its
+  channels report that they cannot be played and nothing is asked of it.
+  A device test asks its image server for a picture and expects the
+  refusal (403); the day that test fails, the museum can come back.
+  1.x's second kind of query, for listings past 1,000 artworks, is not
+  carried over while it cannot be played.
+- **`GET /api/v2/sources/museums`** lists the museums from the firmware's
+  one table: id, name, axes, whether one needs a key and has it, and why
+  one cannot be played. The web page (M5.1) reads this instead of keeping
+  a list of its own.
+- **O10, decided (D76): no time budget for JPEG decodes.** Measured on
+  the device, from "next" to shown, ten pictures each: Cleveland (893 to
+  1216 pixels) 1.0 s median, 1.3 s at worst; Minneapolis (800) 0.9 s;
+  V&A and the Rijksmuseum (720) 0.8 s. The sizes p3a asks the museums
+  for bound the time, and a slow decode holds up only the next artwork,
+  never the one on the panel.
+- **Fixed, found by the device suite: a listing can be stopped.** A
+  museum channel of a thousand artworks takes eleven requests to list
+  (25 seconds); a playset activated meanwhile waited behind it, because
+  the content task does one thing at a time and a listing could not be
+  interrupted. A source is now given a way to ask whether its listing is
+  still wanted (`stop` in `p3a_channel_ref_t`), asks between requests
+  and hands it to its requests as their abort check. A device test
+  changes the playset three seconds into a long Cleveland listing and
+  sees the new one playing within eight.
+- The suite's test that saved a museum playset as the active one (from
+  when no museum source existed) now names a source the firmware lacks.
+- The rest of `legacy/components/art_institution` is deleted (deletion
+  log).
+- Verified, host tests (36 programs, also under gcc with ASan and
+  UBSan): the Rijksmuseum's recorded pages and its three recorded
+  documents walked to the picture's address, with documents that name
+  somewhere else, the wrong step, and 600 mutated copies of each; AIC's
+  recorded page; every axis a museum is said to have.
+- Verified, device tests (5 new cases): a Rijksmuseum set is listed, its
+  pictures found, fetched and played; AIC is refused and its image server
+  still refuses the device; the list of museums over the API; a playset
+  change during a long listing. Suite:
+  the whole suite on the last build: 322 passed, 6 skipped.
+- Not verified: a Rijksmuseum set of more than one page on the device
+  (the tests keep 32 artworks); an artwork whose documents name more than
+  one picture (the walk takes the first); any museum's rate limit; the
+  museums' channels across a restart (the content task's index file is
+  tested with the test source).
+- Open: `test_overlays.py`'s check of the red failure mark failed
+  once more in a whole-suite run (the third time in about thirty), with
+  the corner black. Not explained; the test's message now carries what
+  the device says is on its screen.
+- Not done, and where it goes: the browser telling the device that a
+  museum rate-limited it, and the device's cooldowns shown to the browser
+  (1.x had both): with the web page, M5.1. The device's own waits are the
+  content task's (D66).
 
 ### 2026-11-25: M4.3 part 3, Harvard and the Smithsonian
 

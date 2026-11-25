@@ -1,0 +1,39 @@
+{
+  "@context": "https://linked.art/ns/v1/linked-art.json",
+  "id": "https://id.rijksmuseum.nl/5001081161007973755270",
+  "type": "DigitalObject",
+  "access_point": [
+    {
+      "id": "https://iiif.micr.io/kmGDy/full/max/0/default.jpg",
+      "type": "DigitalObject"
+    }
+  ],
+  "digitally_shows": [
+    {
+      "id": "https://id.rijksmuseum.nl/202107829",
+      "type": "VisualItem"
+    }
+  ],
+  "referred_to_by": [
+    {
+      "type": "LinguisticObject",
+      "classified_as": [
+        {
+          "id": "http://vocab.getty.edu/aat/300435434",
+          "type": "Type"
+        }
+      ],
+      "content": "downloadbaar"
+    },
+    {
+      "type": "LinguisticObject",
+      "classified_as": [
+        {
+          "id": "http://vocab.getty.edu/aat/300435434",
+          "type": "Type"
+        }
+      ],
+      "content": "zichtbaar"
+    }
+  ]
+}

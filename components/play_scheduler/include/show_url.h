@@ -59,6 +59,17 @@ esp_err_t show_url_name(const char *url, p3a_format_t format, char *out, size_t 
 // that fails show_url_ok().
 esp_err_t play_scheduler_show_url(const char *url, p3a_job_id_t *job);
 
+// --- one artwork of a source (show_url.c) -----------------------------------------
+//
+// Shows an artwork a source's message names (Makapix's "show this post"),
+// fetching its bytes into the blob store first if the device does not have
+// them. Queues a job and returns at once. The record needs its source and
+// identity, and whatever that source's `url` needs to find the file (for
+// Makapix, the format). The job ends with ESP_OK when the artwork was
+// handed to the player, P3A_ERR_NOT_PLAYABLE when what was fetched is not
+// a picture, or the fetcher's and the source's errors.
+esp_err_t play_scheduler_show_artwork(const p3a_record_t *record, p3a_job_id_t *job);
+
 #ifdef __cplusplus
 }
 #endif

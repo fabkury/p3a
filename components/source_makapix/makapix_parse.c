@@ -8,6 +8,7 @@
 
 #include "cJSON.h"
 #include "p3a_err.h"
+#include "source_makapix.h"
 
 // --- small things -------------------------------------------------------------------
 
@@ -283,25 +284,34 @@ static p3a_format_t format_named(const char *name, size_t n)
     return P3A_FORMAT_UNKNOWN;
 }
 
-// The post's native format: what its address ends in, else what it says.
-static p3a_format_t format_of(const cJSON *post)
+// What an address ends in, as a format.
+static p3a_format_t format_of_url(const char *url)
 {
-    const char *url = text_of(post, "art_url");
-    if (url != NULL) {
-        const size_t end = strcspn(url, "?#");
-        size_t dot = end;
-        while (dot > 0 && url[dot - 1] != '.' && url[dot - 1] != '/') {
-            dot--;
-        }
-        if (dot > 0 && url[dot - 1] == '.') {
-            const p3a_format_t format = format_named(url + dot, end - dot);
-            if (format != P3A_FORMAT_UNKNOWN) {
-                return format;
-            }
-        }
+    if (url == NULL) {
+        return P3A_FORMAT_UNKNOWN;
     }
-    const char *native = text_of(post, "native_format");
-    return native != NULL ? format_named(native, strlen(native)) : P3A_FORMAT_UNKNOWN;
+    const size_t end = strcspn(url, "?#");
+    size_t dot = end;
+    while (dot > 0 && url[dot - 1] != '.' && url[dot - 1] != '/') {
+        dot--;
+    }
+    return dot > 0 && url[dot - 1] == '.' ? format_named(url + dot, end - dot) : P3A_FORMAT_UNKNOWN;
+}
+
+esp_err_t source_makapix_record(uint32_t post_id, const char *storage_key, const char *art_url,
+                                const char *native_format, p3a_record_t *out)
+{
+    uint8_t uuid[16];
+    p3a_format_t format = format_of_url(art_url);
+    if (format == P3A_FORMAT_UNKNOWN && native_format != NULL) {
+        format = format_named(native_format, strlen(native_format));
+    }
+    if (out == NULL || post_id == 0 || format == P3A_FORMAT_UNKNOWN || !makapix_uuid_parse(storage_key, uuid) ||
+        p3a_record_init_makapix(out, post_id, uuid) != ESP_OK) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    out->format = (uint8_t)format;
+    return ESP_OK;
 }
 
 static bool parse_post(const cJSON *post, bool promoted, p3a_record_t *out)
@@ -317,13 +327,11 @@ static bool parse_post(const cJSON *post, bool promoted, p3a_record_t *out)
     if (id == 0) {
         id = number_of(post, "id", UINT32_MAX);
     }
-    uint8_t uuid[16];
-    const p3a_format_t format = format_of(post);
-    if (id == 0 || !makapix_uuid_parse(text_of(post, "storage_key"), uuid) || format == P3A_FORMAT_UNKNOWN ||
-        p3a_record_init_makapix(out, id, uuid) != ESP_OK) {
+    // The post's native format: what its address ends in, else what it says.
+    if (source_makapix_record(id, text_of(post, "storage_key"), text_of(post, "art_url"), text_of(post, "native_format"),
+                              out) != ESP_OK) {
         return false;
     }
-    out->format = (uint8_t)format;
     // What the channel is ordered by: when it was promoted, on that
     // channel; when it was (last) listed, on the others. Older posts carry
     // only when they were made.

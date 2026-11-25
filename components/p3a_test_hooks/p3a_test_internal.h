@@ -30,6 +30,8 @@ extern const p3a_test_command_t p3a_test_content_commands[];
 extern const size_t p3a_test_content_command_count;
 extern const p3a_test_command_t p3a_test_fetch_commands[];
 extern const size_t p3a_test_fetch_command_count;
+extern const p3a_test_command_t p3a_test_makapix_commands[];
+extern const size_t p3a_test_makapix_command_count;
 extern const p3a_test_command_t p3a_test_ui_commands[];
 extern const size_t p3a_test_ui_command_count;
 // Adds the route that writes a file into the user's folder.

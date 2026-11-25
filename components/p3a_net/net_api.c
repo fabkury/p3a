@@ -503,6 +503,7 @@ void net_api_register(void)
     net_sources_api_register();
     net_pins_api_register();
     net_makapix_api_register();
+    net_makapix_commands_register();
 #if CONFIG_P3A_FRAME_TRACE
     net_trace_api_register();
 #endif

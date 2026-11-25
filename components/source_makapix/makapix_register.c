@@ -100,11 +100,28 @@ void makapix_register_status(source_makapix_status_t *out)
     xSemaphoreGive(s_lock);
 }
 
-// Waits up to `ms`; true when the wait was cut short by a cancel or a new request.
+// What the task does every second, whatever else it is doing: the link is
+// kept and the certificate's dates looked at.
+static void upkeep(void)
+{
+    makapix_link_tick();
+    makapix_renew_tick(makapix_link_is_invalid());
+}
+
+// Waits up to `ms`, a second at a time with the upkeep in between; true
+// when the wait was cut short by a cancel or a new request. A registration
+// lasts a quarter of an hour, and a device that is registering again is
+// still a player meanwhile.
 static bool wait_or_interrupted(uint32_t ms)
 {
-    ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(ms));
-    return atomic_load(&s_cancel) || atomic_load(&s_want_register);
+    for (uint32_t waited = 0; waited < ms; waited += 1000) {
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(ms - waited < 1000 ? ms - waited : 1000));
+        if (atomic_load(&s_cancel) || atomic_load(&s_want_register)) {
+            return true;
+        }
+        upkeep();
+    }
+    return false;
 }
 
 static void screen(const char *title, const char *text, const char *hint, bool big_title)
@@ -273,6 +290,7 @@ static void makapix_task(void *arg)
             register_run();
         }
         atomic_store(&s_cancel, false);  // a cancel with nothing to cancel is spent
+        upkeep();
     }
 }
 

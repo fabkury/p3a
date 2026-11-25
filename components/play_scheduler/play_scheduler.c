@@ -317,28 +317,103 @@ static bool on_ready(uint32_t token, const animation_player_loaded_t *loaded, vo
     return wanted;
 }
 
+// --- telling a source that its artwork is seen -------------------------------------
+//
+// "Seen" is: the scheduler's own artwork is on the panel, the player is not
+// paused, and no screen covers it. What changed is worked out under the
+// lock and told after it is released: a source may take its own lock.
+
+typedef struct {
+    bool hide, show;
+    uint8_t hide_source;
+    p3a_record_t record;
+    p3a_shown_t how;
+    char kind[PLAYSET_KIND_LEN];
+    char identifier[PLAYSET_IDENT_LEN];
+} tell_t;
+
+// Called with the lock held.
+static void tell_prepare(tell_t *t)
+{
+    t->hide = t->show = false;
+    const bool seen = sched->playing && !sched->paused && !sched->shut_down && sched->turn.holds == 0;
+    const bool same = sched->told_seen && seen && memcmp(&sched->told_record, &sched->current, sizeof(p3a_record_t)) == 0;
+    if (same || (!seen && !sched->told_seen)) {
+        return;
+    }
+    if (sched->told_seen) {
+        t->hide = true;
+        t->hide_source = sched->told_record.source;
+    }
+    if (seen) {
+        t->show = true;
+        t->record = sched->current;
+        memcpy(t->kind, sched->current_kind, sizeof(t->kind));
+        memcpy(t->identifier, sched->current_identifier, sizeof(t->identifier));
+        t->how = (p3a_shown_t){.channel_source = sched->current_channel_source,
+                               .asked_for = sched->current_asked,
+                               .random = sched->settings.pick_mode != P3A_PICK_MODE_RECENCY};
+        sched->told_record = sched->current;
+    }
+    sched->told_seen = seen;
+}
+
+// Called without the lock.
+static void tell_deliver(tell_t *t)
+{
+    if (t->hide && !(t->show && t->hide_source == t->record.source)) {
+        const p3a_source_ops_t *ops = p3a_source_get(t->hide_source);
+        if (ops != NULL && ops->shown != NULL) {
+            ops->shown(NULL, NULL);
+        }
+    }
+    if (t->show) {
+        const p3a_source_ops_t *ops = p3a_source_get(t->record.source);
+        if (ops != NULL && ops->shown != NULL) {
+            t->how.kind = t->kind;
+            t->how.identifier = t->identifier;
+            ops->shown(&t->record, &t->how);
+        }
+    }
+}
+
 static void on_shown(uint32_t token, void *ctx)
 {
     (void)ctx;
     if (!(token & OUR_TOKENS)) {
         // Something else put a picture on the panel (a test). The scheduler
         // leaves it there until it is asked for something.
+        tell_t tell;
         LOCK();
         sched->playing = false;
         sched->foreign_shown = token == sched->foreign_token;
         sched_turn_stopped(&sched->turn);
+        tell_prepare(&tell);
         UNLOCK();
+        tell_deliver(&tell);
         sched_changed();
         if (sched->foreign.shown) {
             sched->foreign.shown(token, sched->foreign_ctx);
         }
         return;
     }
+    tell_t tell;
     LOCK();
     if (token == sched->pending_token) {
         sched->pending_token = 0;
         sched->staged = false;
         sched->current = sched->pending_record;
+        // The channel it was picked from, if it was and the playset is still that one.
+        sched->current_channel_source = 0;
+        sched->current_kind[0] = sched->current_identifier[0] = '\0';
+        if (sched->pending_kind == TURN_NEW && sched->pending_generation == sched->generation &&
+            sched->pending_channel < sched->playset.count) {
+            const playset_channel_t *from = &sched->playset.channels[sched->pending_channel];
+            sched->current_channel_source = from->source;
+            memcpy(sched->current_kind, from->kind, sizeof(sched->current_kind));
+            memcpy(sched->current_identifier, from->identifier, sizeof(sched->current_identifier));
+        }
+        sched->current_asked = sched->pending_kind == TURN_SHOW;
         sched->playing = true;
         sched->start_wanted = false;
         sched->foreign_shown = false;
@@ -351,7 +426,9 @@ static void on_shown(uint32_t token, void *ctx)
         sched_recent_add(&sched->recent, recent_id(&sched->current));
         sched_turn_shown(&sched->turn, sched_now_ms());
     }
+    tell_prepare(&tell);
     UNLOCK();
+    tell_deliver(&tell);
     sched_changed();
 }
 
@@ -681,6 +758,25 @@ static void tick(void *arg)
     UNLOCK();
 }
 
+bool play_scheduler_known(const p3a_record_t *record, p3a_record_t *out)
+{
+    if (sched == NULL || record == NULL || out == NULL) {
+        return false;
+    }
+    bool found = false;
+    LOCK();
+    for (uint32_t i = 0; i < sched->playset.count && !found; i++) {
+        const sched_slot_t *ch = &sched->channels[i];
+        const int32_t at = ch->has_index ? p3a_index_find_record(&ch->index, record) : -1;
+        if (at >= 0 && p3a_record_has_blob(&ch->index.records[at])) {
+            *out = ch->index.records[at];
+            found = true;
+        }
+    }
+    UNLOCK();
+    return found;
+}
+
 esp_err_t play_scheduler_set_paused(bool paused)
 {
     if (sched == NULL) {
@@ -700,7 +796,10 @@ esp_err_t play_scheduler_set_paused(bool paused)
         }
         ESP_LOGI(TAG, "%s", paused ? "paused" : "resumed");
     }
+    tell_t tell;
+    tell_prepare(&tell);
     UNLOCK();
+    tell_deliver(&tell);
     sched_changed();
     return ESP_OK;
 }
@@ -710,6 +809,7 @@ void play_scheduler_shutdown(void)
     if (sched == NULL) {
         return;
     }
+    tell_t tell;
     LOCK();
     sched->shut_down = true;
     abandon_pending_pick();
@@ -718,7 +818,9 @@ void play_scheduler_shutdown(void)
     // Not one of the scheduler's own tokens: its report is passed on and
     // otherwise ignored.
     animation_player_stop(1);
+    tell_prepare(&tell);
     UNLOCK();
+    tell_deliver(&tell);
     // A download in progress gives up at its next chunk; the card is not
     // handed over under it.
     if (!sched_content_wait_idle(30000)) {
@@ -750,9 +852,12 @@ void play_scheduler_hold(void)
         atomic_fetch_add(&s_early_holds, 1);
         return;
     }
+    tell_t tell;
     LOCK();
     sched_turn_hold(&sched->turn);
+    tell_prepare(&tell);
     UNLOCK();
+    tell_deliver(&tell);
 }
 
 void play_scheduler_release(void)
@@ -763,9 +868,12 @@ void play_scheduler_release(void)
         }
         return;
     }
+    tell_t tell;
     LOCK();
     sched_turn_release(&sched->turn, sched_now_ms());
+    tell_prepare(&tell);
     UNLOCK();
+    tell_deliver(&tell);
 }
 
 // A pin list that is playing follows the list.

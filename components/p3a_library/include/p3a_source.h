@@ -61,6 +61,16 @@ typedef enum {
     P3A_REACTION_NOTED,     // told to the source, which keeps no state of it (Giphy's click)
 } p3a_reaction_t;
 
+// How one of a source's artworks came to be on the panel.
+typedef struct {
+    uint8_t channel_source;  // the source of the channel it was picked from (6 for a pin list); 0 when it
+                             // was not picked from a channel (asked for by itself, or replayed from history)
+    const char *kind;        // that channel's kind and identifier; "" when there is none
+    const char *identifier;
+    bool asked_for;          // a person asked for this artwork by itself
+    bool random;             // the order channels are played in: random, or the channel's own
+} p3a_shown_t;
+
 typedef struct {
     uint8_t source;    // the channel source number this table serves
     const char *name;  // "local", "giphy", ...
@@ -97,6 +107,13 @@ typedef struct {
     // own job, and its outcome is not waited for. NULL for a source with
     // nothing to tell.
     p3a_reaction_t (*react)(const p3a_record_t *record, bool undo);
+    // One of this source's artworks is now seen on the panel (`record` and
+    // `how`, both valid only during the call), or none of them is any more
+    // (`record` NULL): another artwork took its place, a screen covers it,
+    // or the player is paused. Told once per change, the same artwork again
+    // after a cover included. Called from whichever task made the change:
+    // it must return at once. NULL for a source that does not care.
+    void (*shown)(const p3a_record_t *record, const p3a_shown_t *how);
     // Where a record's bytes are when they are not in the blob store (records
     // flagged P3A_RECORD_IN_PLACE). NULL for a source whose artworks are
     // always blobs.

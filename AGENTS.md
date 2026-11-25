@@ -140,7 +140,13 @@ All in `components/p3a_util`; each header explains itself at the top.
 - **Makapix is asked over HTTPS** (`makapix_rpc()`, D80): a channel's
   listing, a reaction, a playset. MQTT is for commands, presence and
   views. The player's key, token and certificates are never logged and
-  never given out by the API.
+  never given out by the API. Everything Makapix does over time runs on
+  its one task's tick (`makapix_register.c`); the MQTT client's own task
+  only queues what arrives. A command becomes a call through
+  `makapix_command_map()` (pure): add a command there, with its test.
+- **A source that must know what is seen** (to count views) sets
+  `shown` in its table; the scheduler calls it. Nothing else asks the
+  renderer or the UI.
 - **A source is a `p3a_source_ops_t` table** (`p3a_source.h`) registered at
   boot. Code outside a source never names one: it asks
   `p3a_source_get()` and calls through the table. Adding a source is adding

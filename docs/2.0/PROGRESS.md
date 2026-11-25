@@ -10,8 +10,8 @@ times.
 |---|---|
 | Phase | 4, remote sources (Phases 0 to 3 complete but for their manual checks) |
 | Current milestone | M4.5 Makapix |
-| Next action | M4.5 part 3: the link. MQTT for commands, presence and views only (D80). In `source_makapix`, on the Makapix task (`makapix_register.c` has it): connect when registered and the network is up (mTLS with the stored PEMs in PSRAM; broker and port from the store; client id `p3a-{key}`; last will `{"player_key","status":"offline"}` on `makapix/player/{key}/status`), reconnect with 1.x's backoff as pure code (15 s doubling to 120 s, jittered; three handshake failures then one forced renewal, then "invalid"), status every 30 s (the server marks a player offline after 3 minutes), retained `capabilities` then `state`, subscribe `command`. Commands are parsed by pure code (`swap_next`, `swap_back`, `show_artwork`, `play_channel`, `play_playset` and 1.x's `execute_playset`, `show_url`, `swap_to`, `set_background_color`, and the acknowledged `set_paused`, `set_brightness`, `set_rotation`, `set_mirror` as unsupported) and handed to a handler `p3a_net` registers, which makes the scheduler's calls off the MQTT task (a job). Views: the scheduler tells the source when one of its artworks is shown and when it is covered (a new `shown` hook in `p3a_source_ops_t`); first report at 5 s, then every 30 s; the server takes one per 5 s. Reactions: `react` through `makapix_rpc()` as a job. Then Fab registers the unit (M4.5-a) and the registered paths are tested live. Part 4: certificate renewal |
-| Blocked on | Nothing |
+| Next action | M4.5 part 4, which needs M4.5-a done first (Fab registers the dev unit; see the manual checklist). Then, live against production: `GET /api/v2/makapix` says `link: connected` within a minute and `certificate_ends` about three years on; the five channels a registered player can list (`all`, `user`, `by_user`, `hashtag`, `reactions`) through `makapix_rpc()`, more than one page; record a real answer to replace `tests/assets/sources/makapix_rpc_written.json`; a command sent from makapix.club (next, a post, pause, brightness, rotation) and what the site shows back (state, acknowledgement); a swipe up on a Makapix artwork (the like appears on the site) and down; a view counted on the site after 5 s; the token: delete `api_token` from NVS and see it asked for again. Device tests for what can be automated go in `test_makapix.py` (they skip on an unregistered unit). Then close M4.5: delete `legacy/components/makapix`, `p3a_core/p3a_reaction_dispatcher.c` and `p3a_current_post.c` (deletion log), PARITY rows, known-issues H4, H13, M26, the whole device suite, release and trace builds. Until Fab is back: M5.1 (the web UI) does not depend on any of this and can be started |
+| Blocked on | M4.5 part 4 only: M4.5-a (Fab registers the dev unit with Makapix Club). Nothing else waits on it |
 | In flight | Nothing |
 | Uncommitted work | None |
 
@@ -55,7 +55,7 @@ reopened (why).
 | M4.2 Giphy and Klipy | done 2026-11-25. Tiers: host tests (35 programs), device tests (the whole suite: 309 passed, 6 skipped), CI, test, release and trace builds. Manual: M4.2-a. Not verified: listed in the log entries of 2026-11-25. O6 (the services' own marks) stays open and holds nothing |
 | M4.3 Museums | done 2026-11-25. Tiers: host tests (36 programs, also under the sanitizers), device tests (the whole suite on the last build: 322 passed, 6 skipped), CI, test, release and trace builds. Manual: none. Not verified: listed in the log entries of 2026-11-25. O20 (what p3a tells the museums it is) stays open and holds nothing |
 | M4.4 Pinned lists and "show this" | done 2026-11-25. Tiers: host tests (38 programs, also under the sanitizers), device tests (the whole suite: 330 passed, 6 skipped; the pin tests again on the last build), test, release and trace builds. Manual: M4.4-a. Not verified: listed in the log entry |
-| M4.5 Makapix | in progress. Part 1 (2026-11-25): the source, the promoted channel from the public feed, the vault. Part 2 (2026-11-25): registration up to the owner's part. Host and device tests |
+| M4.5 Makapix | in progress. Parts 1 to 3 (2026-11-25): the source, registration up to the owner's part, the link, commands, views, likes, renewal. Host and device tests for everything an unregistered unit can do. Waits on M4.5-a for the rest |
 | M5.1 Embedded web UI | not started |
 | M5.2 Firmware OTA for 2.x | not started |
 | M5.3 Release engineering | not started |
@@ -443,6 +443,82 @@ M4.3, 2026-11-25:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-25: M4.5 part 3, the link, commands, views, likes, renewal
+
+Everything a registered player does is written. What an unregistered unit
+can exercise is tested on the device; the rest waits for M4.5-a.
+
+- **The link** (`makapix_link.c`): MQTT over mutual TLS for commands,
+  presence and views (D80). It is kept by the Makapix task's tick, once
+  a second: connect when registered, the network is up and memory is not
+  short; on a connection publish capabilities, then state, then status;
+  status every 30 seconds; a view when one is due. The client's own
+  task only copies what arrives into a queue and sets flags. A client
+  is stopped and destroyed only by the task that made it (audit H13:
+  1.x deleted its status task from the disconnect handler while it
+  might be publishing; here there is no status task).
+- **Reconnecting** is pure code (`makapix_link_logic.c`): 15 seconds
+  doubling to two minutes, jittered; three failed handshakes, or one in
+  which the player rejects the broker's certificate, call for one
+  renewal; if that does not help the registration is "invalid" and the
+  link stops until a renewal succeeds or the device registers again.
+- **State is published whole** each time it changes. 1.x published one
+  field at a time, each replacing the retained whole, so the server's
+  retained state was whichever field changed last.
+- **Commands** (`makapix_command_map.c` in `p3a_net`, pure; run by
+  `net_makapix_commands.c`). The source hands each command, as it came,
+  to a handler the net layer registers, on the Makapix task (audit M26:
+  1.x ran them, a screen rotation included, on the client's task). The
+  handler makes the calls the HTTP API makes: next, back, activate a
+  playset, show, pause, a setting. The map knows the server's forms (its
+  own source was the reference: `play_playset`, `show_artwork` with
+  `native_format`), 1.x's (`execute_playset` with "name" to save too,
+  `swap_to`, `show_url`, `set_background_color`), and a playset in
+  p3a's own form. Unknown commands are ignored; `set_mirror` is answered
+  "unsupported"; the three `set_*` are acknowledged.
+- **"Show this post"** (`play_scheduler_show_artwork`): a job that
+  shows an artwork a message names, fetching it into the blob store
+  first unless a channel of the active playset already has it.
+- **Views** hang off a new hook: the scheduler tells a source when one
+  of its artworks is seen on the panel and when none is
+  (`p3a_source_ops_t.shown`: not paused, no screen over it), with the
+  channel it came from and whether a person asked for it. The count
+  (first report after 5 seconds seen, then every 30) is pure code; time
+  covered does not count.
+- **Likes**: `react` for Makapix art is a job that asks through
+  `makapix_rpc()`; the icon answers at once and the error icon follows
+  if the server does not take it. No table of pending requests exists
+  any more (audit H4 was a race in it).
+- **Certificates** (`makapix_renew.c`): when one is due is pure code
+  (from 190 days before the end, spread over a week; always with two
+  weeks left; never without a clock). Looked at once a day, at every
+  connection, and when the link asks. A renewal replaces the CA's
+  certificate too.
+- `GET /api/v2/makapix` adds the link's state, the post a view would be
+  for, when the certificate ends and how its last renewal went.
+- Verified, host tests (41 programs, also under gcc with ASan and
+  UBSan): `test_makapix_link_logic` (8 cases: waits, the verdicts, view
+  timing with covers, renewal dates, topics, every message read back as
+  JSON, command envelopes cut and mutated), `test_makapix_command_map`
+  (6 cases: every command in each form, and payloads that will not do).
+- Verified, device tests (3 new cases; commands are handed to the
+  source by a test hook, as the link would): the source is told which
+  post is seen, and that none is when paused or when a file of the
+  user's plays; next, back, brightness, rotation, background, pause, a
+  channel, a playset, each doing what the HTTP call does, and bad ones
+  doing nothing; a post the channel does not hold fetched from the vault
+  and shown at its real size; `swap_to`; a post that does not exist; an
+  address. Also the scheduler, content, pins, UI, overlay and player API
+  tests, which share the changed code (42 passed).
+- Not verified (needs a registered unit, M4.5-a): the connection itself
+  and its TLS; what the server makes of status, capabilities, state,
+  acknowledgements and views; a command arriving over MQTT; a like; a
+  listing through `makapix_rpc()`; the token; a renewal. The handshake
+  failure path cannot be provoked against production at all.
+- Note for the tests: the test build holds the player still from boot
+  with the same hold a covering screen uses, so under it nothing is
+  "seen". `test_makapix.py` releases it.
 
 ### 2026-11-25: M4.5 part 2, registration
 

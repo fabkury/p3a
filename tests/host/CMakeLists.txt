@@ -177,9 +177,15 @@ target_compile_definitions(test_klipy_parse PRIVATE P3A_SOURCE_ASSETS="${P3A_ROO
 p3a_host_test(test_makapix_parse
     SOURCES sources/test_makapix_parse.c ${P3A_COMPONENTS}/source_makapix/makapix_parse.c ${LIBRARY}/p3a_record.c
             ${UTIL}/p3a_err.c
-    INCLUDES ${P3A_COMPONENTS}/source_makapix ${LIBRARY}/include ${UTIL}/include ${P3A_STUBS}
+    INCLUDES ${P3A_COMPONENTS}/source_makapix ${P3A_COMPONENTS}/source_makapix/include ${LIBRARY}/include ${UTIL}/include ${P3A_STUBS}
     LIBS cjson)
 target_compile_definitions(test_makapix_parse PRIVATE P3A_SOURCE_ASSETS="${P3A_ROOT}/tests/assets/sources")
+p3a_host_test(test_makapix_link_logic
+    SOURCES sources/test_makapix_link_logic.c ${P3A_COMPONENTS}/source_makapix/makapix_link_logic.c
+            ${P3A_COMPONENTS}/source_makapix/makapix_parse.c ${LIBRARY}/p3a_record.c ${UTIL}/p3a_err.c
+    INCLUDES ${P3A_COMPONENTS}/source_makapix ${P3A_COMPONENTS}/source_makapix/include ${LIBRARY}/include
+             ${UTIL}/include ${P3A_STUBS}
+    LIBS cjson)
 set(MUSEUM "${P3A_COMPONENTS}/source_museum")
 p3a_host_test(test_museums
     SOURCES sources/test_museums.c ${MUSEUM}/museum_util.c ${MUSEUM}/museum_vam.c ${MUSEUM}/museum_smk.c
@@ -198,6 +204,14 @@ p3a_host_test(test_sched_core
 p3a_host_test(test_playset
     SOURCES player/test_playset.c ${SCHEDULER}/playset.c ${UTIL}/p3a_err.c
     INCLUDES ${SCHEDULER}/include ${P3A_STUBS} ${UTIL}/include
+    LIBS cjson)
+p3a_host_test(test_makapix_command_map
+    SOURCES net/test_makapix_command_map.c ${NET}/makapix_command_map.c ${SCHEDULER}/playset.c
+            ${SCHEDULER}/show_url_name.c ${P3A_COMPONENTS}/source_local/source_local_names.c
+            ${P3A_COMPONENTS}/source_makapix/makapix_parse.c ${LIBRARY}/p3a_record.c ${UTIL}/p3a_err.c
+    INCLUDES ${NET} ${SCHEDULER}/include ${P3A_COMPONENTS}/source_local/include
+             ${P3A_COMPONENTS}/source_makapix ${P3A_COMPONENTS}/source_makapix/include ${LIBRARY}/include
+             ${P3A_STUBS} ${UTIL}/include
     LIBS cjson)
 p3a_host_test(test_show_url
     SOURCES player/test_show_url.c ${SCHEDULER}/show_url_name.c ${P3A_COMPONENTS}/source_local/source_local_names.c

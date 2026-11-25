@@ -66,18 +66,21 @@ static esp_err_t rotate_token(const char *player_key, char token[MAKAPIX_TOKEN_L
     return err;
 }
 
-static esp_err_t post(const char *body, const char *token, char *out, size_t out_len, bool (*stop)(void *), void *stop_ctx)
+static esp_err_t post(const char *url, const char *body, const char *token, char *out, size_t out_len,
+                      bool (*stop)(void *), void *stop_ctx)
 {
     char bearer[MAKAPIX_TOKEN_LEN + 8];
     snprintf(bearer, sizeof(bearer), "Bearer %s", token);
     const http_fetch_header_t headers[] = {{"Authorization", bearer}, {"Content-Type", "application/json"}};
-    const http_fetch_request_t req = {.url = RPC_URL,
+    const http_fetch_request_t req = {.url = url,
                                       .method = HTTP_FETCH_POST,
                                       .body = body,
-                                      .body_len = strlen(body),
+                                      .body_len = body != NULL ? strlen(body) : 0,
                                       .headers = headers,
-                                      .header_count = 2,
+                                      .header_count = body != NULL ? 2 : 1,
                                       .user_agent = makapix_user_agent(),
+                                      .timeout_ms = 30000,
+                                      .max_attempts = 1,  // a question asked twice is counted twice against the limit
                                       .should_abort = stop,
                                       .user_ctx = stop_ctx};
     size_t got = 0;
@@ -87,6 +90,12 @@ static esp_err_t post(const char *body, const char *token, char *out, size_t out
 }
 
 esp_err_t makapix_rpc(const char *body, char *out, size_t out_len, bool (*stop)(void *), void *stop_ctx)
+{
+    return makapix_authorized_post(RPC_URL, body, out, out_len, stop, stop_ctx);
+}
+
+esp_err_t makapix_authorized_post(const char *url, const char *body, char *out, size_t out_len, bool (*stop)(void *),
+                                  void *stop_ctx)
 {
     makapix_identity_t identity;
     if (s_lock == NULL || makapix_store_identity(&identity) != ESP_OK) {
@@ -98,13 +107,13 @@ esp_err_t makapix_rpc(const char *body, char *out, size_t out_len, bool (*stop)(
     char token[MAKAPIX_TOKEN_LEN];
     esp_err_t err = makapix_store_token(token) ? ESP_OK : rotate_token(identity.player_key, token);
     if (err == ESP_OK) {
-        err = post(body, token, out, out_len, stop, stop_ctx);
+        err = post(url, body, token, out, out_len, stop, stop_ctx);
         if (err == (esp_err_t)P3A_ERR_AUTH) {
             // The server does not know this token (it was rotated from the
             // site, or a rotation's answer was lost). One new one, one more try.
             err = rotate_token(identity.player_key, token);
             if (err == ESP_OK) {
-                err = post(body, token, out, out_len, stop, stop_ctx);
+                err = post(url, body, token, out, out_len, stop, stop_ctx);
             } else if (err == (esp_err_t)P3A_ERR_MISSING) {
                 err = P3A_ERR_AUTH;  // the server has no such player: the registration is gone
             }

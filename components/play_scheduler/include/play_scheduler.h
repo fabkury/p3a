@@ -55,6 +55,11 @@ esp_err_t play_scheduler_back(void);
 // for a record that fails its check, ESP_ERR_INVALID_STATE while paused.
 esp_err_t play_scheduler_show(const p3a_record_t *record);
 
+// Whether one of the active playset's channels holds this artwork with its
+// bytes: `*out` (may be `record` itself) then receives that record, blob
+// reference and all.
+bool play_scheduler_known(const p3a_record_t *record, p3a_record_t *out);
+
 // Pause: the panel goes black and its backlight off, and the device stops
 // moving on. Resuming gives the artwork a full dwell. Not kept across a
 // restart. Next, back and show are refused meanwhile.

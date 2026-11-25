@@ -102,6 +102,7 @@ void net_player_api_register(void);
 void net_sources_api_register(void);
 void net_pins_api_register(void);
 void net_makapix_api_register(void);
+void net_makapix_commands_register(void);
 // An artwork as the API shows it: its source, its name or id there, its format and size.
 cJSON *net_record_json(const p3a_record_t *r);
 void net_ui_api_register(void);

@@ -75,6 +75,15 @@ typedef struct {
 
     bool playing;
     p3a_record_t current;
+    // How `current` came to be shown, kept as text: the playset it was
+    // picked from may be gone by the time a source is told.
+    uint8_t current_channel_source;
+    char current_kind[PLAYSET_KIND_LEN];
+    char current_identifier[PLAYSET_IDENT_LEN];
+    bool current_asked;
+    // What the sources were last told is seen on the panel (p3a_source_ops_t.shown).
+    bool told_seen;
+    p3a_record_t told_record;
     bool foreign_shown;      // a picture that is not the scheduler's is on the panel, or about to be
     bool staged;             // the pending request is loaded and waits for the display to draw it
     uint32_t foreign_token;  // the foreign request last reported ready with a picture

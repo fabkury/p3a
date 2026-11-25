@@ -17,6 +17,9 @@
 #include "makapix_store.h"
 #include "mbedtls/sha256.h"
 #include "p3a_err.h"
+#include "p3a_job.h"
+#include "p3a_mem.h"
+#include "p3a_ui_hooks.h"
 #include "p3a_settings.h"
 #include "p3a_source.h"
 #include "psram_alloc.h"
@@ -162,6 +165,58 @@ void source_makapix_status(source_makapix_status_t *out)
         memcpy(out->player_key, identity.player_key, sizeof(out->player_key));
     }
     makapix_register_status(out);
+    makapix_link_status(out);
+    makapix_renew_status(out);
+}
+
+// --- a like ---------------------------------------------------------------------------
+//
+// A swipe up on a Makapix artwork is a thumbs-up from the player's owner; a
+// swipe down takes it back. The icon answers at once and the server is told
+// by a job. If the server does not take it, the error icon says so.
+
+typedef struct {
+    uint32_t post_id;
+    bool revoke;
+} like_t;
+
+static esp_err_t like_job(void *arg)
+{
+    like_t *like = arg;
+    char body[128], answer[512];
+    esp_err_t err = p3a_mem_level() == P3A_MEM_OK ? makapix_reaction_body(like->post_id, like->revoke, body, sizeof(body))
+                                                  : ESP_ERR_NO_MEM;
+    if (err == ESP_OK) {
+        err = makapix_rpc(body, answer, sizeof(answer), NULL, NULL);
+    }
+    if (err == ESP_OK) {
+        err = makapix_parse_result(answer);
+    }
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "the %s of post %u was not taken: %s", like->revoke ? "unlike" : "like", (unsigned)like->post_id,
+                 p3a_err_to_name(err));
+        p3a_ui_icon_show(P3A_ICON_ERROR, P3A_ICON_TOP_RIGHT);
+    }
+    free(like);
+    return err;
+}
+
+static p3a_reaction_t makapix_react(const p3a_record_t *record, bool undo)
+{
+    if (!makapix_store_registered()) {
+        return P3A_REACTION_NONE;  // nobody to like it as
+    }
+    like_t *like = psram_malloc(sizeof(*like));
+    if (like == NULL) {
+        return P3A_REACTION_NONE;
+    }
+    like->post_id = record->id32;
+    like->revoke = undo;
+    if (p3a_job_submit(P3A_JOBS_IO, undo ? "makapix unlike" : "makapix like", like_job, like, NULL) != ESP_OK) {
+        free(like);
+        return P3A_REACTION_NONE;
+    }
+    return undo ? P3A_REACTION_UNLIKED : P3A_REACTION_LIKED;
 }
 
 esp_err_t source_makapix_start(void)
@@ -172,6 +227,8 @@ esp_err_t source_makapix_start(void)
         .refresh = makapix_refresh,
         .remote = true,
         .url = makapix_url,
+        .react = makapix_react,
+        .shown = makapix_link_shown,
         .user_agent = NULL,  // set below: it holds the version
         .refresh_interval_s = makapix_refresh_interval_s,
         .index_capacity = makapix_index_capacity,
@@ -182,7 +239,13 @@ esp_err_t source_makapix_start(void)
     table.user_agent = makapix_user_agent();
     esp_err_t err = makapix_rpc_start();
     if (err == ESP_OK) {
-        err = makapix_task_start();
+        err = makapix_link_start();
+    }
+    if (err == ESP_OK) {
+        err = makapix_renew_start();
+    }
+    if (err == ESP_OK) {
+        err = makapix_task_start();  // last: its first tick uses all of the above
     }
     return err != ESP_OK ? err : p3a_source_register(&table);
 }

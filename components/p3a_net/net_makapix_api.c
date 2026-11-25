@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 // Makapix Club over HTTP: where this device stands with it, and registering.
 //
-//   GET    /api/v2/makapix                 registered, and how a registration under way is going
+//   GET    /api/v2/makapix                 registered; how a registration under way is going; the link
+//                                          ("none", "waiting", "connecting", "connected", "invalid");
+//                                          when the certificate ends and how its last renewal went
 //   POST   /api/v2/makapix/registration    start registering: the device asks for a code and shows it
 //   DELETE /api/v2/makapix/registration    end a registration under way; or, with none under way,
 //                                          forget the device's registration
@@ -19,6 +21,7 @@
 #include "source_makapix.h"
 
 static const char *const s_phases[] = {"idle", "asking", "showing_code"};
+static const char *const s_links[] = {"none", "waiting", "connecting", "connected", "invalid"};
 
 static void get_makapix(p3a_http_request_t *req)
 {
@@ -36,6 +39,18 @@ static void get_makapix(p3a_http_request_t *req)
     }
     if (status.last_result[0] != '\0') {
         cJSON_AddStringToObject(registration, "last_result", status.last_result);
+    }
+    cJSON_AddStringToObject(data, "link", s_links[status.link <= SOURCE_MAKAPIX_LINK_INVALID ? status.link : 0]);
+    if (status.seen_post_id != 0) {
+        cJSON_AddNumberToObject(data, "seen_post_id", status.seen_post_id);  // what a view would be reported for
+    }
+    if (status.registered) {
+        if (status.cert_not_after != 0) {
+            cJSON_AddNumberToObject(data, "certificate_ends", status.cert_not_after);
+        }
+        if (status.renewal[0] != '\0') {
+            cJSON_AddStringToObject(data, "certificate_renewal", status.renewal);
+        }
     }
     p3a_http_no_store(req);  // the seconds run
     p3a_http_ok(req, data);

@@ -36,6 +36,11 @@ esp_err_t makapix_rpc_start(void);
 // and http_fetch's other answers. What the answer says is the caller's to read.
 esp_err_t makapix_rpc(const char *body, char *out, size_t out_len, bool (*stop)(void *), void *stop_ctx);
 
+// The same exchange with another address of the player's API (the
+// certificate renewal). `body` NULL for a request with none.
+esp_err_t makapix_authorized_post(const char *url, const char *body, char *out, size_t out_len, bool (*stop)(void *),
+                                  void *stop_ctx);
+
 // "p3a/{version}": what p3a says it is to Makapix. The server counts
 // requests so named as a player's.
 const char *makapix_user_agent(void);

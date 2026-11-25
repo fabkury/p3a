@@ -10,7 +10,7 @@ times.
 |---|---|
 | Phase | 4, remote sources (Phases 0 to 3 complete but for their manual checks) |
 | Current milestone | M4.5 Makapix |
-| Next action | M4.5 part 2: registration. From the two digests' facts (in the part 1 log entry and `makapix_parse.h`): `POST /api/player/provision` (201: `player_key`, `registration_code`, expiry, broker), then `GET /api/player/{key}/credentials` every 3 s until 200 (404 means not yet), all held in memory until the three PEMs arrive, then `makapix_store_save()`. Pure parsers for both answers in `makapix_parse.c` with host tests; the flow as one long-lived task or a job in `source_makapix`; the code on `P3A_SCREEN_REGISTRATION` through `p3a_ui_hooks.h`; `POST /api/v2/makapix/register`, `DELETE /api/v2/makapix/registration`, state in `GET /api/v2/makapix`. Then Fab registers the dev unit (D13: this is the one manual step; build everything else first). Part 3: MQTT for commands, presence and views only (D80), the commands as the scheduler's calls (a handler `p3a_net` registers), reactions over `makapix_rpc()`, view reports off `shown`. Part 4: certificate renewal |
+| Next action | M4.5 part 3: the link. MQTT for commands, presence and views only (D80). In `source_makapix`, on the Makapix task (`makapix_register.c` has it): connect when registered and the network is up (mTLS with the stored PEMs in PSRAM; broker and port from the store; client id `p3a-{key}`; last will `{"player_key","status":"offline"}` on `makapix/player/{key}/status`), reconnect with 1.x's backoff as pure code (15 s doubling to 120 s, jittered; three handshake failures then one forced renewal, then "invalid"), status every 30 s (the server marks a player offline after 3 minutes), retained `capabilities` then `state`, subscribe `command`. Commands are parsed by pure code (`swap_next`, `swap_back`, `show_artwork`, `play_channel`, `play_playset` and 1.x's `execute_playset`, `show_url`, `swap_to`, `set_background_color`, and the acknowledged `set_paused`, `set_brightness`, `set_rotation`, `set_mirror` as unsupported) and handed to a handler `p3a_net` registers, which makes the scheduler's calls off the MQTT task (a job). Views: the scheduler tells the source when one of its artworks is shown and when it is covered (a new `shown` hook in `p3a_source_ops_t`); first report at 5 s, then every 30 s; the server takes one per 5 s. Reactions: `react` through `makapix_rpc()` as a job. Then Fab registers the unit (M4.5-a) and the registered paths are tested live. Part 4: certificate renewal |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -55,7 +55,7 @@ reopened (why).
 | M4.2 Giphy and Klipy | done 2026-11-25. Tiers: host tests (35 programs), device tests (the whole suite: 309 passed, 6 skipped), CI, test, release and trace builds. Manual: M4.2-a. Not verified: listed in the log entries of 2026-11-25. O6 (the services' own marks) stays open and holds nothing |
 | M4.3 Museums | done 2026-11-25. Tiers: host tests (36 programs, also under the sanitizers), device tests (the whole suite on the last build: 322 passed, 6 skipped), CI, test, release and trace builds. Manual: none. Not verified: listed in the log entries of 2026-11-25. O20 (what p3a tells the museums it is) stays open and holds nothing |
 | M4.4 Pinned lists and "show this" | done 2026-11-25. Tiers: host tests (38 programs, also under the sanitizers), device tests (the whole suite: 330 passed, 6 skipped; the pin tests again on the last build), test, release and trace builds. Manual: M4.4-a. Not verified: listed in the log entry |
-| M4.5 Makapix | in progress. Part 1 (2026-11-25): the source, the promoted channel from the public feed, the vault. Host and device tests |
+| M4.5 Makapix | in progress. Part 1 (2026-11-25): the source, the promoted channel from the public feed, the vault. Part 2 (2026-11-25): registration up to the owner's part. Host and device tests |
 | M5.1 Embedded web UI | not started |
 | M5.2 Firmware OTA for 2.x | not started |
 | M5.3 Release engineering | not started |
@@ -73,6 +73,17 @@ check reopens its milestone.
 
 Open:
 
+- **M4.5-a, registering the dev unit with Makapix Club** (D13). Needed
+  before anything a registered player does can be tested (part 3 on).
+  With the unit on and on the network: `curl -X POST
+  http://p3a-fab.local/api/v2/makapix/registration`. A six-character code
+  appears on the screen, large, with "sign in at makapix.club and enter
+  this code" under it. Type it at makapix.club within 15 minutes, with
+  any name for the player. The screen should say "Registered" for ten
+  seconds and go back to the artwork; `curl
+  http://p3a-fab.local/api/v2/makapix` should say `"registered": true`.
+  Say when it is done (or do it together with a session, which can start
+  it and watch).
 - **M4.4-a, the pin icons.** With a Giphy, Klipy or museum artwork
   playing, swipe up: a pin icon should flash in the top left corner for
   four seconds (with Giphy art, the click icon top right as well). Swipe
@@ -432,6 +443,56 @@ M4.3, 2026-11-25:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-25: M4.5 part 2, registration
+
+- **One long-lived Makapix task** (`makapix_register.c`), started at
+  boot. It runs a registration when asked and will keep the link in
+  part 3. 1.x made a task for asking for the code and another for
+  polling, each on a static stack that a second start could hand to two
+  tasks at once (noticed in the digest); requests here are flags the one
+  task reads.
+- **The flow**: ask for a code (`POST /api/player/provision`), show it,
+  ask for the credentials every three seconds (404 until the owner has
+  typed the code), save. Nothing reaches NVS before the credentials are
+  whole, so a cancel or a code that runs out leaves the device as it
+  was, registered or not. Starting again ends the one under way and
+  asks for a new code. The answer that held the private key is wiped
+  from memory after use, the parse tree's copy included.
+- How long a code is good for is the server's word when the device's
+  clock is set, else the quarter of an hour the server is known to give.
+- **The screen**: the code is the title, drawn twice as large
+  (`big_title`, new in `p3a_ui_content_t`, with a host test), over one
+  sentence that says where to type it. The code is not logged.
+- **Over HTTP**: `GET /api/v2/makapix` (registered; the phase, the code
+  and the seconds left while one is shown; how the last one ended),
+  `POST /api/v2/makapix/registration`, `DELETE` of the same (ends one
+  under way, else forgets the registration). Not a job: it lasts until
+  a person acts.
+- A registration made or forgotten is an event
+  (`P3A_EVENT_MAKAPIX_CHANGED`), on which the scheduler lists the
+  playing Makapix channels again.
+- Verified, host tests: the two answers read whole or not at all (ten
+  kinds of bad code answer, five of bad credentials, room too small,
+  PEMs too long); the large title. 39 programs, also under gcc with ASan
+  and UBSan (which found a test that filled the content with 'W' bytes,
+  the new flag included).
+- Verified, device tests (1 new case, against production): a code asked
+  for and shown (six letters and digits, 60 to 900 seconds, the screen's
+  title); a second start gives another code; cancel returns to idle with
+  nothing saved and the screen gone; forgetting a registration that is
+  not there is refused. Looked at on a screenshot.
+- Not verified: the owner's part and everything after it (credentials
+  arriving, the save, "Registered"): M4.5-a. A code running out (15
+  minutes). A registration over an existing one.
+- Notes: each run of the test asks production for two codes (ten an
+  hour are allowed from one address; the test skips when refused) and
+  leaves two players that were never registered in the server's table.
+  Whether the server clears those was not looked into.
+- Not done, and where it goes: the notice for a Makapix channel on a
+  device with no registration says "A source needs its key", which is
+  not what is missing. Wording per source: with the web page, M5.1.
+  Telling the server on unregistering (1.x did not either).
 
 ### 2026-11-25: M4.5 part 1, the Makapix source and the promoted channel
 

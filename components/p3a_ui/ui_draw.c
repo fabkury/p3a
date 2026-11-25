@@ -128,8 +128,10 @@ void ui_draw_screen(const ui_canvas_t *canvas, const ui_style_t *style, const p3
     const bool has_title = content->title[0] != '\0', has_text = content->text[0] != '\0';
     const bool has_bar = content->progress >= 0;
 
+    const int32_t title_scale = content->big_title ? style->title_scale * 2 : style->title_scale;
+
     // Measure first, to centre the group.
-    const int32_t title_h = has_title ? ui_text_block(NULL, style->font, 0, 0, column, style->title_scale, line_gap,
+    const int32_t title_h = has_title ? ui_text_block(NULL, style->font, 0, 0, column, title_scale, line_gap,
                                                       UI_ALIGN_CENTRE, 0, content->title, 2)
                                       : 0;
     const int32_t text_h = has_text ? body(NULL, style, style->margin, 0, column, content->text) : 0;
@@ -151,7 +153,7 @@ void ui_draw_screen(const ui_canvas_t *canvas, const ui_style_t *style, const p3
         y = style->margin / 2;
     }
     if (has_title) {
-        ui_text_block(canvas, style->font, style->margin, y, column, style->title_scale, line_gap, UI_ALIGN_CENTRE,
+        ui_text_block(canvas, style->font, style->margin, y, column, title_scale, line_gap, UI_ALIGN_CENTRE,
                       style->title, content->title, 2);
         y += title_h + gap;
     }

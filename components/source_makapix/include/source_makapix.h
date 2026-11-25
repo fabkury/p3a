@@ -22,6 +22,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stdint.h>
 
 #include "esp_err.h"
 
@@ -32,13 +33,42 @@ extern "C" {
 // Registers the source. Call once at boot.
 esp_err_t source_makapix_start(void);
 
+// --- registration -------------------------------------------------------------------
+//
+// A device becomes a player when its owner types a code, shown on its
+// screen, at makapix.club. Until that is done nothing is saved: a
+// registration that is cancelled or whose code runs out leaves the device
+// as it was, registered or not.
+
+typedef enum {
+    SOURCE_MAKAPIX_IDLE = 0,
+    SOURCE_MAKAPIX_ASKING,        // asking the server for a code
+    SOURCE_MAKAPIX_SHOWING_CODE,  // the code is on the screen; waiting for the owner
+} source_makapix_phase_t;
+
+#define SOURCE_MAKAPIX_RESULT_LEN 48
+
 // Where this device stands with Makapix Club.
 typedef struct {
     bool registered;      // it has a registration it can connect with
-    char player_key[37];  // the player's id there; "" when not registered. Not a secret by itself,
-                          // but with it anyone can ask for the player's token: treat it as one
+    char player_key[37];  // the player's id there; "" when not registered. With it anyone can ask
+                          // the server for the player's token: never show or log it
+    source_makapix_phase_t phase;
+    char code[8];                 // while SHOWING_CODE
+    uint32_t code_seconds_left;   // how long the code is still good for
+    char last_result[SOURCE_MAKAPIX_RESULT_LEN];  // how the last registration ended: "registered", "cancelled",
+                                                  // "the code ran out", "no code: <why>", "unregistered"; "" for none yet
 } source_makapix_status_t;
 void source_makapix_status(source_makapix_status_t *out);
+
+// Starts a registration and returns at once: the status says how it goes.
+// One already under way is ended and begun again with a new code.
+esp_err_t source_makapix_register(void);
+// Ends a registration under way. Nothing happens if there is none.
+esp_err_t source_makapix_register_cancel(void);
+// Forgets the registration. P3A_ERR_MISSING when there is none. The server
+// is not told: the player stays on its owner's account until removed there.
+esp_err_t source_makapix_unregister(void);
 
 #ifdef __cplusplus
 }

@@ -93,6 +93,7 @@ typedef struct {
     char buttons[P3A_UI_BUTTONS][P3A_UI_BUTTON_LEN];
     uint8_t buttons_enabled;  // bit i: button i takes taps
     int16_t progress;  // 0 to 100, or -1 for none
+    bool big_title;    // the title is the thing to read (a code): drawn twice as large
 } p3a_ui_content_t;
 
 typedef struct {

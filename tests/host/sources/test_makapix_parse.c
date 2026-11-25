@@ -287,6 +287,98 @@ static void test_a_file_with_no_known_format_has_no_address(void)
     TEST_ASSERT_EQUAL(P3A_ERR_MISSING, makapix_vault_url(&giphy, digest, url, sizeof(url)));
 }
 
+#define PEM(what) "-----BEGIN " what "-----\\nAAAA\\n-----END " what "-----\\n"
+
+static void test_a_registration_is_read_whole_or_not_at_all(void)
+{
+    static const char provision[] =
+        "{\"player_key\":\"550E8400-e29b-41d4-a716-446655440000\",\"registration_code\":\"ABC234\","
+        "\"registration_code_expires_at\":\"2026-11-25T20:15:00.123456Z\","
+        "\"mqtt_broker\":{\"host\":\"makapix.club\",\"port\":8883},"
+        "\"https_api\":{\"base_url\":\"https://makapix.club/api\",\"auth\":\"bearer\"}}";
+    makapix_provision_t p;
+    TEST_ASSERT_EQUAL(ESP_OK, makapix_parse_provision(provision, &p));
+    TEST_ASSERT_EQUAL_STRING("550e8400-e29b-41d4-a716-446655440000", p.player_key);
+    TEST_ASSERT_EQUAL_STRING("ABC234", p.code);
+    TEST_ASSERT_EQUAL_UINT32(1795637700u, p.expires_at);
+    TEST_ASSERT_EQUAL_STRING("makapix.club", p.host);
+    TEST_ASSERT_EQUAL(8883, p.port);
+    static const char *const bad[] = {
+        "",
+        "{}",
+        "{\"player_key\":\"not-a-key\",\"registration_code\":\"ABC234\",\"mqtt_broker\":{\"host\":\"makapix.club\",\"port\":8883}}",
+        "{\"player_key\":\"550e8400-e29b-41d4-a716-446655440000\",\"registration_code\":\"AB\",\"mqtt_broker\":{\"host\":\"makapix.club\",\"port\":8883}}",
+        "{\"player_key\":\"550e8400-e29b-41d4-a716-446655440000\",\"registration_code\":\"ABC2345678\",\"mqtt_broker\":{\"host\":\"makapix.club\",\"port\":8883}}",
+        "{\"player_key\":\"550e8400-e29b-41d4-a716-446655440000\",\"registration_code\":\"AB<234\",\"mqtt_broker\":{\"host\":\"makapix.club\",\"port\":8883}}",
+        "{\"player_key\":\"550e8400-e29b-41d4-a716-446655440000\",\"registration_code\":\"ABC234\"}",
+        "{\"player_key\":\"550e8400-e29b-41d4-a716-446655440000\",\"registration_code\":\"ABC234\",\"mqtt_broker\":{\"host\":\"makapix.club\",\"port\":0}}",
+        "{\"player_key\":\"550e8400-e29b-41d4-a716-446655440000\",\"registration_code\":\"ABC234\",\"mqtt_broker\":{\"host\":\"evil.example/x?\",\"port\":8883}}",
+        "{\"player_key\":\"550e8400-e29b-41d4-a716-446655440000\",\"registration_code\":\"ABC234\",\"mqtt_broker\":{\"host\":\"makapix.club\",\"port\":70000}}",
+    };
+    for (size_t i = 0; i < sizeof(bad) / sizeof(bad[0]); i++) {
+        TEST_ASSERT_EQUAL_MESSAGE(P3A_ERR_CORRUPT, makapix_parse_provision(bad[i], &p), bad[i]);
+        TEST_ASSERT_EQUAL_STRING("", p.player_key);
+        TEST_ASSERT_EQUAL_STRING("", p.code);
+    }
+    // A time that cannot be read is not a reason to refuse a code.
+    TEST_ASSERT_EQUAL(ESP_OK, makapix_parse_provision(
+        "{\"player_key\":\"550e8400-e29b-41d4-a716-446655440000\",\"registration_code\":\"ABC234\","
+        "\"mqtt_broker\":{\"host\":\"makapix.club\",\"port\":8883}}", &p));
+    TEST_ASSERT_EQUAL(0, p.expires_at);
+
+    static const char credentials[] =
+        "{\"ca_pem\":\"" PEM("CERTIFICATE") "\",\"cert_pem\":\"" PEM("CERTIFICATE") "\","
+        "\"key_pem\":\"" PEM("PRIVATE KEY") "\",\"broker\":{\"host\":\"mqtt.makapix.club\",\"port\":8884},"
+        "\"https_api\":{\"base_url\":\"https://makapix.club/api\",\"auth\":\"bearer\"},"
+        "\"api_token\":\"mpx_live_abc-DEF_123\"}";
+    static char pems[3 * 4096];
+    makapix_credentials_t c;
+    TEST_ASSERT_EQUAL(ESP_OK, makapix_parse_credentials(credentials, pems, sizeof(pems), &c));
+    TEST_ASSERT_EQUAL_STRING("-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----\n", c.ca);
+    TEST_ASSERT_EQUAL_STRING(c.ca, c.cert);
+    TEST_ASSERT_TRUE(c.ca != c.cert && c.cert != c.key);
+    TEST_ASSERT_EQUAL_STRING("-----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----\n", c.key);
+    TEST_ASSERT_EQUAL_STRING("mqtt.makapix.club", c.host);
+    TEST_ASSERT_EQUAL(8884, c.port);
+    TEST_ASSERT_EQUAL_STRING("mpx_live_abc-DEF_123", c.token);
+
+    // The second asking has no token, and an answer may name no broker.
+    TEST_ASSERT_EQUAL(ESP_OK, makapix_parse_credentials(
+        "{\"ca_pem\":\"" PEM("CERTIFICATE") "\",\"cert_pem\":\"" PEM("CERTIFICATE") "\","
+        "\"key_pem\":\"" PEM("PRIVATE KEY") "\",\"api_token\":null}", pems, sizeof(pems), &c));
+    TEST_ASSERT_EQUAL_STRING("", c.token);
+    TEST_ASSERT_EQUAL_STRING("", c.host);
+    TEST_ASSERT_EQUAL(0, c.port);
+
+    static const char *const bad_credentials[] = {
+        "{\"detail\":\"Player not found or not registered\"}",
+        "{\"ca_pem\":\"" PEM("CERTIFICATE") "\",\"cert_pem\":\"" PEM("CERTIFICATE") "\"}",
+        "{\"ca_pem\":\"" PEM("CERTIFICATE") "\",\"cert_pem\":\"" PEM("CERTIFICATE") "\",\"key_pem\":\"\"}",
+        "{\"ca_pem\":\"" PEM("CERTIFICATE") "\",\"cert_pem\":\"" PEM("CERTIFICATE") "\",\"key_pem\":\"not a PEM\"}",
+        "{\"ca_pem\":7,\"cert_pem\":\"" PEM("CERTIFICATE") "\",\"key_pem\":\"" PEM("PRIVATE KEY") "\"}",
+    };
+    for (size_t i = 0; i < sizeof(bad_credentials) / sizeof(bad_credentials[0]); i++) {
+        memset(pems, 'X', sizeof(pems));
+        TEST_ASSERT_EQUAL_MESSAGE(P3A_ERR_CORRUPT, makapix_parse_credentials(bad_credentials[i], pems, sizeof(pems), &c),
+                                  bad_credentials[i]);
+        TEST_ASSERT_NULL(c.key);
+        TEST_ASSERT_EQUAL(0, pems[0]);
+        TEST_ASSERT_EQUAL(0, pems[sizeof(pems) - 1]);
+    }
+    // Too little room for the three is refused, never overrun.
+    char small[100];
+    char guard = 'G';
+    TEST_ASSERT_EQUAL(P3A_ERR_CORRUPT, makapix_parse_credentials(credentials, small, sizeof(small), &c));
+    TEST_ASSERT_EQUAL('G', guard);
+    // A PEM of 4096 bytes or more is not one of Makapix's.
+    static char huge[5200];
+    static char answer[3 * 5200 + 200];
+    memset(huge, 'A', sizeof(huge) - 1);
+    memcpy(huge, "-----BEGIN CERTIFICATE-----", 27);
+    snprintf(answer, sizeof(answer), "{\"ca_pem\":\"%s\",\"cert_pem\":\"%s\",\"key_pem\":\"%s\"}", huge, huge, huge);
+    TEST_ASSERT_EQUAL(P3A_ERR_CORRUPT, makapix_parse_credentials(answer, pems, sizeof(pems), &c));
+}
+
 static void test_cut_and_mutated_answers_do_no_harm(void)
 {
     static const char *const files[] = {"makapix_promoted_p1.json", "makapix_rpc_written.json"};
@@ -334,6 +426,7 @@ int main(void)
     RUN_TEST(test_times_and_storage_keys_are_read_strictly);
     RUN_TEST(test_channels_and_what_is_asked_of_them);
     RUN_TEST(test_a_file_with_no_known_format_has_no_address);
+    RUN_TEST(test_a_registration_is_read_whole_or_not_at_all);
     RUN_TEST(test_cut_and_mutated_answers_do_no_harm);
     return UNITY_END();
 }

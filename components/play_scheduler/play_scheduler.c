@@ -776,6 +776,15 @@ static void on_pins_changed(const p3a_event_t *event, void *ctx)
     (void)play_scheduler_refresh_source(P3A_CHANNEL_SOURCE_PINNED);
 }
 
+// A registration made or forgotten changes what Makapix's channels may list.
+static void on_makapix_changed(const p3a_event_t *event, void *ctx)
+{
+    (void)ctx;
+    if (event->payload.i32 == 1) {
+        (void)play_scheduler_refresh_source(P3A_SOURCE_MAKAPIX);
+    }
+}
+
 static void on_setting_changed(const p3a_event_t *event, void *ctx)
 {
     (void)ctx;
@@ -812,6 +821,7 @@ esp_err_t play_scheduler_start(void)
     }
     p3a_event_subscribe(P3A_EVENT_SETTING_CHANGED, on_setting_changed, NULL);
     p3a_event_subscribe(P3A_EVENT_PINS_CHANGED, on_pins_changed, NULL);
+    p3a_event_subscribe(P3A_EVENT_MAKAPIX_CHANGED, on_makapix_changed, NULL);
     const esp_timer_create_args_t timer = {.callback = tick, .name = "sched_tick"};
     if (esp_timer_create(&timer, &s_tick) == ESP_OK) {
         esp_timer_start_periodic(s_tick, TICK_MS * 1000);

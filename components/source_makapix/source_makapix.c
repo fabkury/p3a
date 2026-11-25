@@ -11,6 +11,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "http_fetch.h"
+#include "makapix_internal.h"
 #include "makapix_parse.h"
 #include "makapix_rpc.h"
 #include "makapix_store.h"
@@ -160,6 +161,7 @@ void source_makapix_status(source_makapix_status_t *out)
     if (out->registered) {
         memcpy(out->player_key, identity.player_key, sizeof(out->player_key));
     }
+    makapix_register_status(out);
 }
 
 esp_err_t source_makapix_start(void)
@@ -178,6 +180,9 @@ esp_err_t source_makapix_start(void)
     static p3a_source_ops_t table;
     table = ops;
     table.user_agent = makapix_user_agent();
-    const esp_err_t err = makapix_rpc_start();
+    esp_err_t err = makapix_rpc_start();
+    if (err == ESP_OK) {
+        err = makapix_task_start();
+    }
     return err != ESP_OK ? err : p3a_source_register(&table);
 }

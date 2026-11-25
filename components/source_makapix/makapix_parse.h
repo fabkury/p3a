@@ -115,6 +115,43 @@ esp_err_t makapix_parse_result(const char *json);
 // secret: never log it.
 esp_err_t makapix_parse_token(const char *json, char *out, size_t len);
 
+// --- registration -------------------------------------------------------------------
+//
+// A device becomes a player in two steps. It asks for a code
+// (POST /api/player/provision, answered 201) and shows it; its owner types
+// the code at makapix.club. Meanwhile the device asks for its credentials
+// (GET /api/player/{player_key}/credentials), answered 404 until the owner
+// has done so, then once with everything: the three PEMs, the broker, and a
+// token (only on the first asking).
+
+#define MAKAPIX_CODE_LEN 8  // six characters today; with the terminator
+
+typedef struct {
+    char player_key[MAKAPIX_UUID_TEXT];
+    char code[MAKAPIX_CODE_LEN];
+    uint32_t expires_at;  // Unix seconds; 0 when the answer's time could not be read
+    char host[64];        // the broker
+    uint16_t port;
+} makapix_provision_t;
+
+// P3A_ERR_CORRUPT unless the answer has a player key that is a UUID, a code
+// of 4 to 7 letters and digits, and a broker.
+esp_err_t makapix_parse_provision(const char *json, makapix_provision_t *out);
+
+typedef struct {
+    // Each points into the caller's `pems` buffer (below), terminated.
+    const char *ca, *cert, *key;
+    char host[64];  // "" and 0 when the answer names no broker: the one from the provision stands
+    uint16_t port;
+    char token[128];  // "" when the answer has none
+} makapix_credentials_t;
+
+// Reads the credentials. The three PEMs are copied into `pems` (room for
+// `pems_len` bytes), one after the other, and `out` points at them: the
+// JSON can then be wiped. P3A_ERR_CORRUPT unless all three are there, each
+// looks like a PEM ("-----BEGIN ") and is shorter than 4096 bytes.
+esp_err_t makapix_parse_credentials(const char *json, char *pems, size_t pems_len, makapix_credentials_t *out);
+
 // --- the file -----------------------------------------------------------------------
 
 // Where a record's file is. `digest` is SHA-256 of the storage key's text

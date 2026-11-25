@@ -441,6 +441,117 @@ esp_err_t makapix_parse_token(const char *json, char *out, size_t len)
     return err;
 }
 
+// --- registration -------------------------------------------------------------------
+
+// A host name as it may go into an address: letters, digits, '.', '-'.
+static bool host_ok(const char *host, size_t max)
+{
+    if (host == NULL || host[0] == '\0' || strlen(host) >= max) {
+        return false;
+    }
+    for (const char *p = host; *p != '\0'; p++) {
+        const bool ok = (*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z') || (*p >= '0' && *p <= '9') || *p == '.' ||
+                        *p == '-';
+        if (!ok) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool broker_of(const cJSON *broker, char host[64], uint16_t *port)
+{
+    const char *name = cJSON_IsObject(broker) ? text_of(broker, "host") : NULL;
+    const uint32_t number = cJSON_IsObject(broker) ? number_of(broker, "port", 65535) : 0;
+    if (!host_ok(name, 64) || number == 0) {
+        return false;
+    }
+    strcpy(host, name);
+    *port = (uint16_t)number;
+    return true;
+}
+
+esp_err_t makapix_parse_provision(const char *json, makapix_provision_t *out)
+{
+    memset(out, 0, sizeof(*out));
+    cJSON *root = cJSON_Parse(json);
+    esp_err_t err = P3A_ERR_CORRUPT;
+    if (cJSON_IsObject(root)) {
+        const char *key = text_of(root, "player_key");
+        const char *code = text_of(root, "registration_code");
+        uint8_t uuid[16];
+        bool code_ok = code != NULL && strlen(code) >= 4 && strlen(code) < MAKAPIX_CODE_LEN;
+        for (const char *p = code; code_ok && *p != '\0'; p++) {
+            code_ok = (*p >= 'A' && *p <= 'Z') || (*p >= 'a' && *p <= 'z') || (*p >= '0' && *p <= '9');
+        }
+        if (makapix_uuid_parse(key, uuid) && code_ok &&
+            broker_of(cJSON_GetObjectItemCaseSensitive(root, "mqtt_broker"), out->host, &out->port)) {
+            makapix_uuid_text(uuid, out->player_key);  // in the one spelling the server uses
+            strcpy(out->code, code);
+            out->expires_at = makapix_time(text_of(root, "registration_code_expires_at"));
+            err = ESP_OK;
+        }
+    }
+    cJSON_Delete(root);
+    if (err != ESP_OK) {
+        memset(out, 0, sizeof(*out));
+    }
+    return err;
+}
+
+esp_err_t makapix_parse_credentials(const char *json, char *pems, size_t pems_len, makapix_credentials_t *out)
+{
+    memset(out, 0, sizeof(*out));
+    cJSON *root = cJSON_Parse(json);
+    esp_err_t err = P3A_ERR_CORRUPT;
+    if (cJSON_IsObject(root)) {
+        static const char *const names[3] = {"ca_pem", "cert_pem", "key_pem"};
+        const char *got[3] = {NULL, NULL, NULL};
+        size_t at = 0;
+        bool ok = true;
+        for (int i = 0; i < 3 && ok; i++) {
+            const char *pem = text_of(root, names[i]);
+            const size_t len = pem != NULL ? strlen(pem) : 0;
+            ok = len > 0 && len < 4096 && strncmp(pem, "-----BEGIN ", 11) == 0 && at + len + 1 <= pems_len;
+            if (ok) {
+                memcpy(pems + at, pem, len + 1);
+                got[i] = pems + at;
+                at += len + 1;
+            }
+        }
+        if (ok) {
+            out->ca = got[0];
+            out->cert = got[1];
+            out->key = got[2];
+            (void)broker_of(cJSON_GetObjectItemCaseSensitive(root, "broker"), out->host, &out->port);
+            const char *token = text_of(root, "api_token");
+            if (token != NULL && token[0] != '\0' && strlen(token) < sizeof(out->token)) {
+                bool clean = true;
+                for (const char *p = token; *p != '\0'; p++) {
+                    clean = clean && (unsigned char)*p > 0x20 && (unsigned char)*p < 0x7F;
+                }
+                if (clean) {
+                    strcpy(out->token, token);
+                }
+            }
+            err = ESP_OK;
+        }
+    }
+    // The parse tree held the private key.
+    if (root != NULL) {
+        cJSON *key = cJSON_GetObjectItemCaseSensitive(root, "key_pem");
+        if (cJSON_IsString(key) && key->valuestring != NULL) {
+            memset(key->valuestring, 0, strlen(key->valuestring));
+        }
+    }
+    cJSON_Delete(root);
+    if (err != ESP_OK) {
+        memset(out, 0, sizeof(*out));
+        memset(pems, 0, pems_len);
+    }
+    return err;
+}
+
 // --- the file -----------------------------------------------------------------------
 
 esp_err_t makapix_vault_url(const p3a_record_t *record, const uint8_t digest[32], char *out, size_t len)

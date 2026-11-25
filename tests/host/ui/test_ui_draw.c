@@ -114,6 +114,31 @@ static void test_a_screen_is_title_then_text_then_bar_centred_on_the_background(
     guard_intact();
 }
 
+static void test_a_title_that_is_the_thing_to_read_is_drawn_twice_as_large(void)
+{
+    p3a_ui_content_t c;
+    int t0, t1, big0, big1, x0, x1;
+    p3a_ui_content(&c, "ABC234", -1, "%s", "");
+    fresh(0);
+    ui_draw_screen(&canvas, &style, &c);
+    rows_with(style.title, &t0, &t1);
+    c.big_title = true;
+    fresh(0);
+    ui_draw_screen(&canvas, &style, &c);
+    rows_with(style.title, &big0, &big1);
+    TEST_ASSERT_EQUAL(2 * (t1 - t0 + 1), big1 - big0 + 1);
+    // Still centred, and the text below it still clear of it.
+    TEST_ASSERT_INT_WITHIN(24u, big0, H - 1 - big1);
+    p3a_ui_content(&c, "ABC234", -1, "Enter this code");
+    c.big_title = true;
+    fresh(0);
+    ui_draw_screen(&canvas, &style, &c);
+    rows_with(style.title, &big0, &big1);
+    rows_with(style.text, &x0, &x1);
+    TEST_ASSERT_TRUE(x0 > big1);
+    guard_intact();
+}
+
 static void test_no_words_can_push_anything_off_the_screen(void)
 {
     p3a_ui_content_t c;
@@ -122,13 +147,16 @@ static void test_no_words_can_push_anything_off_the_screen(void)
     c.text[sizeof(c.text) - 1] = '\0';
     c.progress = 250;  // beyond the end
     for (int r = 0; r < 360; r += 90) {
-        fresh(r);
-        ui_draw_screen(&canvas, &style, &c);
-        guard_intact();
-        TEST_ASSERT_EQUAL(0, count(0x555555));
-        fresh(r);
-        ui_draw_banner(&canvas, &style, &c);
-        guard_intact();
+        for (int big = 0; big < 2; big++) {
+            c.big_title = big != 0;  // and at twice the size
+            fresh(r);
+            ui_draw_screen(&canvas, &style, &c);
+            guard_intact();
+            TEST_ASSERT_EQUAL(0, count(0x555555));
+            fresh(r);
+            ui_draw_banner(&canvas, &style, &c);
+            guard_intact();
+        }
     }
     // Nothing to say: a plain background, and no banner at all.
     p3a_ui_content(&c, "", -1, "%s", "");
@@ -267,6 +295,7 @@ int main(void)
     UNITY_BEGIN();
     RUN_TEST(test_the_built_in_font_opens_and_the_default_style_suits_the_panel);
     RUN_TEST(test_a_screen_is_title_then_text_then_bar_centred_on_the_background);
+    RUN_TEST(test_a_title_that_is_the_thing_to_read_is_drawn_twice_as_large);
     RUN_TEST(test_no_words_can_push_anything_off_the_screen);
     RUN_TEST(test_a_banner_is_a_band_at_the_viewers_bottom_and_leaves_the_rest);
     RUN_TEST(test_rows_line_up_in_two_columns_and_the_hint_sits_at_the_bottom);

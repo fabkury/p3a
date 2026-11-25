@@ -30,7 +30,12 @@ typedef enum {
     // payload.i32: its p3a_setting_id_t. Read the value with p3a_settings_get().
     P3A_EVENT_SETTING_CHANGED,
 
-    // --- sources 0x0400: none yet ---
+    // --- sources (0x0400) ---
+    // Something about this device and Makapix Club has changed: a
+    // registration begun, a code shown, a registration made or forgotten.
+    // payload.i32: 1 when whether the device is registered changed, else 0.
+    // Ask source_makapix_status().
+    P3A_EVENT_MAKAPIX_CHANGED = 0x0400,
 
     // --- library (0x0500) ---
     // The pin lists have changed: an artwork pinned or unpinned, a list

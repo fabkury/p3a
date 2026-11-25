@@ -21,7 +21,7 @@
 #include "p3a_test_internal.h"
 
 #define CONSOLE_UART   ((uart_port_t)CONFIG_ESP_CONSOLE_UART_NUM)
-#define LINE_MAX_LEN   1024
+#define LINE_MAX_LEN   2048  // the whole of the settings as one JSON object is over 1000 characters
 #define RX_BUFFER_SIZE 2048
 
 static const char *TAG = "p3a_test";

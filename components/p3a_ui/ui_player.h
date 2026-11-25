@@ -29,6 +29,9 @@ typedef struct {
     bool online;          // the network is up
     bool need_key;        // a channel's source has no key, or its key was refused
     bool rate_limited;    // a channel's source asked to wait
+    const char *key_refused_by;  // the name of a source that refused its key ("giphy"); NULL for none
+    const char *no_key_for;      // of a source that has no key
+    const char *wait_asked_by;   // of a source that asked to wait
     uint32_t failed;      // of them, could not be listed
     uint32_t no_source;   // of them, from a source this firmware lacks
     uint32_t playable;    // artworks that could be chosen now
@@ -46,6 +49,22 @@ typedef enum {
 
 // Which standing notice the facts call for, and its words.
 ui_player_standing_t ui_player_standing(const ui_player_facts_t *facts, p3a_ui_content_t *out);
+
+// A source's trouble, said over an artwork that is playing (when nothing
+// plays, the standing notice says it). A refused key stays up until it is
+// put right: nothing else tells a person why a channel never shows. The
+// others are said once and go.
+typedef enum {
+    UI_SOURCE_FINE = 0,
+    UI_SOURCE_KEY_REFUSED,  // stays
+    UI_SOURCE_NO_KEY,       // UI_SOURCE_PROBLEM_TTL_MS, UI_SOURCE_PROBLEM_PER_BOOT
+    UI_SOURCE_WAIT,         // the same
+} ui_source_problem_t;
+
+ui_source_problem_t ui_player_source_problem(const ui_player_facts_t *facts, p3a_ui_content_t *out);
+
+#define UI_SOURCE_PROBLEM_TTL_MS   20000
+#define UI_SOURCE_PROBLEM_PER_BOOT 2
 
 // The words for a request that could not be shown.
 void ui_player_problem(int problem, p3a_ui_content_t *out);

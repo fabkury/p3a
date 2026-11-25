@@ -18,6 +18,7 @@ idf_component_register(
          "ui_canvas.c"
          "ui_card.c"
          "ui_clock.c"
+         "ui_credit.c"
          "ui_display.c"
          "ui_draw.c"
          "ui_font.c"
@@ -55,7 +56,7 @@ idf_component_register(
          "intro/p3a_logo.c"
     INCLUDE_DIRS "include"
     REQUIRES p3a_util
-    PRIV_REQUIRES display_renderer esp_hw_support esp_system esp_timer espressif__esp_lcd_touch p3a_board p3a_settings p3a_storage play_scheduler
+    PRIV_REQUIRES display_renderer esp_hw_support esp_system esp_timer espressif__esp_lcd_touch animation_player p3a_board p3a_library p3a_settings p3a_storage play_scheduler
     EMBED_FILES "fonts/ui.p3afont"
                 "images/like.p3aimg" "images/unlike.p3aimg" "images/click.p3aimg"
                 "images/pin.p3aimg" "images/unpin.p3aimg" "images/error.p3aimg"

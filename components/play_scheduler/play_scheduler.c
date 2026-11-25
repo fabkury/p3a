@@ -38,6 +38,7 @@ static const char *TAG = "sched";
 
 #define OUR_TOKENS 0x80000000u  // the scheduler's requests to the player carry this bit
 #define TICK_MS    250
+#define PENDING_OVERDUE_MS 30000
 
 sched_state_t *sched;
 SemaphoreHandle_t sched_lock;
@@ -89,6 +90,8 @@ static esp_err_t request(turn_kind_t kind, const p3a_record_t *record, uint32_t 
     sched->pending_record = *record;
     sched->pending_channel = channel;
     sched->pending_generation = sched->generation;
+    sched->pending_since_ms = sched_now_ms();
+    sched->pending_overdue_said = false;
     err = animation_player_play(&req);
     if (err != ESP_OK) {
         sched->pending_token = 0;
@@ -337,6 +340,7 @@ static void on_shown(uint32_t token, void *ctx)
         sched->staged = false;
         sched->current = sched->pending_record;
         sched->playing = true;
+        sched->start_wanted = false;
         sched->foreign_shown = false;
         sched->shown++;
         sched->problem = ESP_OK;
@@ -450,9 +454,11 @@ void play_scheduler_set_foreign_listener(const animation_player_listener_t *list
 
 void sched_start_if_wanted(void)
 {
-    if ((sched->start_wanted || (!sched->playing && !sched->foreign_shown)) && sched->pending_token == 0 &&
-        begin_new(SCHED_TURN_AUTO) == ESP_OK) {
-        sched->start_wanted = false;  // the first thing to play has arrived
+    // `start_wanted` stays until an artwork of the new playset is on the
+    // panel (on_shown): a first pick that fails (its blob went from the
+    // store) must not leave the old playset's artwork up for a whole dwell.
+    if ((sched->start_wanted || (!sched->playing && !sched->foreign_shown)) && sched->pending_token == 0) {
+        begin_new(SCHED_TURN_AUTO);
     }
 }
 
@@ -598,6 +604,20 @@ void play_scheduler_get_status(play_scheduler_status_t *out)
     UNLOCK();
 }
 
+bool play_scheduler_current(p3a_record_t *out)
+{
+    if (sched == NULL) {
+        return false;
+    }
+    LOCK();
+    const bool playing = sched->playing && !sched->foreign_shown;
+    if (playing) {
+        *out = sched->current;
+    }
+    UNLOCK();
+    return playing;
+}
+
 void play_scheduler_get_playset(playset_t *out)
 {
     memset(out, 0, sizeof(*out));
@@ -643,6 +663,20 @@ static void tick(void *arg)
     }
     if (!sched->advance_queued && sched_turn_due(&sched->turn, sched_now_ms(), playable_total())) {
         sched->advance_queued = p3a_job_submit(P3A_JOBS_UI, "next artwork", advance_job, NULL, NULL) == ESP_OK;
+    }
+    // The player answers every request (ready and shown, or failed) within
+    // seconds. One still open after half a minute is a fault somewhere
+    // between the two, or something holding the panel so that a loaded
+    // artwork is never drawn (a test pattern left up did that once). Said
+    // once per request, with what each side believes.
+    if (sched->pending_token != 0 && !sched->pending_overdue_said &&
+        sched_now_ms() - sched->pending_since_ms > PENDING_OVERDUE_MS) {
+        sched->pending_overdue_said = true;
+        animation_player_status_t player;
+        animation_player_get_status(&player);
+        ESP_LOGE(TAG, "request %08x has had no answer for %d s: staged %d, foreign %d, playing %d; the player shows %08x, loading %d",
+                 (unsigned)sched->pending_token, PENDING_OVERDUE_MS / 1000, sched->staged, sched->foreign_shown,
+                 sched->playing, (unsigned)player.token, player.loading);
     }
     UNLOCK();
 }

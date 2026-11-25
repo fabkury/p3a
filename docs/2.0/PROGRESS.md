@@ -9,8 +9,8 @@ times.
 | | |
 |---|---|
 | Phase | 4, remote sources (Phases 0 to 3 complete but for their manual checks) |
-| Current milestone | M4.1 fetch, download, refresh, eviction |
-| Next action | First finish M4.1 (paused 2026-11-23 before its milestone-end runs): flash the test build and run the whole device suite (`python -m pytest tests/device`), then `lab.py build release` and `lab.py build trace`; the last edits (URLs logged without their query in `http_fetch.c`, `wait_on_sdio` and `treat_empty_as_not_found` on the content task's downloads) were compiled but have not run on the device. Read CI for this commit. Mark M4.1 done with the results. Then M4.2. Read PLAN.md M4.2, O6, idea 2, `docs/2.0-architecture-review/content-pipeline.md` section 1, `memory`-worthy quirks in `docs/known-issues.md` for Giphy and Klipy, and in `legacy/components`: `giphy` and `klipy` (listing, the parsers, the cooldown, the 401 and no-key states, rendition choice). Build each as a component in the `sources` layer with a `p3a_source_ops_t` (`remote`, `refresh`, `url`, `refresh_interval_s`, `index_capacity`, `filter_aspect`), its settings in `settings.json` (keys flagged `secret`), the listing parser pure and host-tested on recorded responses, and one registration in `app_main`. The content task (M4.1) does the listing schedule, the downloads and the back-off: a source only lists and says where the bytes are. `refresh()` cannot yet hand back a server's Retry-After (the schedule takes it); add that to the ops if Giphy's 429 carries one. Branding on the device (O6). O9's measurements are taken here, with real traffic |
+| Current milestone | M4.2 Giphy and Klipy |
+| Next action | M4.2 part 2. (a) O9: measure internal memory while a Giphy channel downloads (`!mem` min_free over a long run, the SDIO receive pool) and decide on the Option E items. (b) The whole device suite, then mark M4.2 done; the credit's marks wait on Fab (O6) and do not hold the milestone. Then M4.3 (museums): read PLAN.md M4.3, `docs/art-institutions/finalized-design.md`, O10, and `legacy/components/art_institution`. The pattern is M4.2's: a component in `sources`, the requests in one file and a pure reading of recorded responses in another, `filter_aspect` set |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -51,8 +51,8 @@ reopened (why).
 | M3.4 Touch router and gestures | built 2026-11-23; open for manual check M3.4-a (real fingers), swipe actions (Phase 4) and the SD-format taps (M3.3). Tiers: host tests (26 programs, under the sanitizers too), device tests with scripted fingers (71 cases with the areas around it) |
 | M3.5 Overlays | done 2026-11-23 except source branding, which moves to M4.2 where its sources and their terms are (O6). Tiers: host tests (29 programs, under the sanitizers too), device tests (the overlays equal the workstation's rendering). Manual check M3.5-a pending |
 | M3.6 USB mass storage | built 2026-11-23; open for manual check M3.6-a (a real computer). Tiers: host tests (30 programs, under the sanitizers too), device tests with the bus's reports injected (with it every test not marked slow passes: 267 cases), release, test and trace builds, the configuration guard, a from-scratch configure in the CI container |
-| M4.1 Fetch, download, refresh, eviction | built 2026-11-23; the milestone-end runs are owed. Tiers so far: host tests (32 programs), device tests (the suite without its slow tests on an earlier build of this work: 278 of 279 passed, the failure being the test hooks' screenshot, since fixed; on the later build the smoke, content, overlay, UI drawing, library and scheduler tests pass), test build. Owed: the whole device suite on the last build, the release and trace builds. Not verified: listed in the log entry; O9's measurements moved to M4.2 |
-| M4.2 Giphy and Klipy | not started |
+| M4.1 Fetch, download, refresh, eviction | done 2026-11-25. Tiers: host tests (32 programs), the whole device suite on the M4.1 commit (297 pass, 6 skipped), CI green, release and trace builds (made on the tree with M4.2 part 1 in it). Manual: none. Not verified: listed in the log entry of 2026-11-23; O9's measurements moved to M4.2 |
+| M4.2 Giphy and Klipy | in progress: both sources list, download and play against the live services (2026-11-25), and are named under their artworks in words. O9 and the milestone-end suite are to do; the official marks wait on O6 |
 | M4.3 Museums | not started |
 | M4.4 Pinned lists and "show this" | not started |
 | M4.5 Makapix | not started |
@@ -72,6 +72,13 @@ to do, what should happen. Fab ticks a line or reports what he saw; a failed
 check reopens its milestone.
 
 Open:
+
+- **M4.2-a, the credit under a Giphy artwork.** With a Giphy key set and a
+  Giphy channel playing, wait for a GIF that is wider than it is tall.
+  "Powered by GIPHY" should stand centred in the black band under it, in
+  grey: readable from where the device is usually seen, quieter than the
+  picture, clear of its edge. Nothing under a GIF that fills the screen.
+  Say if the size or the grey is wrong.
 
 - **M1.2-a, the panel shows what the framebuffer holds.** Run
   `python host/p3a-lab/lab.py cmd "lcd bars"`. The panel should show eight
@@ -368,10 +375,150 @@ M4.1, 2026-11-23:
 - `components/http_fetch/CMakeLists.txt`: the component is now
   `components/p3a_fetch` with its own.
 
+M4.2, 2026-11-25:
+
+- `components/giphy/` and `components/klipy/` (all files): rewritten as
+  `components/source_giphy` and `components/source_klipy`. Their merge,
+  cache-path, eviction-of-orphans, cooldown and key-latch code has one
+  implementation now, in the content task and the blob store.
+- `components/storage_eviction/` (all files): rewritten as
+  `p3a_evict.c` and `p3a_blob_evict.c` (M4.1, D65). The part that dropped
+  old channel files is `drop_stale_indices()` in `sched_content.c`.
+- `components/channel_manager/download_manager.c` and
+  `include/download_manager.h`: replaced by the content task (M4.1).
+
 ## Session log
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-25: M4.1 closed; M4.2 part 1, Giphy and Klipy
+
+- **M4.1's owed runs.** The whole device suite on the M4.1 commit
+  (`4cb5d4b5`): 297 passed, 6 skipped. Its CI run is green. The release
+  and trace builds pass the build checks; they were made after M4.2
+  part 1 was in the tree, so they cover both.
+- **Two sources**, `components/source_giphy` and `components/source_klipy`
+  (layer `sources`), each a `p3a_source_ops_t` and one registration in
+  `app_main`. Each is two files: the requests (`source_*.c`) and what the
+  answers mean (`giphy_parse.c`, `klipy_parse.c`: pure, host-tested). A
+  source lists its channel into an empty index and says where an
+  artwork's bytes are; when to list, the downloads, the waits and the
+  index on the card are the content task's (M4.1). Written anew from the
+  1.x code rather than moved: the 1.x files were mostly merging, caching
+  and cooldown bookkeeping, which now have one home.
+- **Giphy**: kinds `trending` and `search` (the identifier is the query);
+  the offset starts the listing further down. Rating, country, cache size,
+  refresh interval, rendition, format and prefer-downsized are the
+  settings that were already in `settings.json`.
+- **Which file of a GIF is downloaded is in its record**
+  (`identity.giphy.file`, D68), decided when the channel is listed. The
+  download address then needs only the record, and a change of the
+  rendition setting takes effect at the next listing. The
+  downsized-medium rule is 1.x's: taken when the listing says the file
+  exists (its own address is read, never guessed) and it is no larger
+  than a screen and a half each way.
+- **Klipy**: kinds `gif:` or `sticker:` with `trending`, `search` or
+  `category`. Its key is part of the address's path, a key it does not
+  know is a 404 (reported as `AUTH`), and an item's address is asked for
+  at download time (`ops->url` makes a request), as in 1.x. Advertisements
+  in a listing are skipped. Only an https address at `*.klipy.com` is
+  downloaded: the address comes from a response.
+- **Dates are read as UTC.** 1.x used `mktime()`, which applies the time
+  zone the clock overlay sets.
+- **The fetcher logs only a URL's scheme and host** (D69). Giphy's key is
+  in the query and Klipy's in the path. Device-tested: neither test key is
+  in the device's log after a run.
+- **A swipe up on a GIF is told to Giphy** (its click analytics), through
+  a new entry in the source table, `react` (D70): the UI asks the source
+  of the artwork on the panel and shows the icon for what it answers. The
+  two requests run as a job. `POST /api/v2/sources/giphy/reset-id`
+  forgets the id Giphy gave the device.
+- **A source's trouble is said over the artwork** (`ui_player.c`, pure,
+  D71): a refused key stays up, by the source's name, until it is put
+  right; a missing key and a rate limit are said once for 20 seconds, at
+  most twice per boot.
+- The player's state shows a record's `format` once known.
+- **The source is named under its artwork** (idea 2, D72): when a Giphy
+  or Klipy artwork leaves a band free below it, "Powered by GIPHY" or
+  "Powered by KLIPY" is drawn there in the UI's font, grey, at three
+  times its size or two, centred. Never over the picture: an artwork that
+  fills the screen, or leaves less than 26 rows, has no credit. The line
+  is the source's (`credit` in its table), where it goes is
+  `ui_credit.c` (pure), and the setting `source_credit` turns it off. It
+  is words, not the services' logos: see O6.
+- **The information screen** has a row for each remote source of the
+  active playset: OK, Waiting, No key, Key refused, Asked to wait, Not
+  reached.
+- **An offset past the end of a channel starts from the top.** Giphy's
+  trending is under 200 GIFs; an offset beyond that used to give an empty
+  channel.
+- **Fixed, found by the device suite: a new playset whose first pick fails
+  now starts when something arrives.** `start_wanted` was cleared when the
+  first request was made; if that failed (the index on the card named
+  blobs that had been evicted) the previous playset's artwork stayed up
+  for a whole dwell. It is cleared when an artwork is shown.
+- **A hang in the suite, explained: it was the test rig.** Twice the
+  first request of a Klipy playset stayed "loading" for minutes. The
+  scheduler now logs an error when a request has had no answer for 30
+  seconds, with what both sides believe, and the second time that line
+  said the artwork was loaded and staged and the display never took it.
+  The `!lcd` test patterns hold the panel on the test source until
+  something takes them down, and nothing did: every test that then
+  waited for the scheduler's own artwork hung, unless a test in between
+  happened to switch the source. `!lcd done` hands the panel back, and
+  the two test files that draw patterns call it when they finish. A
+  release build has no test source. The log line stays: a request that
+  is never answered should not be silent.
+- `tests/assets/sources/` holds responses recorded from both services
+  with the requests the device makes. No key is in them, and Giphy's are
+  cut down to the fields the device reads, with the analytics tokens of
+  the account that recorded them taken out. Beside them is
+  `make_expected.py`, a second reading of them in Python that the host
+  tests compare the C parsers against.
+- Verified, host tests (3 new programs, 35 in all): both parsers on the
+  recorded listings against the Python reading; items that cannot be
+  used; which file is taken; dates; every address p3a builds, with a key
+  or a query that tries to add a parameter or a path; cut and mutated
+  listings (3000 and 1500 rounds); the notices' words; where the credit
+  goes (`test_ui_credit.c`).
+- Verified, device tests against the live services with the test rig's
+  keys (11 new cases, `test_giphy.py` and `test_klipy.py`): no key says
+  so, on the channel and on the screen; a key Giphy refuses is `AUTH`,
+  Klipy's 404 is `AUTH`; saving the right key lists the channel by itself;
+  GIFs are downloaded and play animated at the size asked for; a search
+  channel; a sticker search as WebP; an unknown kind is the channel's
+  error; the swipe up is told to Giphy; the id is forgotten and asked for
+  again; the refused-key notice is up over a playing file, with the
+  "Key refused" row on the information screen, and goes when the key is
+  right; the credit is in the band below a wide GIF and nowhere above
+  it, and goes when its setting is turned off. In `test_content.py`, one
+  more: a playset whose blobs all went starts as soon as the first is
+  fetched again. Suite: without its slow tests, 290 passed on the build before the credit was added; on the last build the smoke, Giphy, Klipy, settings, overlay, UI and content tests pass.
+- Not verified: the credit by eye (its size and grey were chosen without
+  seeing the panel: manual check M4.2-a), under a Klipy artwork, and
+  with the screen turned; a rate limit from either service (the waits are
+  host-tested; none was provoked); listings of more than one page on the
+  device (the tests keep 32 items); the downsized-medium choice on the
+  device (the tests turn it off to keep downloads small; host-tested on
+  the recorded listings, where every one of the 50 items takes it); Klipy
+  categories; a GIF Giphy has removed; the offset's effect on what is
+  listed; the once-only notices for a missing key and a rate limit over
+  an artwork (host-tested words, model cap host-tested); the click icon
+  by eye.
+- Known and left: a channel loaded from its index believes in blobs that
+  eviction has since deleted, and finds out one failed pick at a time
+  (each is then fetched again). It mends itself, noisily. A Klipy download
+  costs one request for the item's address, as in 1.x; the listing
+  already had that address. Keeping the addresses of the last listing in
+  memory would save it (an idea, not built). A source's `refresh()`
+  cannot hand the server's Retry-After to the schedule; neither service
+  sent one worth having (Giphy's 401 says 0), and the schedule's floor is
+  15 minutes.
+- From `docs/known-issues.md`, for the files that left `legacy/`: the
+  inline SDIO wait in `giphy_download.c` is gone (downloads use the
+  fetcher's `wait_on_sdio`); the comment drift in `giphy.h` went with the
+  file.
 
 ### 2026-11-23: M4.1 parts 2 and 3, the content task and eviction
 

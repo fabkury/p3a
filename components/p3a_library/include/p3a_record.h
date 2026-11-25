@@ -81,6 +81,7 @@ typedef struct __attribute__((packed)) {
         } makapix;
         struct __attribute__((packed)) {
             char id[P3A_RECORD_GIPHY_ID_LEN];
+            uint8_t file;  // which of the GIF's files, as the Giphy source numbers them; 0 for a record that names none
         } giphy;
         struct __attribute__((packed)) {
             uint64_t id;

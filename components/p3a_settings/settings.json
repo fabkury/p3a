@@ -36,6 +36,7 @@
     {"key": "clock_outline", "type": "int", "default": 3, "min": 0, "max": 6, "group": "clock", "label": "Outline thickness (0 for none)"},
     {"key": "timezone", "type": "string", "default": "UTC0", "max_len": 47, "group": "clock", "label": "Time zone (POSIX TZ, such as EST5EDT,M3.2.0,M11.1.0)"},
     {"key": "indicator_enabled", "type": "bool", "default": true, "group": "display", "label": "Processing indicator", "advanced": true, "was": "proc_notif_enabled"},
+    {"key": "source_credit", "type": "bool", "default": true, "group": "display", "label": "Name the source under its artworks"},
     {"key": "indicator_size", "type": "int", "default": 64, "min": 16, "max": 256, "group": "display", "label": "Processing indicator size", "was": "proc_notif_size"},
 
     {"key": "dwell_s", "type": "int", "default": 30, "min": 0, "max": 86400, "group": "playback", "label": "Seconds per artwork (0 never advances)", "was": "dwell_time_ms"},

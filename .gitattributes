@@ -1,0 +1,2 @@
+# Read byte for byte by the host tests: no line-ending conversion.
+tests/assets/sources/* -text

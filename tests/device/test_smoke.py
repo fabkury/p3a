@@ -24,7 +24,7 @@ def test_unknown_command_is_an_error(uart):
 
 def test_overlong_line_is_rejected_and_the_console_survives(uart):
     with pytest.raises(lab.LabError, match="line too long"):
-        uart.command("version", {"padding": "x" * 1200})
+        uart.command("version", {"padding": "x" * 2400})
     assert uart.command("version")["version"] == lab.project_version()
 
 

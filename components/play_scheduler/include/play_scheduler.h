@@ -128,6 +128,10 @@ typedef struct {
 
 void play_scheduler_get_status(play_scheduler_status_t *out);
 
+// The artwork on the panel, if the scheduler put one there. Cheap: for a
+// caller that needs nothing else of the status.
+bool play_scheduler_current(p3a_record_t *out);
+
 // A copy of the active playset.
 void play_scheduler_get_playset(playset_t *out);
 

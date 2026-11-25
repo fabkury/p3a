@@ -21,7 +21,9 @@
 #include "p3a_settings.h"
 #include "p3a_job.h"
 #include "p3a_ui.h"
+#include "animation_player.h"
 #include "ui_clock.h"
+#include "ui_credit.h"
 #include "ui_draw.h"
 #include "ui_internal.h"
 
@@ -48,6 +50,10 @@ static ui_font_t s_font;
 static atomic_bool s_banner_up;
 static atomic_int s_indicator;       // 0 off, 1 busy, 2 failed
 static atomic_int s_indicator_size;  // pixels; 0 when the setting turns it off
+// The credit under the artwork. The text is a source's own string and lives for good.
+static _Atomic(const char *) s_credit_text;
+static _Atomic uint32_t s_credit_token, s_credit_w, s_credit_h;
+static atomic_bool s_credit_on;
 // An icon per corner and when it goes, in milliseconds since boot.
 static atomic_int s_icon[P3A_ICON_PLACES];
 static _Atomic int64_t s_icon_until_ms[P3A_ICON_PLACES];
@@ -108,6 +114,26 @@ static void draw_banner(uint8_t *buffer, void *ctx)
 {
     (void)ctx;
     const int64_t now_ms = esp_timer_get_time() / 1000;
+    // First, so that everything else is seen over it: the source's name in
+    // the band under its artwork.
+    const char *credit = atomic_load(&s_credit_text);
+    if (credit != NULL && atomic_load(&s_credit_on)) {
+        // Only under the picture it was worked out for: after a change of
+        // artwork the words wait for the job that knows the new one.
+        animation_player_status_t player;
+        animation_player_get_status(&player);
+        if (player.token == atomic_load(&s_credit_token)) {
+            ui_canvas_t below;
+            canvas_for(buffer, &below);
+            const ui_credit_place_t place =
+                ui_credit_place((int32_t)atomic_load(&s_credit_w), (int32_t)atomic_load(&s_credit_h),
+                                ui_canvas_view_width(&below), ui_canvas_view_height(&below),
+                                ui_text_width(&s_font, credit, 1), s_font.height);
+            if (place.show) {
+                ui_text_draw(&below, &s_font, place.x, place.y, place.scale, 0xA8A8A8, credit);
+            }
+        }
+    }
     for (int place = 0; place < P3A_ICON_PLACES; place++) {
         const int icon = atomic_load(&s_icon[place]);
         if (icon > 0 && icon < P3A_ICON_COUNT && now_ms < atomic_load(&s_icon_until_ms[place])) {
@@ -184,6 +210,16 @@ bool p3a_ui_button_rect(int index, int32_t *x, int32_t *y, int32_t *w, int32_t *
                                index, x, y, w, h);
 }
 
+void ui_display_set_credit(const char *text, uint32_t token, uint32_t width, uint32_t height)
+{
+    const bool changed = atomic_exchange(&s_credit_text, text) != text || atomic_exchange(&s_credit_token, token) != token;
+    atomic_store(&s_credit_w, width);
+    atomic_store(&s_credit_h, height);
+    if (changed) {
+        display_renderer_request_redraw();
+    }
+}
+
 void ui_display_set_indicator(int show)
 {
     if (atomic_exchange(&s_indicator, show) != show) {
@@ -196,6 +232,7 @@ static void take_settings(void)
     static p3a_settings_t settings;  // too large for a stack; guarded by being called from one task at a time
     p3a_settings_get(&settings);
     atomic_store(&s_indicator_size, settings.indicator_enabled ? (int)settings.indicator_size : 0);
+    atomic_store(&s_credit_on, settings.source_credit);
     atomic_store(&s_clock_on, settings.clock_enabled);
     atomic_store(&s_clock_24h, settings.clock_24h);
     atomic_store(&s_clock_place, (int)settings.clock_position);
@@ -248,6 +285,7 @@ static void on_setting_changed(const p3a_event_t *event, void *ctx)
     switch (event->payload.i32) {
     case P3A_SET_INDICATOR_ENABLED:
     case P3A_SET_INDICATOR_SIZE:
+    case P3A_SET_SOURCE_CREDIT:
     case P3A_SET_CLOCK_ENABLED:
     case P3A_SET_CLOCK_24H:
     case P3A_SET_CLOCK_POSITION:

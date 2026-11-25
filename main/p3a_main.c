@@ -20,8 +20,11 @@
 #include "freertos/task.h"
 #include "p3a_board.h"
 #include "play_scheduler.h"
+#include "source_giphy.h"
+#include "source_klipy.h"
 #include "source_local.h"
 #include "p3a_err.h"
+#include "p3a_source.h"
 #include "p3a_event.h"
 #include "p3a_job.h"
 #include "esp_system.h"
@@ -84,11 +87,48 @@ static void fill_info(p3a_ui_content_t *out)
     }
     play_scheduler_status_t *player = psram_calloc(1, sizeof(*player));
     uint32_t playable = 0, channels = 0;
+    // One row for each remote source of the active playset: how its last listing went.
+    char sources[120] = "";
     if (player != NULL) {
         play_scheduler_get_status(player);
         channels = player->channel_count;
+        bool told[P3A_CHANNEL_SOURCE_END_] = {false};
+        size_t at = 0;
         for (uint32_t c = 0; c < channels; c++) {
-            playable += player->channels[c].available;
+            const play_channel_status_t *ch = &player->channels[c];
+            playable += ch->available;
+            if (!ch->remote || ch->source >= P3A_CHANNEL_SOURCE_END_ || told[ch->source]) {
+                continue;
+            }
+            // The worst of this source's channels speaks for it.
+            esp_err_t worst = ESP_OK;
+            bool listed = false;
+            for (uint32_t d = c; d < channels; d++) {
+                const play_channel_status_t *other = &player->channels[d];
+                if (other->source == ch->source) {
+                    listed = listed || other->listings > 0;
+                    if (other->error != ESP_OK && (worst == ESP_OK || other->error == (esp_err_t)P3A_ERR_AUTH)) {
+                        worst = other->error;
+                    }
+                }
+            }
+            told[ch->source] = true;
+            const p3a_source_ops_t *ops = p3a_source_get(ch->source);
+            const char *state = worst == (esp_err_t)P3A_ERR_AUTH           ? "Key refused"
+                                : worst == (esp_err_t)P3A_ERR_NO_KEY       ? "No key"
+                                : worst == (esp_err_t)P3A_ERR_RATE_LIMITED ? "Asked to wait"
+                                : worst != ESP_OK                          ? "Not reached"
+                                : listed                                   ? "OK"
+                                                                           : "Waiting";
+            const int n = snprintf(sources + at, sizeof(sources) - at, "\n%s\t%s", ops != NULL ? ops->name : "?", state);
+            if (n < 0 || (size_t)n >= sizeof(sources) - at) {
+                sources[at] = '\0';
+                break;
+            }
+            if (sources[at + 1] >= 'a' && sources[at + 1] <= 'z') {
+                sources[at + 1] = (char)(sources[at + 1] - 'a' + 'A');  // "giphy" as a person reads it
+            }
+            at += (size_t)n;
         }
         free(player);
     }
@@ -97,10 +137,10 @@ static void fill_info(p3a_ui_content_t *out)
     out->progress = -1;
     snprintf(out->text, sizeof(out->text),
              "Firmware\t%s\nUptime\t%s\nWi-Fi\t%s\nSignal\t%s\nAddress\t%s\nWeb page\thttp://%s.local\n"
-             "SD card\t%s\nPlayset\t%u artworks, %u channel%s",
+             "SD card\t%s\nPlayset\t%u artworks, %u channel%s%s",
              app->version, uptime, net.ssid[0] ? net.ssid : "Not set up", up ? signal : p3a_net_state_name(net.state),
              up ? net.ip : "None", name, card, (unsigned)playable, (unsigned)channels,
-             channels == 1 ? "" : "s");
+             channels == 1 ? "" : "s", sources);
     snprintf(out->hint, sizeof(out->hint), "Long press to close");
 }
 
@@ -213,6 +253,8 @@ void app_main(void)
     boot_step("storage", p3a_storage_start(s_settings.sd_root));
     p3a_ui_card_check();  // no usable card: the screen says so and offers to format one
     boot_step("local source", source_local_start());
+    boot_step("giphy source", source_giphy_start());
+    boot_step("klipy source", source_klipy_start());
 #if CONFIG_P3A_TEST_HOOKS
     p3a_test_sources_register();  // before the scheduler reads a playset that may name them
 #endif

@@ -220,3 +220,33 @@ def test_after_a_restart_the_channel_plays_from_its_index_on_the_card(rig):
     lab.wait_online(rig.uart)
     status = rig.wait("the listing was tried and failed", lambda s: channel(s)["listings"] >= 1, timeout=60)
     assert channel(status)["state"] == "ready" and channel(status)["available"] == 3, "and the channel plays on"
+
+
+def test_a_playset_whose_blobs_all_went_starts_when_the_first_is_fetched_again(rig):
+    """Found with Klipy: the index on the card said its artworks were there, the first picks
+    failed, and the previous playset's artwork stayed up for a whole dwell."""
+    from test_decoders import CORPUS
+    uart = rig.uart
+    # The test before this one restarted the device: the test source is told its listing again.
+    uart.command("content set", {"items": items("a", "b", "c"), "result": "ok"})
+    relist(rig, "listed", lambda s: channel(s)["records"] == 3)
+    rig.wait("the channel has its artworks", lambda s: channel(s)["available"] == 3 and not s["downloading"], timeout=120)
+    relist(rig, "its index saved with them", lambda s: channel(s)["available"] == 3)
+    time.sleep(3)
+    rig.put("zz-content-local.png", (CORPUS / "good" / "png/rgb.png").read_bytes())
+    try:
+        assert uart.command("sched activate", LOCAL_ONLY) == {"result": "ok"}
+        uart.command("sched refresh 1")
+        rig.wait("the user's file plays", lambda s: s["playing"] and not s["loading"] and s["current_source"] == "local",
+                 timeout=20)
+        assert uart.command("library evict 1000000000000 0 -", timeout=120)["deleted"] >= 3
+        before = rig.status()
+        started = time.monotonic()
+        assert uart.command("sched activate", REMOTE) == {"result": "ok"}
+        status = rig.wait("an artwork of the new playset is up",
+                          lambda s: s["playset"] == "Remote" and s["playing"] and not s["loading"]
+                          and s["current_source"] == "giphy", timeout=60)
+        assert status["downloads"] > before["downloads"], "fetched again, since the store no longer had it"
+        assert time.monotonic() - started < 60, "at once, not when the old artwork's ten minutes were up"
+    finally:
+        rig.remove("zz-content-local.png")

@@ -70,6 +70,8 @@ typedef struct {
     p3a_record_t pending_record;
     uint32_t pending_channel;
     uint32_t pending_generation;
+    int64_t pending_since_ms;
+    bool pending_overdue_said;  // the warning below was logged for this request
 
     bool playing;
     p3a_record_t current;
@@ -79,7 +81,7 @@ typedef struct {
     uint32_t next_token;
     uint32_t picks, shown, failed;
     esp_err_t last_error;
-    bool start_wanted;  // a new playset is in place and nothing of it has been asked for yet
+    bool start_wanted;  // a new playset is in place and nothing of it has been shown yet
 
     bool downloading;   // a download is in progress
     uint32_t downloads, download_failures;  // since boot

@@ -97,6 +97,7 @@ void net_api_register(void);
 
 // net_player_api.c: adds the player, playset and upload routes.
 void net_player_api_register(void);
+void net_sources_api_register(void);
 void net_ui_api_register(void);
 
 // net_trace_api.c: adds the frame trace's routes. Only in builds with CONFIG_P3A_FRAME_TRACE.

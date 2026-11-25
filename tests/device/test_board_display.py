@@ -10,6 +10,14 @@ import pytest
 
 import lab
 
+
+@pytest.fixture(scope="module", autouse=True)
+def panel_handed_back(bring_up):
+    """A test pattern holds the panel until it is taken down. Left up, the player's artworks are
+    not drawn and every later test that waits for one to be shown hangs."""
+    yield
+    bring_up[0].command("lcd done")
+
 W = H = 720
 
 

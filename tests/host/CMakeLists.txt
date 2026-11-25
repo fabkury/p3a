@@ -158,6 +158,20 @@ p3a_host_test(test_evict
     SOURCES library/test_evict.c ${LIBRARY}/p3a_evict.c
     INCLUDES ${LIBRARY}/include ${P3A_STUBS})
 
+# --- sources ----------------------------------------------------------------
+p3a_host_test(test_giphy_parse
+    SOURCES sources/test_giphy_parse.c ${P3A_COMPONENTS}/source_giphy/giphy_parse.c ${LIBRARY}/p3a_record.c
+            ${UTIL}/p3a_err.c
+    INCLUDES ${P3A_COMPONENTS}/source_giphy ${LIBRARY}/include ${UTIL}/include ${P3A_STUBS}
+    LIBS cjson)
+target_compile_definitions(test_giphy_parse PRIVATE P3A_SOURCE_ASSETS="${P3A_ROOT}/tests/assets/sources")
+p3a_host_test(test_klipy_parse
+    SOURCES sources/test_klipy_parse.c ${P3A_COMPONENTS}/source_klipy/klipy_parse.c ${LIBRARY}/p3a_record.c
+            ${UTIL}/p3a_err.c
+    INCLUDES ${P3A_COMPONENTS}/source_klipy ${LIBRARY}/include ${UTIL}/include ${P3A_STUBS}
+    LIBS cjson)
+target_compile_definitions(test_klipy_parse PRIVATE P3A_SOURCE_ASSETS="${P3A_ROOT}/tests/assets/sources")
+
 # --- scheduler --------------------------------------------------------------
 set(SCHEDULER "${P3A_COMPONENTS}/play_scheduler")
 p3a_host_test(test_sched_core
@@ -206,6 +220,9 @@ p3a_host_test(test_ui_route
     INCLUDES ${UI} ${UTIL}/include)
 p3a_host_test(test_ui_image
     SOURCES ui/test_ui_image.c ${UI}/ui_image.c ${UI}/ui_canvas.c
+    INCLUDES ${UI})
+p3a_host_test(test_ui_credit
+    SOURCES ui/test_ui_credit.c ${UI}/ui_credit.c
     INCLUDES ${UI})
 p3a_host_test(test_ui_clock
     SOURCES ui/test_ui_clock.c ${UI}/ui_clock.c ${UI}/ui_canvas.c ${UI}/ui_font.c

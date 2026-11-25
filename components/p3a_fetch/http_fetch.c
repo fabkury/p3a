@@ -135,16 +135,17 @@ static esp_err_t capture_location_cb(esp_http_client_event_t *evt)
     return ESP_OK;
 }
 
-// Parse a numeric Retry-After (seconds). Mirrors the old ai_parse_retry_after:
-// leading spaces skipped, non-positive/non-numeric -> 0, capped at 1 hour.
-// How much of a URL may be logged: up to its query. A query carries API
-// keys (Giphy's and Klipy's are parameters), and a key is never logged.
+// How much of a URL may be logged: its scheme and host. Giphy's API key
+// travels in the query and Klipy's in the path, and a key is never logged.
 static int url_log_len(const char *url)
 {
-    const char *query = strchr(url, '?');
-    return query != NULL ? (int)(query - url) : (int)strlen(url);
+    const char *host = strstr(url, "://");
+    host = host != NULL ? host + 3 : url;
+    return (int)(host - url) + (int)strcspn(host, "/?#");
 }
 
+// Parse a numeric Retry-After (seconds). Mirrors the old ai_parse_retry_after:
+// leading spaces skipped, non-positive/non-numeric -> 0, capped at 1 hour.
 static uint32_t parse_retry_after(const char *value)
 {
     if (!value) return 0;

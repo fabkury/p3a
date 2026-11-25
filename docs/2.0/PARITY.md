@@ -31,10 +31,10 @@ describe what a client can do, not the 1.x URL.
 | [ ] | Makapix channels: all, promoted, by user, by hashtag, a user's reactions, single artwork | keep | M4.5 | |
 | [ ] | Promoted refreshes over public HTTPS on an unregistered device, so a new device plays art with no account | keep | M4.5 | First-run experience depends on it |
 | [ ] | `followed_artists` and other playsets fetched from the Makapix server by name | keep | M4.5 | |
-| [ ] | Giphy: trending and search channels; rating; country code; refresh interval; cache size | keep | M4.2 | |
-| [ ] | Giphy: rejected-key latch with hourly re-probe, 429 cooldown, analytics id with reset, click registered on swipe up | keep | M4.2 | |
+| [x] | Giphy: trending and search channels; rating; country code; refresh interval; cache size | keep | M4.2 | M4.2. Live device tests for trending, search, rating, cache size and interval; country code and offset are in the request (host-tested), not seen on the device |
+| [x] | Giphy: rejected-key latch with hourly re-probe, 429 cooldown, analytics id with reset, click registered on swipe up | keep | M4.2 | The waits are the content task's for every source (D66): an hour or a settings change after a refused key, at least 15 minutes after a 429. The id, its reset and the click are device-tested; a 429 was not provoked |
 | [ ] | Giphy: rendition, format and prefer-downsized, settable through the API only | decide | M4.2 | Q7 |
-| [ ] | Klipy: GIF or sticker, each as trending, search or category; own key; rating; format; refresh interval; cache size | keep | M4.2 | |
+| [x] | Klipy: GIF or sticker, each as trending, search or category; own key; rating; format; refresh interval; cache size | keep | M4.2 | M4.2. Live device tests for GIF trending and sticker search in both formats; categories are a search by name (host-tested) |
 | [ ] | Klipy: 36 fixed categories offered in the editor | keep | M5.1 | |
 | [ ] | Museums: Rijks, V&A, Wellcome, SMK, Harvard, Smithsonian, Cleveland, Minneapolis; AIC present but marked unavailable, cached AIC art still plays | keep | M4.3 | |
 | [ ] | Museums: Harvard and Smithsonian keys; a channel without its key sleeps and wakes when the key is saved | keep | M4.3 | |
@@ -115,7 +115,7 @@ describe what a client can do, not the 1.x URL.
 | [ ] | Firmware update screen with versions and progress | keep | M3.3, M5.2 | |
 | [ ] | Co-processor update screen with reboot countdown | keep | M1.2, M3.3 | |
 | [ ] | Channel messages: fetching, downloading with progress, failed, empty, loading, waiting for network, empty pin list, no playable files, key needed, museum unavailable, starting | keep | M3.3 | One message surface (finding 11) |
-| [ ] | Refresh-error notices with a 20 s life and a cap of two per boot; the Giphy invalid-key notice stays | keep | M4.2 | |
+| [x] | Refresh-error notices with a 20 s life and a cap of two per boot; the Giphy invalid-key notice stays | keep | M4.2 | D71. The refused-key notice is device-tested; the once-only ones are host-tested |
 | [x] | "SD card is not working" and "SD card repaired" notices, 20 s, once per boot | keep | M3.3 | |
 | [x] | "No Usable SD Card" screen and the two-step on-device format | keep | M3.3 | The device boots on behind the screen in 2.0 |
 | [ ] | USB screens: card exposed, disconnected and restarting | keep | M3.6 | |
@@ -227,7 +227,7 @@ Same pages and look, new internals (D11).
 | [x] | Repetition suppression (C) | M2.4 |
 | [ ] | Aspect-ratio filter for museum channels (D) | M2.4, M4.3 Predicate, settings and wiring done (M2.4) |
 | [ ] | Clock overlay, off by default (idea 1) | M3.5 |
-| [ ] | Giphy and Klipy branding in the letterbox band, on by default (idea 2) | M3.5 |
+| [x] | Giphy and Klipy branding in the letterbox band, on by default (idea 2) | M4.2, in words (D72); the marks wait on O6 |
 | [ ] | Pixel fonts on screen (idea 3) | M3.2 |
 | [ ] | Pins without duplicate bytes | M4.4 |
 | [x] | Back-off under memory pressure | M4.1 |

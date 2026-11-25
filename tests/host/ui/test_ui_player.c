@@ -83,6 +83,26 @@ static void test_a_remote_channel_says_what_it_is_waiting_for(void)
     TEST_ASSERT_EQUAL(UI_PLAYER_NONE, ui_player_standing(&f, &c));
 }
 
+static void test_a_sources_trouble_is_said_over_the_artwork_by_name(void)
+{
+    ui_player_facts_t f = {.playing = true, .channels = 2, .playable = 5};
+    TEST_ASSERT_EQUAL(UI_SOURCE_FINE, ui_player_source_problem(&f, &c));
+    f.wait_asked_by = "klipy";
+    TEST_ASSERT_EQUAL(UI_SOURCE_WAIT, ui_player_source_problem(&f, &c));
+    TEST_ASSERT_EQUAL_STRING("Klipy", c.title);
+    TEST_ASSERT_EQUAL_STRING("Klipy asked to wait. Trying again later", c.text);
+    f.no_key_for = "giphy";
+    TEST_ASSERT_EQUAL(UI_SOURCE_NO_KEY, ui_player_source_problem(&f, &c));
+    TEST_ASSERT_EQUAL_STRING("Giphy needs an API key. Enter it on the web page", c.text);
+    // A refused key outranks the rest: it is the one that does not mend itself.
+    f.key_refused_by = "giphy";
+    TEST_ASSERT_EQUAL(UI_SOURCE_KEY_REFUSED, ui_player_source_problem(&f, &c));
+    TEST_ASSERT_EQUAL_STRING("Giphy refused the API key. Check it on the web page", c.text);
+    // With nothing playing the standing notice speaks instead.
+    f.playing = false;
+    TEST_ASSERT_EQUAL(UI_SOURCE_FINE, ui_player_source_problem(&f, &c));
+}
+
 static void test_a_failed_request_is_put_in_plain_words(void)
 {
     ui_player_problem(P3A_ERR_MISSING, &c);
@@ -139,6 +159,7 @@ int main(void)
     RUN_TEST(test_loading_until_every_channel_is_listed_and_the_first_artwork_is_up);
     RUN_TEST(test_nothing_to_play_says_why);
     RUN_TEST(test_a_remote_channel_says_what_it_is_waiting_for);
+    RUN_TEST(test_a_sources_trouble_is_said_over_the_artwork_by_name);
     RUN_TEST(test_a_failed_request_is_put_in_plain_words);
     RUN_TEST(test_the_indicator_is_busy_while_a_person_waits_and_red_briefly_after_a_failure);
     return UNITY_END();

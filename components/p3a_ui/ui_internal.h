@@ -36,6 +36,11 @@ int ui_display_button_at(int32_t x, int32_t y);
 // 2 failed. Safe from any task.
 void ui_display_set_indicator(int show);
 
+// The credit of the artwork on the panel: `text` (a string that lives for
+// good, or NULL for none) under the picture the player shows as `token`,
+// which is `width` by `height`.
+void ui_display_set_credit(const char *text, uint32_t token, uint32_t width, uint32_t height);
+
 // Flashes an icon (a p3a_icon_t) in a corner (a p3a_icon_place_t), and the
 // panel side's share of the UI's tick: icons that expire, the clock's
 // minute (ui_display.c).

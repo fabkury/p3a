@@ -40,6 +40,14 @@ typedef struct {
     uint32_t offset;
 } p3a_channel_ref_t;
 
+// What a source made of a person's swipe on one of its artworks.
+typedef enum {
+    P3A_REACTION_NONE = 0,  // nothing: the source has no such thing, or cannot now
+    P3A_REACTION_LIKED,
+    P3A_REACTION_UNLIKED,
+    P3A_REACTION_NOTED,     // told to the source, which keeps no state of it (Giphy's click)
+} p3a_reaction_t;
+
 typedef struct {
     uint8_t source;    // the channel source number this table serves
     const char *name;  // "local", "giphy", ...
@@ -59,8 +67,16 @@ typedef struct {
     // (a source that must look the address up); P3A_ERR_MISSING when the
     // artwork no longer exists. NULL for a source that is not remote.
     esp_err_t (*url)(const p3a_record_t *record, char *out, size_t len);
+    // The line that names the source, drawn in the band under its artworks
+    // when there is one ("Powered by GIPHY"). NULL for none.
+    const char *credit;
     // What its downloads say they are; NULL for "p3a".
     const char *user_agent;
+    // A person swiped up on this artwork while it played (down, with
+    // `undo`). Answers at once: anything that takes time is the source's
+    // own job, and its outcome is not waited for. NULL for a source with
+    // nothing to tell.
+    p3a_reaction_t (*react)(const p3a_record_t *record, bool undo);
     // Where a record's bytes are when they are not in the blob store (records
     // flagged P3A_RECORD_IN_PLACE). NULL for a source whose artworks are
     // always blobs.

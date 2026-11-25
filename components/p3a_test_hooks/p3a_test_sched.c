@@ -87,6 +87,9 @@ static void cmd_status(void)
     cJSON_AddNumberToObject(out, "picks", st->picks);
     cJSON_AddNumberToObject(out, "shown", st->shown);
     cJSON_AddNumberToObject(out, "failed", st->failed);
+    cJSON_AddBoolToObject(out, "staged", st->staged);
+    cJSON_AddBoolToObject(out, "foreign", st->foreign);
+    cJSON_AddBoolToObject(out, "asked", st->asked);
     cJSON_AddBoolToObject(out, "downloading", st->downloading);
     cJSON_AddNumberToObject(out, "downloads", st->downloads);
     cJSON_AddNumberToObject(out, "download_failures", st->download_failures);

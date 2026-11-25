@@ -20,7 +20,9 @@
 #include "freertos/semphr.h"
 #include "p3a_err.h"
 #include "p3a_event.h"
+#include "animation_player.h"
 #include "p3a_job.h"
+#include "p3a_source.h"
 #include "p3a_storage.h"
 #include "play_scheduler.h"
 #include "psram_alloc.h"
@@ -47,6 +49,7 @@ static esp_timer_handle_t s_tick;
 static p3a_ui_info_fn s_info;
 static ui_card_t s_card;  // the SD format flow; guarded by s_lock
 static ui_indicator_t s_indicator;  // guarded by s_lock
+static ui_source_problem_t s_source_problem_seen;  // by the player job only
 static atomic_bool s_info_job_queued;
 static uint32_t s_ticks;
 
@@ -164,6 +167,13 @@ static void facts_from(const play_scheduler_status_t *st, ui_player_facts_t *f)
         }
         f->need_key = f->need_key || c->error == (esp_err_t)P3A_ERR_NO_KEY || c->error == (esp_err_t)P3A_ERR_AUTH;
         f->rate_limited = f->rate_limited || c->error == (esp_err_t)P3A_ERR_RATE_LIMITED;
+        if (c->error == (esp_err_t)P3A_ERR_AUTH && f->key_refused_by == NULL) {
+            f->key_refused_by = p3a_source_name(c->source);
+        } else if (c->error == (esp_err_t)P3A_ERR_NO_KEY && f->no_key_for == NULL) {
+            f->no_key_for = p3a_source_name(c->source);
+        } else if (c->error == (esp_err_t)P3A_ERR_RATE_LIMITED && f->wait_asked_by == NULL) {
+            f->wait_asked_by = p3a_source_name(c->source);
+        }
         f->wanted += c->wanted;
     }
     f->online = st->online;
@@ -216,6 +226,27 @@ static esp_err_t player_job(void *arg)
         changed |= ui_model_notice_show(&s_model, P3A_NOTICE_PLAY_PROBLEM, &words, UI_PLAYER_PROBLEM_TTL_MS, 0, now_ms());
     }
     s_problems_seen = facts.problems;
+    // The source's name under its artwork, when it has one to show.
+    p3a_record_t shown;
+    const char *credit = NULL;
+    animation_player_status_t on_panel = {0};
+    if (play_scheduler_current(&shown)) {
+        const p3a_source_ops_t *ops = p3a_source_get(shown.source);
+        credit = ops != NULL ? ops->credit : NULL;
+        animation_player_get_status(&on_panel);
+    }
+    ui_display_set_credit(credit, on_panel.token, on_panel.width, on_panel.height);
+    const ui_source_problem_t source = ui_player_source_problem(&facts, &words);
+    if (source == UI_SOURCE_FINE) {
+        changed |= ui_model_notice_hide(&s_model, P3A_NOTICE_SOURCE_PROBLEM);
+    } else if (source == UI_SOURCE_KEY_REFUSED) {
+        changed |= ui_model_notice_show(&s_model, P3A_NOTICE_SOURCE_PROBLEM, &words, 0, 0, now_ms());
+    } else if (source != s_source_problem_seen) {
+        // Said when it begins, not again while it lasts.
+        changed |= ui_model_notice_show(&s_model, P3A_NOTICE_SOURCE_PROBLEM, &words, UI_SOURCE_PROBLEM_TTL_MS,
+                                        UI_SOURCE_PROBLEM_PER_BOOT, now_ms());
+    }
+    s_source_problem_seen = source;
     ui_indicator_update(&s_indicator, &facts, now_ms());
     const int indicator = (int)ui_indicator_now(&s_indicator, now_ms());
     settle_and_unlock(changed);

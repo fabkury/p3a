@@ -80,7 +80,11 @@ listing parser fed with recorded responses.
 - Rule: logic gets its host test before it first runs on the device. A bug
   found on the device in host-testable code gets a host test that fails
   first.
-- Recorded responses contain no API keys; strip them when recording.
+- Recorded responses contain no API keys; strip them when recording. They
+  live in `tests/assets/sources/`, recorded with the requests the device
+  makes. `make_expected.py` there reads them a second time in Python, and
+  the host tests compare the C parsers against that reading; run it when
+  a response is recorded again.
 
 ### T2 Build checks and lints
 
@@ -113,6 +117,13 @@ the serial log.
 - Tests that reach the internet (Giphy, Klipy, museums, Makapix, GitHub) are
   marked `live` and can be deselected. A `live` failure is checked against
   the service before it is blamed on the firmware.
+- Giphy and Klipy are tested with the test rig's own keys from the secrets
+  file, sent over the UART. Their allowances are small (a Giphy beta key
+  has 100 requests an hour; Klipy's answers state a limit of 100 without
+  its period), so those tests keep 32 items per channel
+  and stop a channel after a few downloads. A channel a test activates
+  gets an offset of its own per run: one the device has seen keeps its
+  index on the card and is not listed again for hours.
 - Tests leave the unit as they found it, or say what they changed.
 - A test that takes 20 seconds or more is marked `slow`. Most of them wait
   on a timer the firmware really uses (two minutes for an absent network)

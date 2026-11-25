@@ -18,6 +18,7 @@
 #include "freertos/task.h"
 #include "p3a_board.h"
 #include "p3a_settings.h"
+#include "p3a_source.h"
 #include "p3a_task.h"
 #include "p3a_ui.h"
 #include "play_scheduler.h"
@@ -159,12 +160,25 @@ static void act(ui_action_t action, p3a_screen_t screen, const ui_gesture_t *ges
         ui_card_cancel();
         break;
     case UI_ACTION_LIKE:
-    case UI_ACTION_UNLIKE:
-        // What these do depends on where the artwork is from, which
-        // arrives with the sources (Phase 4). A user's own file, the only
-        // kind there is so far, has nothing to like: the error icon, as 1.x.
-        p3a_ui_icon_show(P3A_ICON_ERROR, P3A_ICON_TOP_RIGHT);
+    case UI_ACTION_UNLIKE: {
+        // What a swipe up or down means is the business of the artwork's
+        // source. One with nothing to say (a user's own file) gets the
+        // error icon, as in 1.x. Pinning joins here with the pin lists.
+        static const p3a_icon_t icons[] = {[P3A_REACTION_NONE] = P3A_ICON_ERROR,
+                                           [P3A_REACTION_LIKED] = P3A_ICON_LIKE,
+                                           [P3A_REACTION_UNLIKED] = P3A_ICON_UNLIKE,
+                                           [P3A_REACTION_NOTED] = P3A_ICON_CLICK};
+        p3a_record_t record;
+        p3a_reaction_t reaction = P3A_REACTION_NONE;
+        if (play_scheduler_current(&record)) {
+            const p3a_source_ops_t *ops = p3a_source_get(record.source);
+            if (ops != NULL && ops->react != NULL) {
+                reaction = ops->react(&record, action == UI_ACTION_UNLIKE);
+            }
+        }
+        p3a_ui_icon_show(icons[reaction <= P3A_REACTION_NOTED ? reaction : P3A_REACTION_NONE], P3A_ICON_TOP_RIGHT);
         break;
+    }
     default:
         break;
     }

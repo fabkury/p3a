@@ -29,6 +29,7 @@
 #include "esp_log.h"
 #include "fs_atomic.h"
 #include "net_internal.h"
+#include "p3a_blob.h"
 #include "p3a_err.h"
 #include "p3a_http.h"
 #include "p3a_limits.h"
@@ -67,6 +68,10 @@ static cJSON *record_json(const p3a_record_t *r)
             break;
         default:
             break;
+    }
+    const char *extension = p3a_blob_extension((p3a_format_t)r->format);
+    if (extension != NULL) {
+        cJSON_AddStringToObject(o, "format", extension + 1);  // "gif", "webp", "png", "jpg", "bmp"; absent until known
     }
     if (r->width != 0) {
         cJSON_AddNumberToObject(o, "width", r->width);

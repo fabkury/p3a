@@ -40,6 +40,41 @@ ui_player_standing_t ui_player_standing(const ui_player_facts_t *facts, p3a_ui_c
     return UI_PLAYER_NOTHING;
 }
 
+// "giphy" as a person reads it: "Giphy".
+static const char *proper(const char *source, char *buf, size_t len)
+{
+    size_t i = 0;
+    for (; source[i] != '\0' && i + 1 < len; i++) {
+        buf[i] = i == 0 && source[i] >= 'a' && source[i] <= 'z' ? (char)(source[i] - 'a' + 'A') : source[i];
+    }
+    buf[i] = '\0';
+    return buf;
+}
+
+ui_source_problem_t ui_player_source_problem(const ui_player_facts_t *facts, p3a_ui_content_t *out)
+{
+    char name[24];
+    if (!facts->playing) {
+        return UI_SOURCE_FINE;
+    }
+    if (facts->key_refused_by != NULL) {
+        proper(facts->key_refused_by, name, sizeof(name));
+        p3a_ui_content(out, name, -1, "%s refused the API key. Check it on the web page", name);
+        return UI_SOURCE_KEY_REFUSED;
+    }
+    if (facts->no_key_for != NULL) {
+        proper(facts->no_key_for, name, sizeof(name));
+        p3a_ui_content(out, name, -1, "%s needs an API key. Enter it on the web page", name);
+        return UI_SOURCE_NO_KEY;
+    }
+    if (facts->wait_asked_by != NULL) {
+        proper(facts->wait_asked_by, name, sizeof(name));
+        p3a_ui_content(out, name, -1, "%s asked to wait. Trying again later", name);
+        return UI_SOURCE_WAIT;
+    }
+    return UI_SOURCE_FINE;
+}
+
 void ui_player_problem(int problem, p3a_ui_content_t *out)
 {
     switch (problem) {

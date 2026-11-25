@@ -172,7 +172,8 @@ static void reply_shown(esp_err_t err)
 }
 
 // !lcd info | fill <r> <g> <b> | bars | gradient | pixel <x> <y> | crc |
-//      shot <divisor> | brightness <percent>
+//      shot <divisor> | brightness <percent> | done
+// A pattern stays on the panel until `done` hands it back to the player.
 static void cmd_lcd(const char *args)
 {
     char verb[12] = {0};
@@ -201,6 +202,13 @@ static void cmd_lcd(const char *args)
         reply_shown(paint_and_present(paint_bars));
     } else if (strcmp(verb, "gradient") == 0) {
         reply_shown(paint_and_present(paint_gradient));
+    } else if (strcmp(verb, "done") == 0) {
+        // A pattern holds the panel until it is taken down: the player's
+        // artworks are not drawn under it, and a request to play one waits.
+        const esp_err_t err = display_renderer_active_source() == DISPLAY_SOURCE_TEST
+                                  ? display_renderer_select_source(DISPLAY_SOURCE_ARTWORK)
+                                  : ESP_OK;
+        err == ESP_OK ? p3a_test_reply_ok("{\"result\":\"ok\"}") : p3a_test_reply_err(esp_err_to_name(err));
     } else if (strcmp(verb, "pixel") == 0 && n == 3) {
         const uint8_t *buffer = shown_buffer();
         if (!buffer || a < 0 || a >= P3A_DISPLAY_WIDTH || b < 0 || b >= P3A_DISPLAY_HEIGHT) {

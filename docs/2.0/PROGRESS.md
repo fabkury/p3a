@@ -9,8 +9,8 @@ times.
 | | |
 |---|---|
 | Phase | 4, remote sources (Phases 0 to 3 complete but for their manual checks) |
-| Current milestone | M4.2 Giphy and Klipy |
-| Next action | M4.2 part 2. (a) O9: measure internal memory while a Giphy channel downloads (`!mem` min_free over a long run, the SDIO receive pool) and decide on the Option E items. (b) The whole device suite, then mark M4.2 done; the credit's marks wait on Fab (O6) and do not hold the milestone. Then M4.3 (museums): read PLAN.md M4.3, `docs/art-institutions/finalized-design.md`, O10, and `legacy/components/art_institution`. The pattern is M4.2's: a component in `sources`, the requests in one file and a pure reading of recorded responses in another, `filter_aspect` set |
+| Current milestone | M4.3 Museums |
+| Next action | M4.3. Read PLAN.md M4.3, `docs/art-institutions/finalized-design.md` (sections 4, 7, 9, 10, 11.1), O10, and `legacy/components/art_institution` (the dispatch table in `art_institution.c`, `museums/*.c`, the resolver, the rate limit). The pattern is M4.2's: one component in `sources` (`source_museum`), the requests in one file and each museum's reading of its answers pure, host-tested on recorded responses with a second reading in `tests/assets/sources/make_expected.py`; `filter_aspect` set; records are `p3a_record_init_museum()`; a record that needs a second request to find its image is flagged `P3A_RECORD_UNRESOLVED` and resolved in `ops->url`. The museum keys (Harvard, Smithsonian) are in the secrets file. Start with the two simplest IIIF museums end to end, then the rest |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -52,7 +52,7 @@ reopened (why).
 | M3.5 Overlays | done 2026-11-23 except source branding, which moves to M4.2 where its sources and their terms are (O6). Tiers: host tests (29 programs, under the sanitizers too), device tests (the overlays equal the workstation's rendering). Manual check M3.5-a pending |
 | M3.6 USB mass storage | built 2026-11-23; open for manual check M3.6-a (a real computer). Tiers: host tests (30 programs, under the sanitizers too), device tests with the bus's reports injected (with it every test not marked slow passes: 267 cases), release, test and trace builds, the configuration guard, a from-scratch configure in the CI container |
 | M4.1 Fetch, download, refresh, eviction | done 2026-11-25. Tiers: host tests (32 programs), the whole device suite on the M4.1 commit (297 pass, 6 skipped), CI green, release and trace builds (made on the tree with M4.2 part 1 in it). Manual: none. Not verified: listed in the log entry of 2026-11-23; O9's measurements moved to M4.2 |
-| M4.2 Giphy and Klipy | in progress: both sources list, download and play against the live services (2026-11-25), and are named under their artworks in words. O9 and the milestone-end suite are to do; the official marks wait on O6 |
+| M4.2 Giphy and Klipy | done 2026-11-25. Tiers: host tests (35 programs), device tests (the whole suite: 309 passed, 6 skipped), CI, test, release and trace builds. Manual: M4.2-a. Not verified: listed in the log entries of 2026-11-25. O6 (the services' own marks) stays open and holds nothing |
 | M4.3 Museums | not started |
 | M4.4 Pinned lists and "show this" | not started |
 | M4.5 Makapix | not started |
@@ -391,6 +391,36 @@ M4.2, 2026-11-25:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-25: M4.2 part 2, internal memory under a listing (O9). M4.2 done
+
+- **Measured** with `host/p3a-lab/measure_content_memory.py`: a fresh
+  boot, a Giphy trending channel of 100 GIFs in the larger rendition
+  listed (two pages), downloaded and played with a new artwork every 5
+  seconds, for 7 minutes. The internal pool is 391 KB and has 240 KB free
+  when idle.
+  - As built: sampled every 2 seconds the pool never showed less than
+    203 KB free, but its lowest point was 60 KB: a dip of 170 KB between
+    two samples, under the 64 KB mark at which optional work is refused.
+  - With JSON parse trees in PSRAM: lowest point 201 KB. Same run
+    otherwise: 72 artworks shown, none failed, no download failed.
+- **JSON goes to PSRAM** (`cJSON_InitHooks` at the top of `app_main`,
+  D73). cJSON makes one small allocation per value, and small allocations
+  come from internal RAM; a listing page is 100 to 250 KB of JSON. 1.x did
+  the same for the same reason and 2.0 had not carried it over.
+- O9, decided on those numbers (D73): transfers are serial (D63), work is
+  shed below the marks (`p3a_mem_level()`), JSON is out of the pool, and
+  every task stack but the render tasks' is in PSRAM (the task helper).
+  **Packet mode is not adopted**: with 200 KB of headroom the on-demand
+  receive buffer has room, and packet mode costs receive throughput on
+  every device to remove an assert that needs the pool nearly full. The
+  1.x thresholds stay. The soak (M6.1) watches the pool's lowest point
+  and reopens this if it falls under 100 KB.
+- Verified: the two measurement runs above (device, by hand); the whole
+  device suite on the build with the change: the whole suite: 309 passed, 6 skipped.
+- Not verified: the pool under Klipy's larger pages (250 KB of JSON; the
+  parse no longer touches the pool, so the Giphy figure should hold);
+  with Makapix's MQTT session up (M4.5); over hours (M6.1).
 
 ### 2026-11-25: M4.1 closed; M4.2 part 1, Giphy and Klipy
 

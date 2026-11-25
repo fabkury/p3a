@@ -107,7 +107,10 @@ All in `components/p3a_util`; each header explains itself at the top.
   made for one call and never done on a task that must stay responsive.
 - **Allocation** defaults to PSRAM through `psram_alloc.h`. Internal RAM is
   asked for explicitly, with the reason in a comment. No plain `malloc` in
-  project code.
+  project code. cJSON allocates in PSRAM too (hooks set at the top of
+  `app_main`): a parse tree is thousands of small allocations, which
+  would otherwise drain the internal pool the Wi-Fi link and the SD card
+  need.
 - **Errors** that a caller must tell apart use `p3a_err.h`
   (`P3A_ERR_NOT_PLAYABLE`, `CORRUPT`, `MISSING`, `RATE_LIMITED`, `AUTH`,
   `NO_KEY`, `SD_FAILED`). Never classify a failure by matching a path or a
@@ -284,6 +287,12 @@ idf.py fullclean
   before the next commit. Do not wait idle on a long run; read and write
   the next step meanwhile. The full table and how deep tests should go are
   in `docs/2.0/TESTING.md` under "What runs when".
+- **Before pushing a new host-tested file, build the host tests in WSL
+  too**: `wsl -e bash -lc 'cd /mnt/c/<repo> && cmake -S tests/host -B
+  ~/p3a-host -G Ninja -DP3A_SANITIZE=ON && cmake --build ~/p3a-host &&
+  ctest --test-dir ~/p3a-host'`. CI compiles them with Linux gcc under the
+  sanitizers, and MinGW's headers pull in more than gcc's: a missing
+  `<stddef.h>` passes on the workstation and fails there.
 - **A dependency change needs a from-scratch configure in the CI container**
   before it is pushed. The workstation keeps downloaded components and a
   resolver cache, so it can pass where a clean machine fails. Docker runs

@@ -3,6 +3,8 @@
 
 #include "ui_player.h"
 
+#include <stddef.h>
+
 #include "p3a_err.h"
 
 ui_player_standing_t ui_player_standing(const ui_player_facts_t *facts, p3a_ui_content_t *out)

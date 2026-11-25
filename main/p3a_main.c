@@ -13,6 +13,7 @@
 #include "esp_app_desc.h"
 #include "esp_chip_info.h"
 #include "esp_log.h"
+#include "cJSON.h"
 #include "psram_alloc.h"
 #include "esp_timer.h"
 #include "frame_trace.h"
@@ -181,8 +182,21 @@ static void on_boot_button(void *ctx)
     p3a_job_submit(P3A_JOBS_UI, "pause button", toggle_pause_job, NULL, NULL);
 }
 
+// JSON parse trees go to PSRAM. cJSON makes one small allocation per value,
+// and small allocations come from internal RAM by default: a listing of
+// 50 GIFs (100 KB of JSON and more) was measured taking 170 KB of the
+// internal pool for a moment, down to 60 KB free. That pool is what the
+// Wi-Fi link and the SD card allocate from, and running it dry was 1.x's
+// crash (docs/known-issues.md, "SDIO RX").
+static void *json_alloc(size_t size)
+{
+    return psram_malloc(size);
+}
+
 void app_main(void)
 {
+    cJSON_InitHooks(&(cJSON_Hooks){.malloc_fn = json_alloc, .free_fn = free});
+
     const esp_app_desc_t *app = esp_app_get_description();
     esp_chip_info_t chip;
     esp_chip_info(&chip);

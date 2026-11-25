@@ -72,6 +72,10 @@ typedef struct {
     const char *credit;
     // What its downloads say they are; NULL for "p3a".
     const char *user_agent;
+    // A download that is refused (401, 403) says something about that
+    // artwork, not about a key: a museum's image server refusing one
+    // picture. It counts against the artwork and the source carries on.
+    bool refusal_is_the_artworks;
     // Its downloads may be sent on to another address (up to five times).
     // Followed by hand, as 1.x did for the museums' image servers.
     bool redirects;

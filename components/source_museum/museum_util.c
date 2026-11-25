@@ -9,6 +9,9 @@
 static const museum_t *const s_museums[] = {
     &museum_vam,
     &museum_smk,
+    &museum_wellcome,
+    &museum_cma,
+    &museum_mia,
 };
 
 const museum_t *museum_at(size_t index)

@@ -19,10 +19,13 @@ pytestmark = pytest.mark.live
 
 RUN = int(time.time()) % 3000  # a channel the device has not seen: see test_giphy.py
 
-# museum, kind, a term with thousands of artworks
+# museum, kind, a term with thousands of artworks, the longest side its pictures may have
 CHANNELS = [
-    ("vam", "vam:category", "THES48903"),          # prints
-    ("smk", "smk:collection", "Gammel bestand"),
+    ("vam", "vam:category", "THES48903", 720),          # prints
+    ("smk", "smk:collection", "Gammel bestand", 720),
+    ("wellcome", "wellcome:workType", "k", 720),         # pictures
+    ("cma", "cma:department", "Drawings", 1400),         # no IIIF: one fixed "web" size
+    ("mia", "mia:classification", "Paintings", 800),     # no IIIF: the 800-pixel bucket
 ]
 
 
@@ -46,8 +49,8 @@ def channel(status):
     return status["channels"][0]
 
 
-@pytest.mark.parametrize("museum,kind,term", CHANNELS, ids=[c[0] for c in CHANNELS])
-def test_a_museums_channel_is_listed_fetched_and_played(rig, museum, kind, term):
+@pytest.mark.parametrize("museum,kind,term,longest", CHANNELS, ids=[c[0] for c in CHANNELS])
+def test_a_museums_channel_is_listed_fetched_and_played(rig, museum, kind, term, longest):
     before = rig.status()
     assert rig.uart.command("sched activate", playset(kind, term)) == {"result": "ok"}
     status = rig.wait("listed", lambda s: s["playset"] == "Museum test" and channel(s)["listings"] >= 1
@@ -59,9 +62,10 @@ def test_a_museums_channel_is_listed_fetched_and_played(rig, museum, kind, term)
     status = rig.wait("some pictures fetched and one playing",
                       lambda s: s["downloads"] >= before["downloads"] + 3 and s["playing"] and not s["loading"]
                       and s["current_source"] == "museum", timeout=180)
-    assert status["download_failures"] == before["download_failures"]
+    # Minneapolis lists some works whose pictures it then refuses (about one in twenty).
+    assert status["download_failures"] - before["download_failures"] <= (2 if museum == "mia" else 0)
     width, height, frames = rig.on_panel()
-    assert frames == 1 and max(width, height) <= 720, "a still, no larger than the panel"
+    assert frames == 1 and max(width, height) <= longest, "a still, of the size asked for"
     assert max(width, height) >= 300, "and not a thumbnail"
     shown = rig.api.get("/api/v2/player").data["current"]
     assert shown["source"] == "museum" and shown["format"] == "jpg" and shown["id"] == status["current"]

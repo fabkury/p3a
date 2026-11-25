@@ -144,7 +144,50 @@ def smk(name: str) -> None:
     museum(name, len(d["items"]), bool(d["items"]) and d.get("offset", 0) + len(d["items"]) < d.get("found", 0), records)
 
 
+def wellcome(name: str) -> None:
+    d = json.loads((HERE / f"{name}.json").read_bytes())
+    records = []
+    for work in d["results"]:
+        for item in work.get("items", []):
+            urls = [loc["url"] for loc in item.get("locations", [])
+                    if loc.get("locationType", {}).get("id") == "iiif-image" and "/image/" in loc.get("url", "")]
+            if urls:
+                records.append((re.split(r"[/?#]", urls[0].split("/image/", 1)[1])[0], 0, 0))
+                break
+    museum(name, len(d["results"]), bool(d["results"]) and bool(d.get("nextPage")), records)
+
+
+def cma(name: str) -> None:
+    d = json.loads((HERE / f"{name}.json").read_bytes())
+
+    def text_size(v):
+        return int(v) if isinstance(v, str) and v.isdigit() else 0
+
+    records = []
+    for art in d["data"]:
+        web = (art.get("images") or {}).get("web") or {}
+        if isinstance(art.get("accession_number"), str) and web.get("url"):
+            records.append((art["accession_number"], text_size(web.get("width")), text_size(web.get("height"))))
+    info = d.get("info", {})
+    museum(name, len(d["data"]),
+           bool(d["data"]) and info.get("parameters", {}).get("skip", 0) + len(d["data"]) < info.get("total", 0), records)
+
+
+def mia(name: str) -> None:
+    d = json.loads((HERE / f"{name}.json").read_bytes())
+    hits = [] if isinstance(d, list) else d["hits"]["hits"]
+    records = [(str(h["_source"]["id"]), h["_source"].get("image_width"), h["_source"].get("image_height"))
+               for h in hits if isinstance(h.get("_source", {}).get("id"), int)]
+    museum(name, len(hits), len(hits) >= 50, records)
+
+
 if __name__ == "__main__":
+    for listing in ("wellcome_worktype_p1", "wellcome_empty"):
+        wellcome(listing)
+    for listing in ("cma_department_p1", "cma_type_p2", "cma_empty"):
+        cma(listing)
+    for listing in ("mia_classification_p1", "mia_empty", "mia_past_window"):
+        mia(listing)
     for listing in ("vam_category_p1", "vam_category_p3", "vam_empty"):
         vam(listing)
     for listing in ("smk_collection_p1", "smk_empty"):

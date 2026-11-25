@@ -113,14 +113,18 @@ bool museum_key_ok(const char *key);
 
 // Adds a record for `key` to the page, if it is usable and there is room.
 // `width` and `height` are the original's size when the listing says (0 if
-// not): the record gets the size of the picture that will be fetched.
+// not): the record gets that shape fitted into 720 pixels, which for the
+// IIIF museums is the size of the picture that will be fetched. (For the
+// two that serve fixed sizes it is right in shape only, until the picture
+// is decoded.) Knowing the shape before the download lets the aspect
+// filter pass an elongated artwork over without fetching it.
 void museum_page_add(museum_page_t *page, uint16_t museum, const char *key, uint32_t width, uint32_t height);
 
 // "{base}/{key}/full/!720,720/0/default.jpg": the IIIF address most of them share.
 esp_err_t museum_iiif_url(const char *base, const p3a_record_t *record, char *out, size_t len);
 
 // The museums.
-extern const museum_t museum_vam, museum_smk;
+extern const museum_t museum_vam, museum_smk, museum_wellcome, museum_cma, museum_mia;
 
 #ifdef __cplusplus
 }

@@ -10,7 +10,7 @@ times.
 |---|---|
 | Phase | 4, remote sources (Phases 0 to 3 complete but for their manual checks) |
 | Current milestone | M4.3 Museums |
-| Next action | M4.3 part 2: the other museums, one at a time, each as V&A and SMK were done: read its section of `docs/art-institutions/finalized-design.md` and its file under `legacy/components/art_institution/museums/`; record its listing with the request the device makes (`tests/assets/sources/`, with its reading in `make_expected.py`); write `museum_<id>.c` (pure: `list_url`, `parse_page`, `image_url`), add it to the table in `museum_util.c` and to `test_museums.c`; add its channel to `CHANNELS` in `tests/device/test_museum.py`; delete its legacy file with a line in the deletion log. Order: Wellcome, Cleveland, Minneapolis (no key), then Harvard and the Smithsonian (keys from the secrets file; `MUSEUM_KEY_*`), then Rijksmuseum (a record needs a second request to find its picture: `P3A_RECORD_UNRESOLVED`, resolved in `ops->url`; pages by token: `museum_page_t.next`), then AIC (kept in the table, `unavailable` set). Then O10 and the milestone end |
+| Next action | M4.3 part 2: the other museums, one at a time, each as V&A and SMK were done: read its section of `docs/art-institutions/finalized-design.md` and its file under `legacy/components/art_institution/museums/`; record its listing with the request the device makes (`tests/assets/sources/`, with its reading in `make_expected.py`); write `museum_<id>.c` (pure: `list_url`, `parse_page`, `image_url`), add it to the table in `museum_util.c` and to `test_museums.c`; add its channel to `CHANNELS` in `tests/device/test_museum.py`; delete its legacy file with a line in the deletion log. Done: V&A, SMK, Wellcome, Cleveland, Minneapolis. Next: Harvard and the Smithsonian (keys from the secrets file; `MUSEUM_KEY_*`), then Rijksmuseum (a record needs a second request to find its picture: `P3A_RECORD_UNRESOLVED`, resolved in `ops->url`; pages by token: `museum_page_t.next`), then AIC (kept in the table, `unavailable` set). Then O10 and the milestone end |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -53,7 +53,7 @@ reopened (why).
 | M3.6 USB mass storage | built 2026-11-23; open for manual check M3.6-a (a real computer). Tiers: host tests (30 programs, under the sanitizers too), device tests with the bus's reports injected (with it every test not marked slow passes: 267 cases), release, test and trace builds, the configuration guard, a from-scratch configure in the CI container |
 | M4.1 Fetch, download, refresh, eviction | done 2026-11-25. Tiers: host tests (32 programs), the whole device suite on the M4.1 commit (297 pass, 6 skipped), CI green, release and trace builds (made on the tree with M4.2 part 1 in it). Manual: none. Not verified: listed in the log entry of 2026-11-23; O9's measurements moved to M4.2 |
 | M4.2 Giphy and Klipy | done 2026-11-25. Tiers: host tests (35 programs), device tests (the whole suite: 309 passed, 6 skipped), CI, test, release and trace builds. Manual: M4.2-a. Not verified: listed in the log entries of 2026-11-25. O6 (the services' own marks) stays open and holds nothing |
-| M4.3 Museums | in progress: the source and its first two museums (V&A, SMK) list, download and play; the aspect filter (D) is seen on the device (2026-11-25). Seven museums to do |
+| M4.3 Museums | in progress: five of nine museums list, download and play (V&A, SMK, Wellcome, Cleveland, Minneapolis); D is seen on the device (2026-11-25). Harvard, the Smithsonian, the Rijksmuseum and AIC to do |
 | M4.4 Pinned lists and "show this" | not started |
 | M4.5 Makapix | not started |
 | M5.1 Embedded web UI | not started |
@@ -392,11 +392,40 @@ M4.3, 2026-11-25:
 - `components/art_institution/museums/vam.c` and `smk.c`: rewritten as
   `components/source_museum/museum_vam.c` and `museum_smk.c`. Their page
   loops are the one in `source_museum.c`.
+- `museums/wellcome.c`, `cma.c` and `mia.c`: rewritten the same way.
+  Cleveland's table of cut department names is not needed (a term
+  is 95 characters).
 
 ## Session log
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-25: M4.3 part 2, Wellcome, Cleveland, Minneapolis
+
+- Three more museums, each a pure file of about 120 lines and a row in
+  the table: `museum_wellcome.c`, `museum_cma.c`, `museum_mia.c`.
+- **Cleveland's and Wellcome's 1.x workarounds are gone**, as planned: a
+  term is 95 characters in 2.0, so Cleveland's long department names need
+  no table to expand them and Wellcome's long labels are not hidden.
+- Cleveland and Minneapolis have no IIIF: Cleveland's one "web" picture
+  (750 to 1300 pixels) and Minneapolis's 800-pixel bucket are fetched.
+- Minneapolis answers a bare `[]` past the end of its index: read as an
+  empty last page. A term with a quotation mark or a backslash is refused
+  (it would end the phrase in the query).
+- **A refused download is the artwork's, for a source that says so**
+  (`refusal_is_the_artworks`): about one in twenty of Minneapolis's
+  listed works answer 403 for their picture. That counts against the one
+  artwork (left alone after three) and the museums' other downloads go
+  on; for Giphy and Klipy a 403 still stops the source for 15 minutes.
+- Verified, host tests (36 programs, also under gcc with ASan and
+  UBSan): the three museums' recorded listings against the Python
+  reading, their addresses, mutated listings.
+- Verified, device tests against the museums: all five list a channel,
+  fetch pictures and play them (3 new cases, 12 with the smoke tests).
+- Not verified: a refused Minneapolis picture on the device (none came
+  up in the 32 listed); Wellcome's label axes on the device (host-tested
+  addresses only); the whole device suite on this build.
 
 ### 2026-11-25: M4.3 part 1, the museum source with V&A and SMK; D on the device
 

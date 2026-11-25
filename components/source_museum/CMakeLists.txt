@@ -3,9 +3,12 @@
 # museum (source_museum.c); what each museum's answers mean is in its own
 # pure file.
 idf_component_register(
-    SRCS "museum_smk.c"
+    SRCS "museum_cma.c"
+         "museum_mia.c"
+         "museum_smk.c"
          "museum_util.c"
          "museum_vam.c"
+         "museum_wellcome.c"
          "source_museum.c"
     INCLUDE_DIRS "include"
     REQUIRES p3a_library

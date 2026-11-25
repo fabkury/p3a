@@ -86,6 +86,14 @@ static void test_recorded_listings_are_read_as_an_independent_reading_expects(vo
     TEST_ASSERT_EQUAL(0, check(&museum_vam, "vam_empty"));
     TEST_ASSERT_TRUE(check(&museum_smk, "smk_collection_p1") >= 15);
     TEST_ASSERT_EQUAL(0, check(&museum_smk, "smk_empty"));
+    TEST_ASSERT_TRUE(check(&museum_wellcome, "wellcome_worktype_p1") >= 15);
+    TEST_ASSERT_EQUAL(0, check(&museum_wellcome, "wellcome_empty"));
+    TEST_ASSERT_TRUE(check(&museum_cma, "cma_department_p1") >= 20);
+    TEST_ASSERT_TRUE(check(&museum_cma, "cma_type_p2") >= 20);
+    TEST_ASSERT_EQUAL(0, check(&museum_cma, "cma_empty"));
+    TEST_ASSERT_TRUE(check(&museum_mia, "mia_classification_p1") >= 15);
+    TEST_ASSERT_EQUAL(0, check(&museum_mia, "mia_empty"));
+    TEST_ASSERT_EQUAL(0, check(&museum_mia, "mia_past_window"));  // a bare [] past the index's end
 }
 
 static void test_a_channels_kind_names_a_museum_and_one_of_its_axes(void)
@@ -155,6 +163,45 @@ static void test_the_addresses(void)
     TEST_ASSERT_EQUAL(ESP_OK, museum_smk.image_url(&r, url, sizeof(url)));
     TEST_ASSERT_EQUAL_STRING("https://iip.smk.dk/iiif/jp2/bc386p50w_kksgb22235.tif.jp2/full/!720,720/0/default.jpg", url);
     TEST_ASSERT_EQUAL(ESP_ERR_INVALID_SIZE, museum_smk.image_url(&r, url, 40));
+    q = (museum_query_t){.axis = "genres", .term = "Wood engravings & co", .api_key = "", .start = 200, .next = ""};
+    TEST_ASSERT_EQUAL(ESP_OK, museum_wellcome.list_url(&q, url, sizeof(url)));
+    TEST_ASSERT_EQUAL_STRING("https://api.wellcomecollection.org/catalogue/v2/works?page=3&pageSize=100"
+                             "&items.locations.locationType=iiif-image&include=items&genres.label=Wood%20engravings%20%26%20co",
+                             url);
+    q.axis = "workType";
+    q.term = "k";
+    q.start = 0;
+    TEST_ASSERT_EQUAL(ESP_OK, museum_wellcome.list_url(&q, url, sizeof(url)));
+    TEST_ASSERT_NOT_NULL(strstr(url, "?page=1&"));
+    TEST_ASSERT_NOT_NULL(strstr(url, "&workType=k"));
+    p3a_record_init_museum(&r, MUSEUM_WELLCOME, "V0014156");
+    TEST_ASSERT_EQUAL(ESP_OK, museum_wellcome.image_url(&r, url, sizeof(url)));
+    TEST_ASSERT_EQUAL_STRING("https://iiif.wellcomecollection.org/image/V0014156/full/!720,720/0/default.jpg", url);
+
+    // A long department name fits: 1.x cut it to 32 characters and kept a table to expand it.
+    q = (museum_query_t){.axis = "department", .term = "Modern European Painting and Sculpture", .api_key = "",
+                         .start = 300, .next = ""};
+    TEST_ASSERT_EQUAL(ESP_OK, museum_cma.list_url(&q, url, sizeof(url)));
+    TEST_ASSERT_EQUAL_STRING("https://openaccess-api.clevelandart.org/api/artworks/?cc0=1&has_image=1&skip=300&limit=100"
+                             "&department=Modern%20European%20Painting%20and%20Sculpture&fields=accession_number,images",
+                             url);
+    p3a_record_init_museum(&r, MUSEUM_CMA, "1926.1976");
+    TEST_ASSERT_EQUAL(ESP_OK, museum_cma.image_url(&r, url, sizeof(url)));
+    TEST_ASSERT_EQUAL_STRING("https://openaccess-cdn.clevelandart.org/1926.1976/1926.1976_web.jpg", url);
+
+    q = (museum_query_t){.axis = "classification", .term = "Jewelry/Adornment", .api_key = "", .start = 100, .next = ""};
+    TEST_ASSERT_EQUAL(ESP_OK, museum_mia.list_url(&q, url, sizeof(url)));
+    TEST_ASSERT_EQUAL_STRING("https://search.artsmia.org/classification%3A%22Jewelry%2FAdornment%22%20AND%20rights_type%3A"
+                             "%22Public%20Domain%22%20AND%20image%3Avalid?size=50&from=100",
+                             url);
+    q.term = "x\" OR id:1 OR \"";  // a term cannot close its quotation and add to the query
+    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG, museum_mia.list_url(&q, url, sizeof(url)));
+    p3a_record_init_museum(&r, MUSEUM_MIA, "529");
+    TEST_ASSERT_EQUAL(ESP_OK, museum_mia.image_url(&r, url, sizeof(url)));
+    TEST_ASSERT_EQUAL_STRING("https://1.api.artsmia.org/800/529.jpg", url);
+    p3a_record_init_museum(&r, MUSEUM_MIA, "529a");  // its keys are numbers
+    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG, museum_mia.image_url(&r, url, sizeof(url)));
+
     // A key from a damaged index is not made into an address.
     p3a_record_init_museum(&r, MUSEUM_SMK, "a/../../b");
     TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG, museum_smk.image_url(&r, url, sizeof(url)));
@@ -202,7 +249,10 @@ static void test_what_is_not_a_listing_is_refused(void)
     for (size_t m = 0; museum_at(m) != NULL; m++) {
         for (size_t i = 0; i < sizeof(not_listings) / sizeof(not_listings[0]); i++) {
             museum_page_t page = fresh_page();
-            TEST_ASSERT_EQUAL_MESSAGE(P3A_ERR_CORRUPT, museum_at(m)->parse_page(not_listings[i], &page), museum_at(m)->id);
+            const esp_err_t err = museum_at(m)->parse_page(not_listings[i], &page);
+            // Minneapolis answers a bare [] past the end of its index: for it, an empty page.
+            const bool empty_page = museum_at(m) == &museum_mia && strcmp(not_listings[i], "[]") == 0;
+            TEST_ASSERT_EQUAL_MESSAGE(empty_page ? ESP_OK : (esp_err_t)P3A_ERR_CORRUPT, err, museum_at(m)->id);
             TEST_ASSERT_EQUAL(0, page.count);
         }
     }
@@ -268,6 +318,9 @@ static void test_cut_and_mutated_listings_do_no_harm(void)
 {
     mutate(&museum_vam, "vam_category_p1", 1500);
     mutate(&museum_smk, "smk_collection_p1", 800);
+    mutate(&museum_wellcome, "wellcome_worktype_p1", 800);
+    mutate(&museum_cma, "cma_department_p1", 1500);
+    mutate(&museum_mia, "mia_classification_p1", 600);
 }
 
 int main(void)

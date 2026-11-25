@@ -573,6 +573,12 @@ static bool download_one(void)
         if (r != NULL) {
             r->flags |= P3A_RECORD_GONE;  // the source no longer has it: never asked for again
         }
+    } else if (err == P3A_ERR_AUTH && ops->refusal_is_the_artworks) {
+        // One picture the server will not give: three such and it is left alone. The others go on.
+        sched->download_failures++;
+        if (r != NULL && r->download_fails < UINT8_MAX) {
+            r->download_fails++;
+        }
     } else if (err == P3A_ERR_RATE_LIMITED || err == P3A_ERR_AUTH || err == P3A_ERR_NO_KEY) {
         sched->download_failures++;
         s_source_blocked_until[source] = after + SOURCE_BLOCK_MS;

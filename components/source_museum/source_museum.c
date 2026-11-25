@@ -167,6 +167,7 @@ esp_err_t source_museum_start(void)
         .url = museum_url,
         .user_agent = s_user_agent,
         .redirects = true,  // the museums' image servers send a picture's address on to another
+        .refusal_is_the_artworks = true,  // no picture is behind a key; a 403 is one dead picture
         .refresh_interval_s = museum_refresh_interval_s,
         .index_capacity = museum_index_capacity,
         .smooth = true,         // photographs of paintings: scaled smoothly

@@ -12,6 +12,8 @@ static const museum_t *const s_museums[] = {
     &museum_wellcome,
     &museum_cma,
     &museum_mia,
+    &museum_ham,
+    &museum_si,
 };
 
 const museum_t *museum_at(size_t index)
@@ -106,7 +108,7 @@ bool museum_key_ok(const char *key)
     for (size_t i = 0; i < len; i++) {
         const char c = key[i];
         if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '-' || c == '_' ||
-              c == '.' || c == '~')) {
+              c == '.' || c == '~' || c == ':')) {
             return false;
         }
     }

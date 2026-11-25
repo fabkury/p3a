@@ -175,6 +175,7 @@ set(MUSEUM "${P3A_COMPONENTS}/source_museum")
 p3a_host_test(test_museums
     SOURCES sources/test_museums.c ${MUSEUM}/museum_util.c ${MUSEUM}/museum_vam.c ${MUSEUM}/museum_smk.c
             ${MUSEUM}/museum_wellcome.c ${MUSEUM}/museum_cma.c ${MUSEUM}/museum_mia.c
+            ${MUSEUM}/museum_ham.c ${MUSEUM}/museum_si.c
             ${LIBRARY}/p3a_record.c ${UTIL}/p3a_err.c
     INCLUDES ${MUSEUM} ${LIBRARY}/include ${UTIL}/include ${P3A_STUBS}
     LIBS cjson)

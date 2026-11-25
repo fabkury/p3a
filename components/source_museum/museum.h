@@ -108,7 +108,8 @@ bool museum_put_encoded(char *out, size_t len, size_t *at, const char *text);
 bool museum_put_number(char *out, size_t len, size_t *at, uint32_t n);
 
 // A key goes into a picture's address as it is: only characters that are
-// safe there (letters, digits, - . _ ~), and not too long for a record.
+// safe in a part of a path (letters, digits, - . _ ~ and the colon of
+// Harvard's "urn-3:HUAM:..."), and not too long for a record.
 bool museum_key_ok(const char *key);
 
 // Adds a record for `key` to the page, if it is usable and there is room.
@@ -124,7 +125,7 @@ void museum_page_add(museum_page_t *page, uint16_t museum, const char *key, uint
 esp_err_t museum_iiif_url(const char *base, const p3a_record_t *record, char *out, size_t len);
 
 // The museums.
-extern const museum_t museum_vam, museum_smk, museum_wellcome, museum_cma, museum_mia;
+extern const museum_t museum_vam, museum_smk, museum_wellcome, museum_cma, museum_mia, museum_ham, museum_si;
 
 #ifdef __cplusplus
 }

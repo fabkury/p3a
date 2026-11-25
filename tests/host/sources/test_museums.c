@@ -94,6 +94,11 @@ static void test_recorded_listings_are_read_as_an_independent_reading_expects(vo
     TEST_ASSERT_TRUE(check(&museum_mia, "mia_classification_p1") >= 15);
     TEST_ASSERT_EQUAL(0, check(&museum_mia, "mia_empty"));
     TEST_ASSERT_EQUAL(0, check(&museum_mia, "mia_past_window"));  // a bare [] past the index's end
+    TEST_ASSERT_TRUE(check(&museum_ham, "ham_classification_p1") >= 20);
+    TEST_ASSERT_TRUE(check(&museum_ham, "ham_classification_p3") >= 20);
+    TEST_ASSERT_EQUAL(0, check(&museum_ham, "ham_empty"));
+    TEST_ASSERT_TRUE(check(&museum_si, "si_unit_p1") >= 8);
+    TEST_ASSERT_EQUAL(0, check(&museum_si, "si_empty"));
 }
 
 static void test_a_channels_kind_names_a_museum_and_one_of_its_axes(void)
@@ -202,6 +207,28 @@ static void test_the_addresses(void)
     p3a_record_init_museum(&r, MUSEUM_MIA, "529a");  // its keys are numbers
     TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG, museum_mia.image_url(&r, url, sizeof(url)));
 
+    q = (museum_query_t){.axis = "classification", .term = "26", .api_key = "k-1 2", .start = 200, .next = ""};
+    TEST_ASSERT_EQUAL(ESP_OK, museum_ham.list_url(&q, url, sizeof(url)));
+    TEST_ASSERT_EQUAL_STRING("https://api.harvardartmuseums.org/object?apikey=k-1%202&size=100&page=3&hasimage=1"
+                             "&q=imagepermissionlevel:0&classification=26&sort=id&sortorder=asc&fields=id,primaryimageurl",
+                             url);
+    q.api_key = "";  // no key: no address is made, the source says NO_KEY before asking
+    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG, museum_ham.list_url(&q, url, sizeof(url)));
+    p3a_record_init_museum(&r, MUSEUM_HAM, "urn-3:HUAM:79762_dynmc");
+    TEST_ASSERT_EQUAL(ESP_OK, museum_ham.image_url(&r, url, sizeof(url)));
+    TEST_ASSERT_EQUAL_STRING("https://nrs.harvard.edu/urn-3:HUAM:79762_dynmc/full/!720,720/0/default.jpg", url);
+
+    q = (museum_query_t){.axis = "unit", .term = "SAAM", .api_key = "KEY7", .start = 100, .next = ""};
+    TEST_ASSERT_EQUAL(ESP_OK, museum_si.list_url(&q, url, sizeof(url)));
+    TEST_ASSERT_EQUAL_STRING("https://api.si.edu/openaccess/api/v1.0/search?api_key=KEY7"
+                             "&q=unit_code%3ASAAM%20AND%20online_visual_material%3Atrue&start=100&rows=50",
+                             url);
+    q.term = "SAAM OR unit_code:NMNH";  // a unit's code is letters and digits
+    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG, museum_si.list_url(&q, url, sizeof(url)));
+    p3a_record_init_museum(&r, MUSEUM_SI, "SAAM-1909.7.35_1");
+    TEST_ASSERT_EQUAL(ESP_OK, museum_si.image_url(&r, url, sizeof(url)));
+    TEST_ASSERT_EQUAL_STRING("https://ids.si.edu/ids/iiif/SAAM-1909.7.35_1/full/!720,720/0/default.jpg", url);
+
     // A key from a damaged index is not made into an address.
     p3a_record_init_museum(&r, MUSEUM_SMK, "a/../../b");
     TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG, museum_smk.image_url(&r, url, sizeof(url)));
@@ -211,6 +238,7 @@ static void test_keys_and_sizes(void)
 {
     TEST_ASSERT_TRUE(museum_key_ok("2016JL6674"));
     TEST_ASSERT_TRUE(museum_key_ok("bc386p50w_kksgb22235.tif.jp2"));
+    TEST_ASSERT_TRUE(museum_key_ok("urn-3:HUAM:79762_dynmc"));
     static const char *const bad[] = {NULL, "", ".", "..", "a/b", "a b", "a?b", "a#b", "a%2Fb", "\xC3\xA9",
                                       "0123456789012345678901234567890123456789012345678901234567890123456789"
                                       "01234567890123456789012345"};  // 96 characters: one too many
@@ -245,7 +273,9 @@ static void test_keys_and_sizes(void)
 static void test_what_is_not_a_listing_is_refused(void)
 {
     static const char *const not_listings[] = {"", "<html>503</html>", "[]", "{}", "{\"records\":{}}", "{\"items\":7}",
-                                               "null"};
+                                               "null", "Unauthorized",
+                                               "<html><head><title>Request Rejected</title></head></html>",
+                                               "{\"response\":{\"rows\":3}}"};
     for (size_t m = 0; museum_at(m) != NULL; m++) {
         for (size_t i = 0; i < sizeof(not_listings) / sizeof(not_listings[0]); i++) {
             museum_page_t page = fresh_page();
@@ -321,6 +351,8 @@ static void test_cut_and_mutated_listings_do_no_harm(void)
     mutate(&museum_wellcome, "wellcome_worktype_p1", 800);
     mutate(&museum_cma, "cma_department_p1", 1500);
     mutate(&museum_mia, "mia_classification_p1", 600);
+    mutate(&museum_ham, "ham_classification_p1", 1500);
+    mutate(&museum_si, "si_unit_p1", 800);
 }
 
 int main(void)

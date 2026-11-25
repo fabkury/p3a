@@ -1,0 +1,1662 @@
+{
+  "status": 200,
+  "responseCode": 1,
+  "response": {
+    "rows": [
+      {
+        "id": "ld1-1643381040022-1643381048274-1",
+        "title": "William T. Evans",
+        "unitCode": "SAAM",
+        "type": "edanmdm",
+        "url": "edanmdm:saam_1909.7.35",
+        "content": {
+          "freetext": {
+            "date": [
+              {
+                "label": "Date",
+                "content": "n.d."
+              }
+            ],
+            "name": [
+              {
+                "label": "Artist",
+                "content": "Alphonse Jongers, born Mezieres, France 1872-died Montreal, Quebec, Canada 1945"
+              },
+              {
+                "label": "Sitter",
+                "content": "William Thomas Evans"
+              }
+            ],
+            "topic": [
+              {
+                "label": "Topic",
+                "content": "Occupation\\art\\collector"
+              },
+              {
+                "label": "Topic",
+                "content": "Portrait male\\waist length"
+              }
+            ],
+            "setName": [
+              {
+                "label": "See more items in",
+                "content": "Smithsonian American Art Museum Collection"
+              },
+              {
+                "label": "Department",
+                "content": "Painting and Sculpture"
+              }
+            ],
+            "creditLine": [
+              {
+                "label": "Credit Line",
+                "content": "Smithsonian American Art Museum, Gift of William T. Evans"
+              }
+            ],
+            "dataSource": [
+              {
+                "label": "Data Source",
+                "content": "Smithsonian American Art Museum"
+              }
+            ],
+            "identifier": [
+              {
+                "label": "Object number",
+                "content": "1909.7.35"
+              }
+            ],
+            "objectType": [
+              {
+                "label": "Type",
+                "content": "Painting"
+              }
+            ],
+            "objectRights": [
+              {
+                "label": "Restrictions & Rights",
+                "content": "CC0"
+              }
+            ],
+            "physicalDescription": [
+              {
+                "label": "Medium",
+                "content": "oil on canvas"
+              },
+              {
+                "label": "Dimensions",
+                "content": "36 1/8 x 28 1/4 in. (91.7 x 71.6 cm)"
+              }
+            ]
+          },
+          "indexedStructured": {
+            "date": [
+              "1940s",
+              "1870s"
+            ],
+            "name": [
+              "Evans, William Thomas",
+              "Jongers, Alphonse"
+            ],
+            "topic": [
+              "Art",
+              "Occupations",
+              "Men",
+              "Collector",
+              "Portraits"
+            ],
+            "usage_flag": [
+              "permcoll"
+            ],
+            "object_type": [
+              "Paintings"
+            ],
+            "online_media_type": [
+              "Images"
+            ]
+          },
+          "descriptiveNonRepeating": {
+            "guid": "http://n2t.net/ark:/65665/vk7919b9c35-3a25-4f1a-bed3-847611be9957",
+            "title": {
+              "label": "Title",
+              "content": "William T. Evans"
+            },
+            "record_ID": "saam_1909.7.35",
+            "unit_code": "SAAM",
+            "title_sort": "WILLIAM T. EVANS",
+            "data_source": "Smithsonian American Art Museum",
+            "record_link": "https://americanart.si.edu/collections/search/artwork/?id=12756",
+            "online_media": {
+              "media": [
+                {
+                  "id": "media:SAAM-1909.7.35_1",
+                  "guid": "http://n2t.net/ark:/65665/bj94dd1c2f8-25aa-410f-8b6c-2b05ec2684a0",
+                  "type": "Images",
+                  "idsId": "SAAM-1909.7.35_1",
+                  "usage": {
+                    "access": "CC0"
+                  },
+                  "width": 2279,
+                  "height": 2880,
+                  "content": "https://ids.si.edu/ids/deliveryService?id=SAAM-1909.7.35_1",
+                  "maxsize": 3000,
+                  "thumbnail": "https://ids.si.edu/ids/deliveryService?id=SAAM-1909.7.35_1",
+                  "altTextAccessibility": "",
+                  "extDescrAccessibility": "",
+                  "resources": [
+                    {
+                      "label": "High-resolution TIFF",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1909.7.35_1.tif",
+                      "width": 2279,
+                      "height": 2880,
+                      "dimensions": "2279x2880"
+                    },
+                    {
+                      "label": "High-resolution JPEG",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1909.7.35_1.jpg",
+                      "width": 2279,
+                      "height": 2880,
+                      "dimensions": "2279x2880"
+                    },
+                    {
+                      "label": "Screen Image",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1909.7.35_1_screen"
+                    },
+                    {
+                      "label": "Thumbnail Image",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1909.7.35_1_thumb"
+                    }
+                  ]
+                }
+              ],
+              "mediaCount": 1
+            },
+            "metadata_usage": {
+              "access": "CC0"
+            }
+          }
+        },
+        "hash": "02cc13e2d22b295f1c5bea7b15e5c0ebe8c67a11",
+        "docSignature": "3e69f6a9de2b55d7152f0733fe84b0ec",
+        "timestamp": "1663786513",
+        "lastTimeUpdated": "1792838601",
+        "version": "1792833858"
+      },
+      {
+        "id": "ld1-1643381040022-1643381047060-0",
+        "title": "Young Girl",
+        "unitCode": "SAAM",
+        "type": "edanmdm",
+        "url": "edanmdm:saam_1956.11.18",
+        "content": {
+          "freetext": {
+            "date": [
+              {
+                "label": "Date",
+                "content": "n.d."
+              }
+            ],
+            "name": [
+              {
+                "label": "Attributed to",
+                "content": "Gerrit Willemsz Horst, Dutch, born ca. 1612-died 1652"
+              },
+              {
+                "label": "Sitter",
+                "content": "unidentified"
+              }
+            ],
+            "topic": [
+              {
+                "label": "Topic",
+                "content": "Portrait female\\child"
+              }
+            ],
+            "setName": [
+              {
+                "label": "See more items in",
+                "content": "Smithsonian American Art Museum Collection"
+              },
+              {
+                "label": "Department",
+                "content": "Painting and Sculpture"
+              }
+            ],
+            "creditLine": [
+              {
+                "label": "Credit Line",
+                "content": "Smithsonian American Art Museum, Bequest of Mabel Johnson Langhorne"
+              }
+            ],
+            "dataSource": [
+              {
+                "label": "Data Source",
+                "content": "Smithsonian American Art Museum"
+              }
+            ],
+            "identifier": [
+              {
+                "label": "Object number",
+                "content": "1956.11.18"
+              }
+            ],
+            "objectType": [
+              {
+                "label": "Type",
+                "content": "Painting"
+              }
+            ],
+            "objectRights": [
+              {
+                "label": "Restrictions & Rights",
+                "content": "CC0"
+              }
+            ],
+            "physicalDescription": [
+              {
+                "label": "Medium",
+                "content": "oil on canvas"
+              },
+              {
+                "label": "Dimensions",
+                "content": "26 1/4 x 20 in. (66.7 x 50.8 cm.)"
+              }
+            ]
+          },
+          "indexedStructured": {
+            "date": [
+              "1610s",
+              "1650s"
+            ],
+            "name": [
+              "Horst, Gerrit Willemsz"
+            ],
+            "topic": [
+              "Women",
+              "Portraits",
+              "Children"
+            ],
+            "usage_flag": [
+              "permcoll"
+            ],
+            "object_type": [
+              "Paintings"
+            ],
+            "online_media_type": [
+              "Images"
+            ]
+          },
+          "descriptiveNonRepeating": {
+            "guid": "http://n2t.net/ark:/65665/vk77a6b02d4-064d-4f67-ae9d-bd653c454310",
+            "title": {
+              "label": "Title",
+              "content": "Young Girl"
+            },
+            "record_ID": "saam_1956.11.18",
+            "unit_code": "SAAM",
+            "title_sort": "YOUNG GIRL",
+            "data_source": "Smithsonian American Art Museum",
+            "record_link": "https://americanart.si.edu/collections/search/artwork/?id=10794",
+            "online_media": {
+              "media": [
+                {
+                  "id": "media:SAAM-1956.11.18_1",
+                  "guid": "http://n2t.net/ark:/65665/bj956ded181-1b9e-4cc1-b324-49d7f78d4b95",
+                  "type": "Images",
+                  "idsId": "SAAM-1956.11.18_1",
+                  "usage": {
+                    "access": "CC0"
+                  },
+                  "width": 5082,
+                  "height": 6720,
+                  "content": "https://ids.si.edu/ids/deliveryService?id=SAAM-1956.11.18_1",
+                  "maxsize": 3000,
+                  "thumbnail": "https://ids.si.edu/ids/deliveryService?id=SAAM-1956.11.18_1",
+                  "altTextAccessibility": "",
+                  "extDescrAccessibility": "",
+                  "resources": [
+                    {
+                      "label": "High-resolution TIFF",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1956.11.18_1.tif",
+                      "width": 2269,
+                      "height": 3000,
+                      "dimensions": "2269x3000"
+                    },
+                    {
+                      "label": "High-resolution JPEG",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1956.11.18_1.jpg",
+                      "width": 2269,
+                      "height": 3000,
+                      "dimensions": "2269x3000"
+                    },
+                    {
+                      "label": "Screen Image",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1956.11.18_1_screen"
+                    },
+                    {
+                      "label": "Thumbnail Image",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1956.11.18_1_thumb"
+                    }
+                  ]
+                }
+              ],
+              "mediaCount": 1
+            },
+            "metadata_usage": {
+              "access": "CC0"
+            }
+          }
+        },
+        "hash": "038b042e65427c7d83d02d83e11f2191e54f15ed",
+        "docSignature": "f5fd42dbc8463e5162dd5be4f5442937",
+        "timestamp": "1663786513",
+        "lastTimeUpdated": "1792838601",
+        "version": "1792833858"
+      },
+      {
+        "id": "ld1-1643381040022-1643381056751-0",
+        "title": "Untitled (Lily)",
+        "unitCode": "SAAM",
+        "type": "edanmdm",
+        "url": "edanmdm:saam_1970.355.790",
+        "content": {
+          "freetext": {
+            "date": [
+              {
+                "label": "Date",
+                "content": "1875"
+              }
+            ],
+            "name": [
+              {
+                "label": "Artist",
+                "content": "Mary Vaux Walcott, born Philadelphia, PA 1860-died St. Andrews, New Brunswick, Canada 1940"
+              }
+            ],
+            "topic": [
+              {
+                "label": "Topic",
+                "content": "Object\\flower\\lily"
+              }
+            ],
+            "setName": [
+              {
+                "label": "See more items in",
+                "content": "Smithsonian American Art Museum Collection"
+              },
+              {
+                "label": "Department",
+                "content": "Graphic Arts"
+              }
+            ],
+            "creditLine": [
+              {
+                "label": "Credit Line",
+                "content": "Smithsonian American Art Museum, Gift of the artist"
+              }
+            ],
+            "dataSource": [
+              {
+                "label": "Data Source",
+                "content": "Smithsonian American Art Museum"
+              }
+            ],
+            "identifier": [
+              {
+                "label": "Object number",
+                "content": "1970.355.790"
+              }
+            ],
+            "objectType": [
+              {
+                "label": "Type",
+                "content": "Painting"
+              }
+            ],
+            "objectRights": [
+              {
+                "label": "Restrictions & Rights",
+                "content": "CC0"
+              }
+            ],
+            "physicalDescription": [
+              {
+                "label": "Medium",
+                "content": "watercolor on paper"
+              },
+              {
+                "label": "Dimensions",
+                "content": "sheet: 8 1/8 x 6 3/4 in. (20.6 x 17.3 cm)"
+              }
+            ]
+          },
+          "indexedStructured": {
+            "date": [
+              "1870s"
+            ],
+            "name": [
+              "Walcott, Mary Vaux"
+            ],
+            "topic": [
+              "Flowers",
+              "Lily"
+            ],
+            "usage_flag": [
+              "permcoll"
+            ],
+            "object_type": [
+              "Paintings"
+            ],
+            "online_media_type": [
+              "Images"
+            ]
+          },
+          "descriptiveNonRepeating": {
+            "guid": "http://n2t.net/ark:/65665/vk784dd7922-78c2-4b6a-bdcb-8721353a54cb",
+            "title": {
+              "label": "Title",
+              "content": "Untitled (Lily)"
+            },
+            "record_ID": "saam_1970.355.790",
+            "unit_code": "SAAM",
+            "title_sort": "UNTITLED (LILY)",
+            "data_source": "Smithsonian American Art Museum",
+            "record_link": "https://americanart.si.edu/collections/search/artwork/?id=26471",
+            "online_media": {
+              "media": [
+                {
+                  "id": "media:SAAM-1970.355.790_1",
+                  "guid": "http://n2t.net/ark:/65665/bj98db53acf-f526-4e21-8afe-14d2a7b009b4",
+                  "type": "Images",
+                  "idsId": "SAAM-1970.355.790_1",
+                  "usage": {
+                    "access": "CC0"
+                  },
+                  "width": 2375,
+                  "height": 2880,
+                  "content": "https://ids.si.edu/ids/deliveryService?id=SAAM-1970.355.790_1",
+                  "maxsize": 3000,
+                  "thumbnail": "https://ids.si.edu/ids/deliveryService?id=SAAM-1970.355.790_1",
+                  "altTextAccessibility": "",
+                  "extDescrAccessibility": "",
+                  "resources": [
+                    {
+                      "label": "High-resolution TIFF",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1970.355.790_1.tif",
+                      "width": 2375,
+                      "height": 2880,
+                      "dimensions": "2375x2880"
+                    },
+                    {
+                      "label": "High-resolution JPEG",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1970.355.790_1.jpg",
+                      "width": 2375,
+                      "height": 2880,
+                      "dimensions": "2375x2880"
+                    },
+                    {
+                      "label": "Screen Image",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1970.355.790_1_screen"
+                    },
+                    {
+                      "label": "Thumbnail Image",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1970.355.790_1_thumb"
+                    }
+                  ]
+                }
+              ],
+              "mediaCount": 1
+            },
+            "metadata_usage": {
+              "access": "CC0"
+            }
+          }
+        },
+        "hash": "03a0c65254f8f5fc8d58a7842b218c3e502dd8dd",
+        "docSignature": "710516dd37593db2381995c30271d1df",
+        "timestamp": "1663786513",
+        "lastTimeUpdated": "1792838601",
+        "version": "1792833858"
+      },
+      {
+        "id": "ld1-1643381040022-1643381059138-0",
+        "title": "Vase",
+        "unitCode": "SAAM",
+        "type": "edanmdm",
+        "url": "edanmdm:saam_1929.8.174.32",
+        "content": {
+          "freetext": {
+            "name": [
+              {
+                "label": "Artist",
+                "content": "Unidentified"
+              }
+            ],
+            "topic": [
+              {
+                "label": "Topic",
+                "content": "Object\\other\\vase"
+              }
+            ],
+            "setName": [
+              {
+                "label": "See more items in",
+                "content": "Smithsonian American Art Museum Collection"
+              },
+              {
+                "label": "Department",
+                "content": "Decorative Arts"
+              }
+            ],
+            "creditLine": [
+              {
+                "label": "Credit Line",
+                "content": "Smithsonian American Art Museum, Gift of John Gellatly"
+              }
+            ],
+            "dataSource": [
+              {
+                "label": "Data Source",
+                "content": "Smithsonian American Art Museum"
+              }
+            ],
+            "identifier": [
+              {
+                "label": "Object number",
+                "content": "1929.8.174.32"
+              }
+            ],
+            "objectType": [
+              {
+                "label": "Type",
+                "content": "Decorative Arts-Glass"
+              }
+            ],
+            "objectRights": [
+              {
+                "label": "Restrictions & Rights",
+                "content": "CC0"
+              }
+            ],
+            "physicalDescription": [
+              {
+                "label": "Medium",
+                "content": "glass"
+              }
+            ]
+          },
+          "indexedStructured": {
+            "topic": [
+              "Vase"
+            ],
+            "usage_flag": [
+              "permcoll"
+            ],
+            "object_type": [
+              "Decorative arts"
+            ],
+            "online_media_type": [
+              "Images"
+            ]
+          },
+          "descriptiveNonRepeating": {
+            "guid": "http://n2t.net/ark:/65665/vk7b23bbeb5-448d-44da-bd4b-4e15ee7807e1",
+            "title": {
+              "label": "Title",
+              "content": "Vase"
+            },
+            "record_ID": "saam_1929.8.174.32",
+            "unit_code": "SAAM",
+            "title_sort": "VASE",
+            "data_source": "Smithsonian American Art Museum",
+            "record_link": "https://americanart.si.edu/collections/search/artwork/?id=30939",
+            "online_media": {
+              "media": [
+                {
+                  "id": "media:SAAM-1929.8.174.32_1",
+                  "guid": "http://n2t.net/ark:/65665/bj915f79c0f-2ec2-442e-8d26-7faec7051dbc",
+                  "type": "Images",
+                  "idsId": "SAAM-1929.8.174.32_1",
+                  "usage": {
+                    "access": "CC0"
+                  },
+                  "width": 5280,
+                  "height": 7040,
+                  "content": "https://ids.si.edu/ids/deliveryService?id=SAAM-1929.8.174.32_1",
+                  "maxsize": 3000,
+                  "thumbnail": "https://ids.si.edu/ids/deliveryService?id=SAAM-1929.8.174.32_1",
+                  "altTextAccessibility": "",
+                  "extDescrAccessibility": "",
+                  "resources": [
+                    {
+                      "label": "High-resolution TIFF",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1929.8.174.32_1.tif",
+                      "width": 2250,
+                      "height": 3000,
+                      "dimensions": "2250x3000"
+                    },
+                    {
+                      "label": "High-resolution JPEG",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1929.8.174.32_1.jpg",
+                      "width": 2250,
+                      "height": 3000,
+                      "dimensions": "2250x3000"
+                    },
+                    {
+                      "label": "Screen Image",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1929.8.174.32_1_screen"
+                    },
+                    {
+                      "label": "Thumbnail Image",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1929.8.174.32_1_thumb"
+                    }
+                  ]
+                }
+              ],
+              "mediaCount": 1
+            },
+            "metadata_usage": {
+              "access": "CC0"
+            }
+          }
+        },
+        "hash": "0543896c074dcde70e1df01ee8572bb493bc3a97",
+        "docSignature": "73ebd84d4b3602d594ca6a91d5ba690d",
+        "timestamp": "1663786513",
+        "lastTimeUpdated": "1792838601",
+        "version": "1792833858"
+      },
+      {
+        "id": "ld1-1643381040022-1643381047034-0",
+        "title": "Samuel Warren Holland, Aged Two Years",
+        "unitCode": "SAAM",
+        "type": "edanmdm",
+        "url": "edanmdm:saam_1986.65.119",
+        "content": {
+          "freetext": {
+            "date": [
+              {
+                "label": "Date",
+                "content": "19th century"
+              }
+            ],
+            "name": [
+              {
+                "label": "Attributed to",
+                "content": "M. W. Hopkins, born Harwinton, CT 1789-died Williamsburgh, OH 1844"
+              },
+              {
+                "label": "Sitter",
+                "content": "Samuel Warren Holland"
+              }
+            ],
+            "notes": [
+              {
+                "label": "Luce Center Label",
+                "content": "This image of a young boy has been attributed to the artist Milton Hopkins, who painted portraits in New York State and Ohio during the first half of the nineteenth century. We know little about the sitter, Samuel Holland, because there were several people of the same name living in the United States at that time. The artist painted a whip to show that the child was male, a necessary symbol in a period when boys wore skirts until they were five or six. The boy gazes directly at the viewer with large dark eyes that stand out against his pale skin and fair hair, and his fancy costume suggests he was a member of a wealthy household. Early in the nineteenth century, children often died in infancy, and parents commissioned portraits of their sons and daughters as keepsakes."
+              }
+            ],
+            "topic": [
+              {
+                "label": "Topic",
+                "content": "Portrait male\\child"
+              }
+            ],
+            "setName": [
+              {
+                "label": "See more items in",
+                "content": "Smithsonian American Art Museum Collection"
+              },
+              {
+                "label": "Department",
+                "content": "Painting and Sculpture"
+              },
+              {
+                "label": "On View",
+                "content": "Smithsonian American Art Museum, Luce Foundation Center, 3rd Floor, 1A"
+              },
+              {
+                "label": "On View",
+                "content": "Smithsonian American Art Museum, Luce Foundation Center"
+              },
+              {
+                "label": "On View",
+                "content": "Smithsonian American Art Museum, Luce Foundation Center, 3rd Floor"
+              }
+            ],
+            "creditLine": [
+              {
+                "label": "Credit Line",
+                "content": "Smithsonian American Art Museum, Gift of Herbert Waide Hemphill, Jr. and museum purchase made possible by Ralph Cross Johnson"
+              }
+            ],
+            "dataSource": [
+              {
+                "label": "Data Source",
+                "content": "Smithsonian American Art Museum"
+              }
+            ],
+            "identifier": [
+              {
+                "label": "Object number",
+                "content": "1986.65.119"
+              }
+            ],
+            "objectType": [
+              {
+                "label": "Type",
+                "content": "Painting"
+              },
+              {
+                "label": "Type",
+                "content": "Folk Art"
+              }
+            ],
+            "objectRights": [
+              {
+                "label": "Restrictions & Rights",
+                "content": "CC0"
+              }
+            ],
+            "physicalDescription": [
+              {
+                "label": "Medium",
+                "content": "oil on wood panel"
+              },
+              {
+                "label": "Dimensions",
+                "content": "26 1/8 x 22 1/8 in. (66.5 x 56.1 cm)"
+              }
+            ]
+          },
+          "indexedStructured": {
+            "date": [
+              "1800s",
+              "1890s"
+            ],
+            "name": [
+              "Holland, Samuel Warren",
+              "Hopkins, M. W."
+            ],
+            "topic": [
+              "Men",
+              "Portraits",
+              "Children"
+            ],
+            "exhibition": [
+              {
+                "building": "SAAM"
+              }
+            ],
+            "usage_flag": [
+              "permcoll"
+            ],
+            "object_type": [
+              "Paintings",
+              "Folk art"
+            ],
+            "onPhysicalExhibit": [
+              "Yes"
+            ],
+            "online_media_type": [
+              "Images"
+            ]
+          },
+          "descriptiveNonRepeating": {
+            "guid": "http://n2t.net/ark:/65665/vk75f14e48e-f7e4-4647-be6e-45bd1c2cb7d3",
+            "title": {
+              "label": "Title",
+              "content": "Samuel Warren Holland, Aged Two Years"
+            },
+            "record_ID": "saam_1986.65.119",
+            "unit_code": "SAAM",
+            "title_sort": "SAMUEL WARREN HOLLAND, AGED TWO YEARS",
+            "data_source": "Smithsonian American Art Museum",
+            "record_link": "https://americanart.si.edu/collections/search/artwork/?id=10752",
+            "online_media": {
+              "media": [
+                {
+                  "id": "media:SAAM-1986.65.119_1",
+                  "guid": "http://n2t.net/ark:/65665/bj9ec122e8a-6825-48e8-949c-512a030d22d4",
+                  "type": "Images",
+                  "idsId": "SAAM-1986.65.119_1",
+                  "usage": {
+                    "access": "CC0"
+                  },
+                  "width": 4571,
+                  "height": 5440,
+                  "content": "https://ids.si.edu/ids/deliveryService?id=SAAM-1986.65.119_1",
+                  "maxsize": 3000,
+                  "thumbnail": "https://ids.si.edu/ids/deliveryService?id=SAAM-1986.65.119_1",
+                  "altTextAccessibility": "",
+                  "extDescrAccessibility": "",
+                  "resources": [
+                    {
+                      "label": "High-resolution TIFF",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1986.65.119_1.tif",
+                      "width": 2521,
+                      "height": 3000,
+                      "dimensions": "2521x3000"
+                    },
+                    {
+                      "label": "High-resolution JPEG",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1986.65.119_1.jpg",
+                      "width": 2521,
+                      "height": 3000,
+                      "dimensions": "2521x3000"
+                    },
+                    {
+                      "label": "Screen Image",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1986.65.119_1_screen"
+                    },
+                    {
+                      "label": "Thumbnail Image",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1986.65.119_1_thumb"
+                    }
+                  ]
+                }
+              ],
+              "mediaCount": 1
+            },
+            "metadata_usage": {
+              "access": "CC0"
+            }
+          }
+        },
+        "hash": "07c0d5c0bf37c5878967e2a4348113a2de5fb70e",
+        "docSignature": "226c2f674839afe3d6592401abc23be5",
+        "timestamp": "1663786514",
+        "lastTimeUpdated": "1792838601",
+        "version": "1792833858"
+      },
+      {
+        "id": "ld1-1643381040022-1643381059174-0",
+        "title": "Chair",
+        "unitCode": "SAAM",
+        "type": "edanmdm",
+        "url": "edanmdm:saam_1929.8.411.2",
+        "content": {
+          "freetext": {
+            "name": [
+              {
+                "label": "Artist",
+                "content": "Unidentified"
+              }
+            ],
+            "topic": [
+              {
+                "label": "Topic",
+                "content": "Object\\furniture\\chair"
+              }
+            ],
+            "setName": [
+              {
+                "label": "See more items in",
+                "content": "Smithsonian American Art Museum Collection"
+              },
+              {
+                "label": "Department",
+                "content": "Decorative Arts"
+              }
+            ],
+            "creditLine": [
+              {
+                "label": "Credit Line",
+                "content": "Smithsonian American Art Museum, Gift of John Gellatly"
+              }
+            ],
+            "dataSource": [
+              {
+                "label": "Data Source",
+                "content": "Smithsonian American Art Museum"
+              }
+            ],
+            "identifier": [
+              {
+                "label": "Object number",
+                "content": "1929.8.411.2"
+              }
+            ],
+            "objectType": [
+              {
+                "label": "Type",
+                "content": "Decorative Arts-Furniture"
+              }
+            ],
+            "objectRights": [
+              {
+                "label": "Restrictions & Rights",
+                "content": "CC0"
+              }
+            ]
+          },
+          "indexedStructured": {
+            "topic": [
+              "Chairs",
+              "Furnishings"
+            ],
+            "usage_flag": [
+              "permcoll"
+            ],
+            "object_type": [
+              "Decorative arts"
+            ],
+            "online_media_type": [
+              "Images"
+            ]
+          },
+          "descriptiveNonRepeating": {
+            "guid": "http://n2t.net/ark:/65665/vk746829057-539d-46a8-8335-62e1e833cd3b",
+            "title": {
+              "label": "Title",
+              "content": "Chair"
+            },
+            "record_ID": "saam_1929.8.411.2",
+            "unit_code": "SAAM",
+            "title_sort": "CHAIR",
+            "data_source": "Smithsonian American Art Museum",
+            "record_link": "https://americanart.si.edu/collections/search/artwork/?id=31021",
+            "online_media": {
+              "media": [
+                {
+                  "id": "media:SAAM-1929.8.411.2_1",
+                  "guid": "http://n2t.net/ark:/65665/bj9bea83623-06da-4932-8bcf-edd58abc1a53",
+                  "type": "Images",
+                  "idsId": "SAAM-1929.8.411.2_1",
+                  "usage": {
+                    "access": "CC0"
+                  },
+                  "width": 5841,
+                  "height": 7680,
+                  "content": "https://ids.si.edu/ids/deliveryService?id=SAAM-1929.8.411.2_1",
+                  "maxsize": 3000,
+                  "thumbnail": "https://ids.si.edu/ids/deliveryService?id=SAAM-1929.8.411.2_1",
+                  "altTextAccessibility": "",
+                  "extDescrAccessibility": "",
+                  "resources": [
+                    {
+                      "label": "High-resolution TIFF",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1929.8.411.2_1.tif",
+                      "width": 2282,
+                      "height": 3000,
+                      "dimensions": "2282x3000"
+                    },
+                    {
+                      "label": "High-resolution JPEG",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1929.8.411.2_1.jpg",
+                      "width": 2282,
+                      "height": 3000,
+                      "dimensions": "2282x3000"
+                    },
+                    {
+                      "label": "Screen Image",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1929.8.411.2_1_screen"
+                    },
+                    {
+                      "label": "Thumbnail Image",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1929.8.411.2_1_thumb"
+                    }
+                  ]
+                }
+              ],
+              "mediaCount": 1
+            },
+            "metadata_usage": {
+              "access": "CC0"
+            }
+          }
+        },
+        "hash": "0a8616a1e2b4eef6adbf11873a6b270440d93e80",
+        "docSignature": "ca67af8fc62356fd22db5e23ac7ed928",
+        "timestamp": "1663786513",
+        "lastTimeUpdated": "1792838601",
+        "version": "1792833858"
+      },
+      {
+        "id": "ld1-1643381040022-1643381059131-1",
+        "title": "Vase",
+        "unitCode": "SAAM",
+        "type": "edanmdm",
+        "url": "edanmdm:saam_1929.8.174.17",
+        "content": {
+          "freetext": {
+            "name": [
+              {
+                "label": "Artist",
+                "content": "Unidentified"
+              }
+            ],
+            "notes": [
+              {
+                "label": "Luce Center Label",
+                "content": "Most of the glass vessels in this case date from the first century BC to the fourth century AD. Early glass vessels were made in the Middle East and Egypt using the core-forming technique, in which molten glass was poured over a clay core and decorated with threads of colored glass. During the first century AD, Rome became the center of glassmaking, and the invention of blown glass led to new methods, including free-blown glass, which could be decorated by pinching, rolling, or dragging the surface, and mold-blown glass, in which the molten glass was blown into a terra-cotta mold. The Romans also developed stratified glass, in which different colored canes were fused together and blown <b>[see 1929.8.147.1, 1929.8.147.2]</b>, and millefiori glass (Italian for “one-thousand flowers”), in which colored strips of glass were joined together into a rod, cut into slices, and fused into bowls and cups <b>[see 1929.8.147.13, 1929.8.157.9]</b>. Many glass vessels were buried in the tombs of wealthy Romans and this contact with damp soil over hundreds of years caused the surface of the glass to deteriorate and become iridescent <b>[see 1929.8.147.37, 1929.8.157.22]</b>."
+              }
+            ],
+            "setName": [
+              {
+                "label": "See more items in",
+                "content": "Smithsonian American Art Museum Collection"
+              },
+              {
+                "label": "Department",
+                "content": "Decorative Arts"
+              },
+              {
+                "label": "On View",
+                "content": "Smithsonian American Art Museum, Luce Foundation Center, 4th Floor, 52A"
+              },
+              {
+                "label": "On View",
+                "content": "Smithsonian American Art Museum, Luce Foundation Center"
+              },
+              {
+                "label": "On View",
+                "content": "Smithsonian American Art Museum, Luce Foundation Center, 4th Floor"
+              }
+            ],
+            "creditLine": [
+              {
+                "label": "Credit Line",
+                "content": "Smithsonian American Art Museum, Gift of John Gellatly"
+              }
+            ],
+            "dataSource": [
+              {
+                "label": "Data Source",
+                "content": "Smithsonian American Art Museum"
+              }
+            ],
+            "identifier": [
+              {
+                "label": "Object number",
+                "content": "1929.8.174.17"
+              }
+            ],
+            "objectType": [
+              {
+                "label": "Type",
+                "content": "Decorative Arts-Glass"
+              }
+            ],
+            "objectRights": [
+              {
+                "label": "Restrictions & Rights",
+                "content": "CC0"
+              }
+            ],
+            "physicalDescription": [
+              {
+                "label": "Medium",
+                "content": "glass"
+              }
+            ]
+          },
+          "indexedStructured": {
+            "exhibition": [
+              {
+                "building": "SAAM"
+              }
+            ],
+            "usage_flag": [
+              "permcoll"
+            ],
+            "object_type": [
+              "Decorative arts"
+            ],
+            "onPhysicalExhibit": [
+              "Yes"
+            ],
+            "online_media_type": [
+              "Images"
+            ]
+          },
+          "descriptiveNonRepeating": {
+            "guid": "http://n2t.net/ark:/65665/vk787cc9112-ff22-44e8-8310-81df76471a47",
+            "title": {
+              "label": "Title",
+              "content": "Vase"
+            },
+            "record_ID": "saam_1929.8.174.17",
+            "unit_code": "SAAM",
+            "title_sort": "VASE",
+            "data_source": "Smithsonian American Art Museum",
+            "record_link": "https://americanart.si.edu/collections/search/artwork/?id=30928",
+            "online_media": {
+              "media": [
+                {
+                  "id": "media:SAAM-1929.8.174.17_1",
+                  "guid": "http://n2t.net/ark:/65665/bj990ee00c6-a438-4e51-8309-99306e470d56",
+                  "type": "Images",
+                  "idsId": "SAAM-1929.8.174.17_1",
+                  "usage": {
+                    "access": "CC0"
+                  },
+                  "width": 2777,
+                  "height": 3520,
+                  "content": "https://ids.si.edu/ids/deliveryService?id=SAAM-1929.8.174.17_1",
+                  "maxsize": 3000,
+                  "thumbnail": "https://ids.si.edu/ids/deliveryService?id=SAAM-1929.8.174.17_1",
+                  "altTextAccessibility": "",
+                  "extDescrAccessibility": "",
+                  "resources": [
+                    {
+                      "label": "High-resolution TIFF",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1929.8.174.17_1.tif",
+                      "width": 2367,
+                      "height": 3000,
+                      "dimensions": "2367x3000"
+                    },
+                    {
+                      "label": "High-resolution JPEG",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1929.8.174.17_1.jpg",
+                      "width": 2367,
+                      "height": 3000,
+                      "dimensions": "2367x3000"
+                    },
+                    {
+                      "label": "Screen Image",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1929.8.174.17_1_screen"
+                    },
+                    {
+                      "label": "Thumbnail Image",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1929.8.174.17_1_thumb"
+                    }
+                  ]
+                }
+              ],
+              "mediaCount": 1
+            },
+            "metadata_usage": {
+              "access": "CC0"
+            }
+          }
+        },
+        "hash": "0b668049da5b1fa846e06eec1e7a89c90f38e3ca",
+        "docSignature": "8be9be3b6a249cc0753a364e42894a76",
+        "timestamp": "1663786513",
+        "lastTimeUpdated": "1792838601",
+        "version": "1792833858"
+      },
+      {
+        "id": "ld1-1643381040022-1643381059102-0",
+        "title": "Vase",
+        "unitCode": "SAAM",
+        "type": "edanmdm",
+        "url": "edanmdm:saam_1929.8.157.44",
+        "content": {
+          "freetext": {
+            "name": [
+              {
+                "label": "Artist",
+                "content": "Unidentified (Roman)"
+              }
+            ],
+            "notes": [
+              {
+                "label": "Luce Center Label",
+                "content": "Most of the glass vessels in this case date from the first century BC to the fourth century AD. Early glass vessels were made in the Middle East and Egypt using the core-forming technique, in which molten glass was poured over a clay core and decorated with threads of colored glass. During the first century AD, Rome became the center of glassmaking, and the invention of blown glass led to new methods, including free-blown glass, which could be decorated by pinching, rolling, or dragging the surface, and mold-blown glass, in which the molten glass was blown into a terra-cotta mold. The Romans also developed stratified glass, in which different colored canes were fused together and blown <b>[see 1929.8.147.1, 1929.8.147.2]</b>, and millefiori glass (Italian for “one-thousand flowers”), in which colored strips of glass were joined together into a rod, cut into slices, and fused into bowls and cups <b>[see 1929.8.147.13, 1929.8.157.9]</b>. Many glass vessels were buried in the tombs of wealthy Romans and this contact with damp soil over hundreds of years caused the surface of the glass to deteriorate and become iridescent <b>[see 1929.8.147.37, 1929.8.157.22]</b>."
+              }
+            ],
+            "setName": [
+              {
+                "label": "See more items in",
+                "content": "Smithsonian American Art Museum Collection"
+              },
+              {
+                "label": "Department",
+                "content": "Decorative Arts"
+              },
+              {
+                "label": "On View",
+                "content": "Smithsonian American Art Museum, Luce Foundation Center, 4th Floor, 52A"
+              },
+              {
+                "label": "On View",
+                "content": "Smithsonian American Art Museum, Luce Foundation Center"
+              },
+              {
+                "label": "On View",
+                "content": "Smithsonian American Art Museum, Luce Foundation Center, 4th Floor"
+              }
+            ],
+            "creditLine": [
+              {
+                "label": "Credit Line",
+                "content": "Smithsonian American Art Museum, Gift of John Gellatly"
+              }
+            ],
+            "dataSource": [
+              {
+                "label": "Data Source",
+                "content": "Smithsonian American Art Museum"
+              }
+            ],
+            "identifier": [
+              {
+                "label": "Object number",
+                "content": "1929.8.157.44"
+              }
+            ],
+            "objectType": [
+              {
+                "label": "Type",
+                "content": "Decorative Arts-Glass"
+              }
+            ],
+            "objectRights": [
+              {
+                "label": "Restrictions & Rights",
+                "content": "CC0"
+              }
+            ],
+            "physicalDescription": [
+              {
+                "label": "Medium",
+                "content": "glass"
+              }
+            ]
+          },
+          "indexedStructured": {
+            "exhibition": [
+              {
+                "building": "SAAM"
+              }
+            ],
+            "usage_flag": [
+              "permcoll"
+            ],
+            "object_type": [
+              "Decorative arts"
+            ],
+            "onPhysicalExhibit": [
+              "Yes"
+            ],
+            "online_media_type": [
+              "Images"
+            ]
+          },
+          "descriptiveNonRepeating": {
+            "guid": "http://n2t.net/ark:/65665/vk7e704dedc-22ee-4386-9409-cdac965c865d",
+            "title": {
+              "label": "Title",
+              "content": "Vase"
+            },
+            "record_ID": "saam_1929.8.157.44",
+            "unit_code": "SAAM",
+            "title_sort": "VASE",
+            "data_source": "Smithsonian American Art Museum",
+            "record_link": "https://americanart.si.edu/collections/search/artwork/?id=30882",
+            "online_media": {
+              "media": [
+                {
+                  "id": "media:SAAM-1929.8.157.44_1",
+                  "guid": "http://n2t.net/ark:/65665/bj9ac55bc68-1b66-4b2c-941e-06b6b7c5d471",
+                  "type": "Images",
+                  "idsId": "SAAM-1929.8.157.44_1",
+                  "usage": {
+                    "access": "CC0"
+                  },
+                  "width": 2090,
+                  "height": 3840,
+                  "content": "https://ids.si.edu/ids/deliveryService?id=SAAM-1929.8.157.44_1",
+                  "maxsize": 3000,
+                  "thumbnail": "https://ids.si.edu/ids/deliveryService?id=SAAM-1929.8.157.44_1",
+                  "altTextAccessibility": "",
+                  "extDescrAccessibility": "",
+                  "resources": [
+                    {
+                      "label": "High-resolution TIFF",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1929.8.157.44_1.tif",
+                      "width": 1633,
+                      "height": 3000,
+                      "dimensions": "1633x3000"
+                    },
+                    {
+                      "label": "High-resolution JPEG",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1929.8.157.44_1.jpg",
+                      "width": 1633,
+                      "height": 3000,
+                      "dimensions": "1633x3000"
+                    },
+                    {
+                      "label": "Screen Image",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1929.8.157.44_1_screen"
+                    },
+                    {
+                      "label": "Thumbnail Image",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1929.8.157.44_1_thumb"
+                    }
+                  ]
+                }
+              ],
+              "mediaCount": 1
+            },
+            "metadata_usage": {
+              "access": "CC0"
+            }
+          }
+        },
+        "hash": "0b68caa01e50170fdbe6f7cb0dab964c4b8bac53",
+        "docSignature": "47ebb3b4349880de4967245b51b20103",
+        "timestamp": "1663786513",
+        "lastTimeUpdated": "1792838601",
+        "version": "1792833858"
+      },
+      {
+        "id": "ld1-1643381040022-1643381059122-0",
+        "title": "Bowl",
+        "unitCode": "SAAM",
+        "type": "edanmdm",
+        "url": "edanmdm:saam_1929.8.170.41",
+        "content": {
+          "freetext": {
+            "name": [
+              {
+                "label": "Artist",
+                "content": "Unidentified"
+              }
+            ],
+            "topic": [
+              {
+                "label": "Topic",
+                "content": "Object\\other\\dish"
+              }
+            ],
+            "setName": [
+              {
+                "label": "See more items in",
+                "content": "Smithsonian American Art Museum Collection"
+              },
+              {
+                "label": "Department",
+                "content": "Decorative Arts"
+              }
+            ],
+            "creditLine": [
+              {
+                "label": "Credit Line",
+                "content": "Smithsonian American Art Museum, Gift of John Gellatly"
+              }
+            ],
+            "dataSource": [
+              {
+                "label": "Data Source",
+                "content": "Smithsonian American Art Museum"
+              }
+            ],
+            "identifier": [
+              {
+                "label": "Object number",
+                "content": "1929.8.170.41"
+              }
+            ],
+            "objectType": [
+              {
+                "label": "Type",
+                "content": "Decorative Arts"
+              }
+            ],
+            "objectRights": [
+              {
+                "label": "Restrictions & Rights",
+                "content": "CC0"
+              }
+            ],
+            "physicalDescription": [
+              {
+                "label": "Medium",
+                "content": "glass"
+              }
+            ]
+          },
+          "indexedStructured": {
+            "topic": [
+              "Dish"
+            ],
+            "usage_flag": [
+              "permcoll"
+            ],
+            "object_type": [
+              "Decorative arts"
+            ],
+            "online_media_type": [
+              "Images"
+            ]
+          },
+          "descriptiveNonRepeating": {
+            "guid": "http://n2t.net/ark:/65665/vk711bbd24e-ced1-4081-beea-3b92509400a8",
+            "title": {
+              "label": "Title",
+              "content": "Bowl"
+            },
+            "record_ID": "saam_1929.8.170.41",
+            "unit_code": "SAAM",
+            "title_sort": "BOWL",
+            "data_source": "Smithsonian American Art Museum",
+            "record_link": "https://americanart.si.edu/collections/search/artwork/?id=30912",
+            "online_media": {
+              "media": [
+                {
+                  "id": "media:SAAM-1929.8.170.41_1",
+                  "guid": "http://n2t.net/ark:/65665/bj9af209a31-a758-4015-be6d-a74739560829",
+                  "type": "Images",
+                  "idsId": "SAAM-1929.8.170.41_1",
+                  "usage": {
+                    "access": "CC0"
+                  },
+                  "width": 5120,
+                  "height": 4203,
+                  "content": "https://ids.si.edu/ids/deliveryService?id=SAAM-1929.8.170.41_1",
+                  "maxsize": 3000,
+                  "thumbnail": "https://ids.si.edu/ids/deliveryService?id=SAAM-1929.8.170.41_1",
+                  "altTextAccessibility": "",
+                  "extDescrAccessibility": "",
+                  "resources": [
+                    {
+                      "label": "High-resolution TIFF",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1929.8.170.41_1.tif",
+                      "width": 3000,
+                      "height": 2463,
+                      "dimensions": "3000x2463"
+                    },
+                    {
+                      "label": "High-resolution JPEG",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1929.8.170.41_1.jpg",
+                      "width": 3000,
+                      "height": 2463,
+                      "dimensions": "3000x2463"
+                    },
+                    {
+                      "label": "Screen Image",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1929.8.170.41_1_screen"
+                    },
+                    {
+                      "label": "Thumbnail Image",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1929.8.170.41_1_thumb"
+                    }
+                  ]
+                }
+              ],
+              "mediaCount": 1
+            },
+            "metadata_usage": {
+              "access": "CC0"
+            }
+          }
+        },
+        "hash": "0dab96b82dbe0040b4f2fa90660e1389d2a0f637",
+        "docSignature": "f580ea1516f5a0e8e550e5e716c36924",
+        "timestamp": "1663786513",
+        "lastTimeUpdated": "1792838601",
+        "version": "1792833858"
+      },
+      {
+        "id": "ld1-1643381040022-1643381059110-0",
+        "title": "Bowl",
+        "unitCode": "SAAM",
+        "type": "edanmdm",
+        "url": "edanmdm:saam_1929.8.170.11",
+        "content": {
+          "freetext": {
+            "name": [
+              {
+                "label": "Artist",
+                "content": "Unidentified"
+              }
+            ],
+            "notes": [
+              {
+                "label": "Luce Center Label",
+                "content": "Most of the glass vessels in this case date from the first century BC to the fourth century AD. Early glass vessels were made in the Middle East and Egypt using the core-forming technique, in which molten glass was poured over a clay core and decorated with threads of colored glass. During the first century AD, Rome became the center of glassmaking, and the invention of blown glass led to new methods, including free-blown glass, which could be decorated by pinching, rolling, or dragging the surface, and mold-blown glass, in which the molten glass was blown into a terra-cotta mold. The Romans also developed stratified glass, in which different colored canes were fused together and blown <b>[see 1929.8.147.1, 1929.8.147.2]</b>, and millefiori glass (Italian for “one-thousand flowers”), in which colored strips of glass were joined together into a rod, cut into slices, and fused into bowls and cups <b>[see 1929.8.147.13, 1929.8.157.9]</b>. Many glass vessels were buried in the tombs of wealthy Romans and this contact with damp soil over hundreds of years caused the surface of the glass to deteriorate and become iridescent <b>[see 1929.8.147.37, 1929.8.157.22]</b>."
+              }
+            ],
+            "setName": [
+              {
+                "label": "See more items in",
+                "content": "Smithsonian American Art Museum Collection"
+              },
+              {
+                "label": "Department",
+                "content": "Decorative Arts"
+              },
+              {
+                "label": "On View",
+                "content": "Smithsonian American Art Museum, Luce Foundation Center, 4th Floor, 52A"
+              },
+              {
+                "label": "On View",
+                "content": "Smithsonian American Art Museum, Luce Foundation Center"
+              },
+              {
+                "label": "On View",
+                "content": "Smithsonian American Art Museum, Luce Foundation Center, 4th Floor"
+              }
+            ],
+            "creditLine": [
+              {
+                "label": "Credit Line",
+                "content": "Smithsonian American Art Museum, Gift of John Gellatly"
+              }
+            ],
+            "dataSource": [
+              {
+                "label": "Data Source",
+                "content": "Smithsonian American Art Museum"
+              }
+            ],
+            "identifier": [
+              {
+                "label": "Object number",
+                "content": "1929.8.170.11"
+              }
+            ],
+            "objectType": [
+              {
+                "label": "Type",
+                "content": "Decorative Arts"
+              }
+            ],
+            "objectRights": [
+              {
+                "label": "Restrictions & Rights",
+                "content": "CC0"
+              }
+            ],
+            "physicalDescription": [
+              {
+                "label": "Medium",
+                "content": "glass"
+              }
+            ]
+          },
+          "indexedStructured": {
+            "exhibition": [
+              {
+                "building": "SAAM"
+              }
+            ],
+            "usage_flag": [
+              "permcoll"
+            ],
+            "object_type": [
+              "Decorative arts"
+            ],
+            "onPhysicalExhibit": [
+              "Yes"
+            ],
+            "online_media_type": [
+              "Images"
+            ]
+          },
+          "descriptiveNonRepeating": {
+            "guid": "http://n2t.net/ark:/65665/vk7fd2f5395-f112-4d2a-8143-e8c8663031c6",
+            "title": {
+              "label": "Title",
+              "content": "Bowl"
+            },
+            "record_ID": "saam_1929.8.170.11",
+            "unit_code": "SAAM",
+            "title_sort": "BOWL",
+            "data_source": "Smithsonian American Art Museum",
+            "record_link": "https://americanart.si.edu/collections/search/artwork/?id=30896",
+            "online_media": {
+              "media": [
+                {
+                  "id": "media:SAAM-1929.8.170.11_1",
+                  "guid": "http://n2t.net/ark:/65665/bj9ea11d16f-34be-48c9-bbef-89e7f5577ecd",
+                  "type": "Images",
+                  "idsId": "SAAM-1929.8.170.11_1",
+                  "usage": {
+                    "access": "CC0"
+                  },
+                  "width": 3840,
+                  "height": 2553,
+                  "content": "https://ids.si.edu/ids/deliveryService?id=SAAM-1929.8.170.11_1",
+                  "maxsize": 3000,
+                  "thumbnail": "https://ids.si.edu/ids/deliveryService?id=SAAM-1929.8.170.11_1",
+                  "altTextAccessibility": "",
+                  "extDescrAccessibility": "",
+                  "resources": [
+                    {
+                      "label": "High-resolution TIFF",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1929.8.170.11_1.tif",
+                      "width": 3000,
+                      "height": 1995,
+                      "dimensions": "3000x1995"
+                    },
+                    {
+                      "label": "High-resolution JPEG",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1929.8.170.11_1.jpg",
+                      "width": 3000,
+                      "height": 1995,
+                      "dimensions": "3000x1995"
+                    },
+                    {
+                      "label": "Screen Image",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1929.8.170.11_1_screen"
+                    },
+                    {
+                      "label": "Thumbnail Image",
+                      "url": "https://ids.si.edu/ids/download?id=SAAM-1929.8.170.11_1_thumb"
+                    }
+                  ]
+                }
+              ],
+              "mediaCount": 1
+            },
+            "metadata_usage": {
+              "access": "CC0"
+            }
+          }
+        },
+        "hash": "0dbc73dab19d97ae73c7ae8d11739775e67318fb",
+        "docSignature": "e384f1a6e27718d93d4a5559128c8a0b",
+        "timestamp": "1663786513",
+        "lastTimeUpdated": "1792838601",
+        "version": "1792833858"
+      }
+    ],
+    "facets": {},
+    "rowCount": 13017,
+    "message": "content found"
+  }
+}

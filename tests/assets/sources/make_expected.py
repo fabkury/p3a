@@ -98,7 +98,7 @@ def klipy(name: str, webp: bool) -> None:
     print(name, suffix, len(page["data"]), "items,", len(lines), "records")
 
 
-KEY = re.compile(r"^[0-9A-Za-z._~-]{1,95}$")
+KEY = re.compile(r"^[0-9A-Za-z._~:-]{1,95}$")
 
 
 def fitted(width, height) -> tuple:
@@ -181,7 +181,38 @@ def mia(name: str) -> None:
     museum(name, len(hits), len(hits) >= 50, records)
 
 
+def ham(name: str) -> None:
+    d = json.loads((HERE / f"{name}.json").read_bytes())
+    prefix = "https://nrs.harvard.edu/"
+    records = [(r["primaryimageurl"][len(prefix):], 0, 0) for r in d["records"]
+               if isinstance(r.get("primaryimageurl"), str) and r["primaryimageurl"].startswith(prefix)]
+    info = d.get("info", {})
+    museum(name, len(d["records"]), bool(d["records"]) and info.get("page", 0) < info.get("pages", 0), records)
+
+
+def si(name: str) -> None:
+    d = json.loads((HERE / f"{name}.json").read_bytes())
+    rows = d["response"]["rows"]
+
+    def text_size(v):  # a number, or a number as text
+        if isinstance(v, int) and not isinstance(v, bool):
+            return v
+        return int(v) if isinstance(v, str) and v.isdigit() else 0
+
+    records = []
+    for row in rows:
+        media = row.get("content", {}).get("descriptiveNonRepeating", {}).get("online_media", {}).get("media")
+        first = media[0] if isinstance(media, list) and media else media
+        if isinstance(first, dict) and isinstance(first.get("idsId"), str):
+            records.append((first["idsId"], text_size(first.get("width")), text_size(first.get("height"))))
+    museum(name, len(rows), len(rows) >= 50, records)
+
+
 if __name__ == "__main__":
+    for listing in ("ham_classification_p1", "ham_classification_p3", "ham_empty"):
+        ham(listing)
+    for listing in ("si_unit_p1", "si_empty"):
+        si(listing)
     for listing in ("wellcome_worktype_p1", "wellcome_empty"):
         wellcome(listing)
     for listing in ("cma_department_p1", "cma_type_p2", "cma_empty"):

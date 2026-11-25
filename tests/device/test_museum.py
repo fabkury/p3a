@@ -26,7 +26,11 @@ CHANNELS = [
     ("wellcome", "wellcome:workType", "k", 720),         # pictures
     ("cma", "cma:department", "Drawings", 1400),         # no IIIF: one fixed "web" size
     ("mia", "mia:classification", "Paintings", 800),     # no IIIF: the 800-pixel bucket
+    ("ham", "ham:classification", "26", 720),            # paintings; needs Harvard's key
+    ("si", "si:unit", "SAAM", 720),                      # the American Art Museum; needs the Smithsonian's key
 ]
+# museum -> (the setting its key goes in, the key's name in the secrets file)
+KEYS = {"ham": ("harvard_api_key", "ham_api_key"), "si": ("smithsonian_api_key", "si_api_key")}
 
 
 def playset(kind: str, term: str, offset: int = RUN) -> dict:
@@ -38,10 +42,12 @@ def playset(kind: str, term: str, offset: int = RUN) -> dict:
 def rig(bring_up):
     uart = bring_up[0]
     r = Rig(uart, Api(lab.provision(uart)["ip"]))
-    uart.command("settings set", {"museum_cache_size": 32, "dwell_s": 600})
+    uart.command("settings set", {"museum_cache_size": 32, "dwell_s": 600, "harvard_api_key": "",
+                                  "smithsonian_api_key": ""})
     yield r
     uart.command("sched activate", LOCAL_ONLY)
-    uart.command("settings set", {"museum_cache_size": 1024, "dwell_s": 30})
+    uart.command("settings set", {"museum_cache_size": 1024, "dwell_s": 30, "harvard_api_key": "",
+                                  "smithsonian_api_key": ""})
     uart.command("library evict 1000000000000 0 -", timeout=120)
 
 
@@ -53,6 +59,23 @@ def channel(status):
 def test_a_museums_channel_is_listed_fetched_and_played(rig, museum, kind, term, longest):
     before = rig.status()
     assert rig.uart.command("sched activate", playset(kind, term)) == {"result": "ok"}
+    if museum in KEYS:
+        setting, secret = KEYS[museum]
+        # Without its key the channel says so and the museum is not asked.
+        status = rig.wait("refused for want of a key", lambda s: s["playset"] == "Museum test"
+                          and channel(s)["listings"] >= 1 and channel(s)["state"] != "listing", timeout=30)
+        assert channel(status)["error"] == "NO_KEY" and channel(status)["state"] == "failed"
+        # A key the museum does not know is told apart from no key at all.
+        listings = channel(status)["listings"]
+        rig.uart.command("settings set", {setting: "00000000-0000-0000-0000-000000000000"})
+        status = rig.wait("the museum refused it", lambda s: channel(s)["listings"] > listings
+                          and channel(s)["state"] != "listing", timeout=60)
+        assert channel(status)["error"] == "AUTH", channel(status)
+        # The right key: saving it lists the channel by itself.
+        listings = channel(status)["listings"]
+        rig.uart.command("settings set", {setting: lab.load_secrets()["api_keys"][secret]})
+        rig.wait("listed with the key", lambda s: channel(s)["listings"] > listings and channel(s)["state"] != "listing",
+                 timeout=90)
     status = rig.wait("listed", lambda s: s["playset"] == "Museum test" and channel(s)["listings"] >= 1
                       and channel(s)["state"] != "listing", timeout=90)
     ch = channel(status)
@@ -69,6 +92,9 @@ def test_a_museums_channel_is_listed_fetched_and_played(rig, museum, kind, term,
     assert max(width, height) >= 300, "and not a thumbnail"
     shown = rig.api.get("/api/v2/player").data["current"]
     assert shown["source"] == "museum" and shown["format"] == "jpg" and shown["id"] == status["current"]
+    if museum in KEYS:
+        lines = rig.api.get("/api/v2/test/log").body
+        assert lab.load_secrets()["api_keys"][KEYS[museum][1]].encode() not in lines, "the key is in no log line"
 
 
 def test_a_museum_or_an_axis_this_firmware_lacks_is_the_channels_error(rig):

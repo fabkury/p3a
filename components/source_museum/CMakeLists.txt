@@ -4,7 +4,9 @@
 # pure file.
 idf_component_register(
     SRCS "museum_cma.c"
+         "museum_ham.c"
          "museum_mia.c"
+         "museum_si.c"
          "museum_smk.c"
          "museum_util.c"
          "museum_vam.c"

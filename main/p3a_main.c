@@ -24,6 +24,7 @@
 #include "source_giphy.h"
 #include "source_klipy.h"
 #include "source_local.h"
+#include "source_makapix.h"
 #include "source_museum.h"
 #include "source_pinned.h"
 #include "p3a_pins.h"
@@ -275,6 +276,7 @@ void app_main(void)
     boot_step("giphy source", source_giphy_start());
     boot_step("klipy source", source_klipy_start());
     boot_step("museum source", source_museum_start());
+    boot_step("makapix source", source_makapix_start());
 #if CONFIG_P3A_TEST_HOOKS
     p3a_test_sources_register();  // before the scheduler reads a playset that may name them
 #endif

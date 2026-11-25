@@ -98,6 +98,58 @@ def klipy(name: str, webp: bool) -> None:
     print(name, suffix, len(page["data"]), "items,", len(lines), "records")
 
 
+# --- Makapix -------------------------------------------------------------------------
+
+UUID = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+STAMP = re.compile(r"^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)(\.\d+)?(Z|\+00:00)$")
+MAKAPIX_FORMATS = {"webp": 1, "gif": 2, "png": 3, "bmp": 5}
+
+
+def stamp(text) -> int:
+    m = STAMP.match(text or "")
+    if not m:
+        return 0
+    return calendar.timegm(tuple(map(int, m.groups()[:6])))
+
+
+def makapix(name: str, promoted: bool) -> None:
+    """A page of either kind: the public feed ("items") or the player's own question ("posts").
+
+    makapix_rpc_written.json was written by hand from the server's schema, because the player's
+    question needs a registered player's token; replace it with a recorded answer when there is one.
+    """
+    import hashlib
+    page = json.loads((HERE / f"{name}.json").read_bytes())
+    posts = page["posts"] if "posts" in page else page["items"]
+    lines = []
+    for post in posts:
+        number = post.get("post_id", post.get("id"))
+        key = post.get("storage_key") or ""
+        ending = (post.get("art_url") or "").split("?")[0].rsplit("/", 1)[-1].rpartition(".")
+        fmt = MAKAPIX_FORMATS.get(ending[2] if ending[1] else "") or MAKAPIX_FORMATS.get(post.get("native_format"))
+        if post.get("kind", "artwork") != "artwork" or not isinstance(number, int) or number < 1 \
+                or not UUID.match(key) or not fmt:
+            continue
+        key = key.lower()
+        at = (stamp(post.get("promoted_at")) if promoted else 0) or stamp(post.get("listed_at")) \
+            or stamp(post.get("created_at"))
+        digest = hashlib.sha256(key.encode()).digest()
+        ext = {v: k for k, v in MAKAPIX_FORMATS.items()}[fmt]
+        url = f"https://vault.makapix.club/{digest[0] & 0x3F:02x}/{digest[1] & 0x3F:02x}/{key}.{ext}"
+        # Where the service itself says the file is (the device works it out from the key).
+        said = post.get("art_url") or ""
+        if said.endswith("." + ext) and name != "makapix_rpc_written":
+            assert said == url, (said, url)
+        lines.append(f"{number} {key} {fmt} {at} {stamp(post.get('artwork_modified_at'))} "
+                     f"{post.get('width') or 0} {post.get('height') or 0} {digest.hex()} {url}")
+    cursor = page.get("next_cursor") or ""
+    more = bool(cursor) and ("items" in page or page.get("has_more") is True)
+    suffix = "promoted" if promoted else "listed"
+    head = f"{len(posts)} {1 if more else 0} {cursor or '-'}"
+    (HERE / f"{name}.{suffix}.expected").write_text(head + "\n" + "\n".join(lines) + "\n", newline="\n")
+    print(name, suffix, len(posts), "posts,", len(lines), "records")
+
+
 KEY = re.compile(r"^[0-9A-Za-z._~:-]{1,95}$")
 
 
@@ -244,6 +296,9 @@ if __name__ == "__main__":
         vam(listing)
     for listing in ("smk_collection_p1", "smk_empty"):
         smk(listing)
+    for listing in ("makapix_promoted_p1", "makapix_promoted_p2", "makapix_rpc_written"):
+        makapix(listing, True)
+        makapix(listing, False)
     for listing in ("klipy_gifs_trending", "klipy_stickers_search", "klipy_gifs_item"):
         klipy(listing, False)
         klipy(listing, True)

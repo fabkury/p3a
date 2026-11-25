@@ -149,13 +149,13 @@ def test_an_artwork_that_fails_costs_nothing_and_leaves_the_last_one_playing(rig
 def test_the_active_playset_is_resumed_after_a_restart(rig):
     for name, (source, *_rest) in FILES.items():
         rig.put(name, (CORPUS / "good" / source).read_bytes())
-    mix = {"name": "Restart mix", "channels": [{"source": "makapix", "kind": "all", "weight": 5},
+    mix = {"name": "Restart mix", "channels": [{"source": "makapix", "kind": "no-such-kind", "weight": 5},
                                                {"source": "local", "weight": 1}]}
     assert rig.uart.command("sched activate", mix) == {"result": "ok"}
     status = rig.wait("the new playset is playing",
                       lambda s: s["playset"] == "Restart mix" and s["channels"][1]["state"] == "ready" and s["playing"]
-                      and not s["loading"])
-    assert status["channels"][0]["state"] == "no_source", "a source this firmware lacks is passed over, not an error"
+                      and not s["loading"] and s["channels"][0]["state"] == "failed")
+    assert status["channels"][0]["error"] == "ESP_ERR_NOT_SUPPORTED", "a channel that cannot be listed is passed over"
     assert status["channels"][0]["source"] == "makapix" and status["current"] in FILES
 
     start = rig.uart.mark()

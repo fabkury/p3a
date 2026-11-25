@@ -137,6 +137,10 @@ All in `components/p3a_util`; each header explains itself at the top.
   `pinned`, and each record in it is still its own source's artwork.
   Code that changes a list goes through `p3a_pins_*`; who needs to know
   subscribes to `P3A_EVENT_PINS_CHANGED`.
+- **Makapix is asked over HTTPS** (`makapix_rpc()`, D80): a channel's
+  listing, a reaction, a playset. MQTT is for commands, presence and
+  views. The player's key, token and certificates are never logged and
+  never given out by the API.
 - **A source is a `p3a_source_ops_t` table** (`p3a_source.h`) registered at
   boot. Code outside a source never names one: it asks
   `p3a_source_get()` and calls through the table. Adding a source is adding

@@ -10,7 +10,7 @@ times.
 |---|---|
 | Phase | 4, remote sources (Phases 0 to 3 complete but for their manual checks) |
 | Current milestone | M4.5 Makapix |
-| Next action | M4.5. Read PLAN.md M4.5, the Makapix rows of PARITY.md, O15, `docs/reference/` (the MQTT protocol and the player API), and in `legacy/`: `components/makapix*`, `p3a_core/p3a_reaction_dispatcher.c`, `p3a_current_post.c`, and what the deletion log says was left for M4.5 (`makapix_show_artwork`, `player_commands`). Build: the Makapix source (`source_makapix`: registration and its own NVS namespace, MQTT, listing a channel into records, `url`, `react` for likes), the commands a Makapix message can give as the same calls the HTTP player API makes (next, back, show, show URL through `play_scheduler_show_url`, playsets), and view reporting off the player's `shown`. A Makapix artwork pins like any other (M4.4); check it on the device |
+| Next action | M4.5 part 2: registration. From the two digests' facts (in the part 1 log entry and `makapix_parse.h`): `POST /api/player/provision` (201: `player_key`, `registration_code`, expiry, broker), then `GET /api/player/{key}/credentials` every 3 s until 200 (404 means not yet), all held in memory until the three PEMs arrive, then `makapix_store_save()`. Pure parsers for both answers in `makapix_parse.c` with host tests; the flow as one long-lived task or a job in `source_makapix`; the code on `P3A_SCREEN_REGISTRATION` through `p3a_ui_hooks.h`; `POST /api/v2/makapix/register`, `DELETE /api/v2/makapix/registration`, state in `GET /api/v2/makapix`. Then Fab registers the dev unit (D13: this is the one manual step; build everything else first). Part 3: MQTT for commands, presence and views only (D80), the commands as the scheduler's calls (a handler `p3a_net` registers), reactions over `makapix_rpc()`, view reports off `shown`. Part 4: certificate renewal |
 | Blocked on | Nothing |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -55,7 +55,7 @@ reopened (why).
 | M4.2 Giphy and Klipy | done 2026-11-25. Tiers: host tests (35 programs), device tests (the whole suite: 309 passed, 6 skipped), CI, test, release and trace builds. Manual: M4.2-a. Not verified: listed in the log entries of 2026-11-25. O6 (the services' own marks) stays open and holds nothing |
 | M4.3 Museums | done 2026-11-25. Tiers: host tests (36 programs, also under the sanitizers), device tests (the whole suite on the last build: 322 passed, 6 skipped), CI, test, release and trace builds. Manual: none. Not verified: listed in the log entries of 2026-11-25. O20 (what p3a tells the museums it is) stays open and holds nothing |
 | M4.4 Pinned lists and "show this" | done 2026-11-25. Tiers: host tests (38 programs, also under the sanitizers), device tests (the whole suite: 330 passed, 6 skipped; the pin tests again on the last build), test, release and trace builds. Manual: M4.4-a. Not verified: listed in the log entry |
-| M4.5 Makapix | not started |
+| M4.5 Makapix | in progress. Part 1 (2026-11-25): the source, the promoted channel from the public feed, the vault. Host and device tests |
 | M5.1 Embedded web UI | not started |
 | M5.2 Firmware OTA for 2.x | not started |
 | M5.3 Release engineering | not started |
@@ -195,7 +195,6 @@ and proposals are in [DECISIONS.md](DECISIONS.md) under "Open decisions".
 | O19 | How does a person tell the device its time zone? The setting is a POSIX TZ string, which nobody types. The web page could offer a list of regions, or send the browser's own zone | M5.1 |
 | O6 | May p3a ship Giphy's and Klipy's own marks, and which? The source is credited in words meanwhile (D72) | when Fab has an answer; holds nothing |
 | O20 | What should 2.0 tell the museums it is? 1.x sent "p3a/{version}" with a contact e-mail address. 2.0 sends "p3a/{version}" alone for now. Museums like a way to reach whoever runs a client; the choices are an address, the project's public page, or nothing | M4.3 ends; holds nothing |
-| O15 | Does Makapix need any server-side change for 2.0 devices? | M4.5 |
 | O1 | Exact name of the 2.x firmware asset | M5.2 |
 | O12 | OTA hardening choices | M5.2 |
 | O14 | A second board for the field test | M6.3 |
@@ -433,6 +432,69 @@ M4.3, 2026-11-25:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-25: M4.5 part 1, the Makapix source and the promoted channel
+
+- **Read first: both sides of the contract.** The 1.x client (6,300
+  lines) and the Makapix server's own source (it is on this workstation,
+  beside this repository) were each digested before any code was
+  written. The reference pages under `docs/reference/` disagree with
+  both in many places; the facts used are stated in `makapix_parse.h`,
+  `makapix_rpc.h` and `source_makapix.h`.
+- **D80: a registered player asks over HTTPS, not MQTT.** The server
+  answers the same request objects at `POST /api/player/rpc` with the
+  player's bearer token (checked in production: 401 without one). 1.x
+  published each question over MQTT and matched answers to waiters
+  through a table, with a per-channel task and a poll loop around it
+  (finding 8), a use-after-free in the table (audit H4), and a 128 KB
+  reassembly buffer whose overflow the server "fixes" by dropping posts.
+  In 2.0 a question and its answer are one `http_fetch` on the content
+  task, like every other source. MQTT is left with what only it can do:
+  commands, presence and views (part 3). O15 is answered by this: no
+  server change is needed.
+- `components/source_makapix`: `makapix_parse.c` (pure: a page of either
+  kind into records, the questions, times, storage keys, where a file
+  is), `makapix_rpc.c` (the exchange and the token: asked for when
+  missing, replaced once when refused), `makapix_store.c` (the
+  registration in NVS, nothing of it logged), `source_makapix.c` (the
+  table).
+- A channel is listed in the server's order (newest listing first;
+  newest promotion first on "promoted": the feed-bump keys), 50 posts a
+  page, paced under the server's 60 questions a minute, and stops when
+  the playset changes.
+- **Without a registration the promoted channel plays**, from the public
+  feed, as in 1.x. The feed is asked for each post's address, so a GIF
+  or PNG post is fetched as what it is: 1.x assumed WebP for every post
+  on this path.
+- A file's address is worked out from its storage key (two directory
+  levels from SHA-256 of the key), as 1.x did. The Python reading of the
+  recorded pages checks this against the address the server itself
+  gives, for every post recorded.
+- `GET /api/v2/makapix` says whether the device is registered. It does
+  not give the player's key, which 1.x's status did: with the key anyone
+  can ask Makapix for the player's token.
+- Three tests used "makapix" as a source the firmware lacks. It lacks
+  none now; they use a Makapix kind that does not exist, and expect the
+  channel to fail and be passed over.
+- Verified, host tests (`test_makapix_parse`, 7 cases; 39 programs, also
+  under gcc with ASan and UBSan): two pages recorded from the production
+  feed, and an answer to a player's question written by hand from the
+  server's schema (a registered player is needed to record one: replace
+  it then), against the Python reading; refusals told apart; times and
+  storage keys read strictly; the questions; cut and mutated answers.
+- Verified, device tests (`test_makapix.py`, 3 cases, against
+  production): the promoted channel listed (32 records), every file
+  fetched from the vault with no failure, pixel art on the panel; the
+  other channels say NO_KEY; kinds that do not exist are refused without
+  a request. Also the scheduler, player API and playset tests, which
+  changed.
+- Not verified: anything a registered player does (`makapix_rpc.c`, the
+  token's rotation, the other five channels); a listing of more than one
+  page on the device; a playlist post in a real answer.
+- Not done, and where it goes: channels other than "promoted" for a
+  device with no registration. The server lists them to anyone over
+  HTTPS (`/api/v1/post/recent`, `/hashtags/{tag}/posts`, ...), which 1.x
+  did not use. Recorded in `ideas.md`.
 
 ### 2026-11-25: M4.4, pin lists and "show this". M4.4 done
 

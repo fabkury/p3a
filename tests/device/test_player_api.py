@@ -19,7 +19,7 @@ GIF = (CORPUS / "good" / "gif" / "opaque_anim.gif").read_bytes()
 PNG = (CORPUS / "good" / "png" / "rgb.png").read_bytes()
 OURS = ["zz-api-a.gif", "zz-api-b.png", "zz api c.PNG"]
 LOCAL_ONLY = {"name": "", "channels": [{"source": "local"}]}
-MIX = {"channels": [{"source": "makapix", "kind": "promoted", "weight": 3},
+MIX = {"channels": [{"source": "makapix", "kind": "no-such-kind", "weight": 3},
                     {"source": "local", "display_name": "My files", "weight": 1}]}
 
 
@@ -131,8 +131,9 @@ def test_the_active_playset_is_set_whole_or_by_a_saved_name(api):
     assert api.call("PUT", "/api/v2/player/playset", {"name": "Direct", **MIX}).status == 200
     active = api.get("/api/v2/player/playset").data
     assert active["name"] == "Direct" and len(active["channels"]) == 2
-    state = wait_player(api, "its local channel is listed", lambda s: s["channels"][1]["state"] == "ready")
-    assert state["playset"] == "Direct" and state["channels"][0]["state"] == "no_source"
+    state = wait_player(api, "its local channel is listed, the other refused",
+                        lambda s: s["channels"][1]["state"] == "ready" and s["channels"][0]["state"] == "failed")
+    assert state["playset"] == "Direct"
 
     assert api.call("PUT", "/api/v2/playsets/Saved%20one", LOCAL_ONLY | {"name": "Saved one"}).status == 200
     assert api.call("PUT", "/api/v2/player/playset", {"saved": "Saved one"}).status == 200

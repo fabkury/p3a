@@ -151,3 +151,21 @@ series, has Cyrillic and the extra letters of Polish and Turkish and would
 be the first candidate. Arabic and Hebrew also need right-to-left layout,
 which the renderer does not do.
 
+## Added 2026-11-25
+
+### 6. Makapix channels without a registration
+
+**What.** A device that is not registered with Makapix Club plays one
+Makapix channel, "promoted", as in 1.x. The server lists the others to
+anyone over HTTPS too: everything (`/api/v1/post/recent`), a tag
+(`/api/v1/hashtags/{tag}/posts`), an artist (`/api/v1/post?owner_id=`, after
+looking the artist up), what someone liked
+(`/api/v1/user/u/{sqid}/reacted-posts`). An unregistered p3a could play all
+of them.
+
+**What it depends on.** A product decision: registration is how Makapix
+knows its players, and "register to see more" may be wanted. Technically:
+only the promoted feed accepts `fields`, so the other pages are 2 KB a
+post (100 KB a page of 50); the anonymous lists hide posts with moderated
+tags, where a registered player sees what its owner allowed; the
+liked-posts list has no storage key (it is in the address).

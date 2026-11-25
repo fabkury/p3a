@@ -174,6 +174,12 @@ p3a_host_test(test_klipy_parse
     INCLUDES ${P3A_COMPONENTS}/source_klipy ${LIBRARY}/include ${UTIL}/include ${P3A_STUBS}
     LIBS cjson)
 target_compile_definitions(test_klipy_parse PRIVATE P3A_SOURCE_ASSETS="${P3A_ROOT}/tests/assets/sources")
+p3a_host_test(test_makapix_parse
+    SOURCES sources/test_makapix_parse.c ${P3A_COMPONENTS}/source_makapix/makapix_parse.c ${LIBRARY}/p3a_record.c
+            ${UTIL}/p3a_err.c
+    INCLUDES ${P3A_COMPONENTS}/source_makapix ${LIBRARY}/include ${UTIL}/include ${P3A_STUBS}
+    LIBS cjson)
+target_compile_definitions(test_makapix_parse PRIVATE P3A_SOURCE_ASSETS="${P3A_ROOT}/tests/assets/sources")
 set(MUSEUM "${P3A_COMPONENTS}/source_museum")
 p3a_host_test(test_museums
     SOURCES sources/test_museums.c ${MUSEUM}/museum_util.c ${MUSEUM}/museum_vam.c ${MUSEUM}/museum_smk.c

@@ -342,8 +342,9 @@ The device plays the user's own files through the complete 2.0 content loop.
 ### M4.5 Makapix
 
 - From `legacy/`: MQTT over mTLS, registration, certificate renewal, status
-  publishing, the view tracker, reactions. Refresh runs on the refresh task
-  with pages arriving through a queue. MQTT commands call `player_commands`.
+  publishing, the view tracker, reactions. Refresh runs on the content
+  task, and asks over HTTPS (D80; this replaced "pages arriving through a
+  queue"). MQTT commands call the scheduler's functions (D54).
 - Closes: finding 8; audit H4, H13, M26.
 - Tests: host tests for page merge and command parsing; live device tests
   against production (D13).

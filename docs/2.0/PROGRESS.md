@@ -10,7 +10,7 @@ times.
 |---|---|
 | Phase | 4, remote sources (Phases 0 to 3 complete but for their manual checks) |
 | Current milestone | M5.1 Embedded web UI (M4.5 part 4 waits on M4.5-a) |
-| Next action | M5.1 part 2: the settings page, drawn from `GET /api/v2/settings/schema` (groups as 1.x's tabs: display, clock, playback, network, storage, makapix, giphy, klipy, museum, system), saved with `PATCH /api/v2/settings`, secrets shown masked; the Makapix tab's registration (code and countdown from `GET /api/v2/makapix`, which 1.x's page never showed), unregister; network read-outs and erase Wi-Fi; system (versions, uptime, reboot, factory reset, crash-dump warning); theme select. `components/p3a_net/static/settings.html` + `static/settings.js`, reusing `api.js`, `ui.js`, `lib.js` (add its pure parts to `lib.js` with node tests: what control a schema entry gets, validation). 1.x's page is `legacy/webui/settings.html`; what it did is in the part 1 log entry's digest notes. Then part 3: the playset editor and the museum browser (a `museums.json` shared by the page and the build, finding 19); part 4: the update page (with M5.2), the Followed pill (needs Makapix part 4), museum titles in the info panel, look at every page in a browser, delete `legacy/webui`. If Fab has registered the unit (M4.5-a), M4.5 part 4 comes first: its Next action is in the M4.5 part 3 entry |
+| Next action | M5.1 part 3: the playset editor and the museum browser. `components/p3a_net/static/playsets.html` + `static/playsets.js` on `GET/PUT/DELETE /api/v2/playsets/{name}` and `PUT /api/v2/player/playset` (2.0's playset JSON: `source`, `kind`, `identifier`, `display_name`, `weight`, `offset`; see `playset.h`), with its pure parts (default names are `channelLabel` in `lib.js`; validation; the weight bar) in a model file tested with node. 1.x's page is `legacy/webui/playset-editor.html`: list, editor with the balance bar, add-channel dialog per source (Makapix kinds with the site's public `verify-user`, `verify-hashtag`, `verify-reactions` checks; Giphy; Klipy with its 36 categories; museum through the browser; SD card; and pin lists, which 1.x could not add), reorder, save, save and play, rename, delete; its toasts were an empty function (audit H11). The museum browser: `legacy/webui/museum/*.js` moved to `static/museum/`, one shared request helper, a `museums.json` that the page loads and a build check compares with `source_museum`'s table (finding 19; `GET /api/v2/sources/museums` already says which need keys and which are unavailable), keys from `GET /api/v2/secrets/museum-keys`, the 32-character term gates and Cleveland's truncation table removed (identifiers are 95 bytes now), Rijksmuseum's 193 simultaneous requests bounded (audit M19). Then part 4: the update page (with M5.2), the Followed pill (needs M4.5 part 4), museum titles in the home page's info panel, every page looked at and clicked in a browser, `legacy/webui` deleted. If Fab has registered the unit (M4.5-a), M4.5 part 4 comes first |
 | Blocked on | M4.5 part 4 only: M4.5-a (Fab registers the dev unit with Makapix Club). Nothing else waits on it |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -56,7 +56,7 @@ reopened (why).
 | M4.3 Museums | done 2026-11-25. Tiers: host tests (36 programs, also under the sanitizers), device tests (the whole suite on the last build: 322 passed, 6 skipped), CI, test, release and trace builds. Manual: none. Not verified: listed in the log entries of 2026-11-25. O20 (what p3a tells the museums it is) stays open and holds nothing |
 | M4.4 Pinned lists and "show this" | done 2026-11-25. Tiers: host tests (38 programs, also under the sanitizers), device tests (the whole suite: 330 passed, 6 skipped; the pin tests again on the last build), test, release and trace builds. Manual: M4.4-a. Not verified: listed in the log entry |
 | M4.5 Makapix | in progress. Parts 1 to 3 (2026-11-25): the source, registration up to the owner's part, the link, commands, views, likes, renewal. Host and device tests for everything an unregistered unit can do. Waits on M4.5-a for the rest |
-| M5.1 Embedded web UI | in progress. Part 1 (2026-11-25): shared scripts, the home page, the device serving artworks to the page. Node, host and device tests |
+| M5.1 Embedded web UI | in progress. Part 1 (2026-11-25): shared scripts, the home page, the device serving artworks to the page. Part 2 (2026-11-25): the settings page from the schema. Node, host and device tests |
 | M5.2 Firmware OTA for 2.x | not started |
 | M5.3 Release engineering | not started |
 | M5.4 Documentation | not started |
@@ -443,6 +443,49 @@ M4.3, 2026-11-25:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-25: M5.1 part 2, the settings page
+
+- **Drawn from the device's schema** (`settings.html`, `static/settings.js`,
+  `static/settings-model.js`). The page holds no range, no default and no
+  list of settings: each entry of `GET /api/v2/settings/schema` gets a
+  control by its type (toggle, select, buttons, slider, number, color,
+  key, time zone, text) and is checked against the same entry before it
+  is sent. 1.x typed every limit twice and they had drifted (finding 6).
+  What the page adds is what a schema should not hold: the words of
+  help, names for some values ("4 hours" for 14400), and the layout.
+- A setting the firmware gains shows by itself, in the tab of its group;
+  one it loses is dropped. The node test reads the real `settings.json`:
+  a key the page names that the firmware lacks, an option the firmware
+  would refuse, or a default that fails the page's own check fails CI.
+- **Keys** are shown as "Key set" or not, never as themselves (D33): the
+  field is empty, typing replaces, "Remove" clears.
+- **The time zone** is picked from a list of 34 regions, with "Other" for
+  a POSIX string typed by hand. This is a working answer to O19 (a list
+  on the page); the browser's own zone cannot be turned into a POSIX
+  string without a zone database.
+- **Makapix**: the registration code and its countdown are on the page
+  too (1.x's page never showed them), with cancel, register again and
+  remove; the link's state and the certificate's end.
+- **System**: versions, uptime, the device's time, reboot (two presses),
+  factory reset (new in 2.0; typed confirmation), and the crash record
+  with its warning (D34) when there is one.
+- The clock and playback settings, which 1.x did not have or kept under
+  "Advanced", have sections of their own on the Display tab.
+- Verified, node (9 new cases, 20 in all): every visible setting placed
+  exactly once; controls by type; named options within the schema's
+  range and including the default; what is typed; the zones' syntax.
+- Verified, device test (1 new case): the page, its scripts and what it
+  draws from are served; a value for every setting; a key reads back as
+  the mask and is not in the answer's bytes.
+- Looked at: three tabs in headless Edge at phone width.
+- Not verified: any save made through the page in a browser (the calls
+  it makes are the API tests'); the registration flow on the page; the
+  other themes.
+- Not done, and where it goes: the Wi-Fi co-processor's version and the
+  board's facts on the System tab (the status call does not carry them
+  yet: add with M5.2's update page); a list of nearby networks
+  (`ideas.md` 4).
 
 ### 2026-11-25: M5.1 part 1, the home page
 

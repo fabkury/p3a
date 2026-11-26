@@ -293,7 +293,7 @@ python host/p3a-lab/lab.py provision       # name the dev unit and put it on the
 python -m pytest tests/device              # flash the test build, run every device test (18 minutes)
 python -m pytest tests/device/test_smoke.py tests/device/test_<area>.py   # a checkpoint
 cmake -S tests/host -B build-host -G Ninja; cmake --build build-host; ctest --test-dir build-host --output-on-failure
-node --test tests/web/test_lib.mjs         # the web pages' shared logic
+node --test tests/web/*.mjs                # the web pages' shared logic (PowerShell: name the files)
 python tools/check_tree.py                 # layer rule and forbidden patterns
 
 Set-Location <repo root>                   # raw idf.py: in the same command, every time

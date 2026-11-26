@@ -67,6 +67,32 @@ def test_the_home_page_and_everything_it_loads_are_served(rig):
         assert api.get(missing).status == 404, missing
 
 
+def test_the_settings_page_and_what_it_draws_itself_from_are_served(rig):
+    api = rig.api
+    page = api.get("/settings")
+    assert page.status == 200 and page.body == api.get("/settings.html").body
+    html = text(page)
+    assert "<title>p3a - Settings</title>" in html and "/static/settings.js" in html
+    for path in ("/static/settings.js", "/static/settings-model.js", "/static/settings.css"):
+        assert api.get(path).status == 200, path
+    script = text(api.get("/static/settings.js"))
+    for module in re.findall(r"from '\./([a-z-]+\.js)'", script):
+        assert api.get(f"/static/{module}").status == 200, module
+    # What the page draws from: the schema, the values with keys masked, the animations' names.
+    schema = api.get("/api/v2/settings/schema").json
+    values = api.get("/api/v2/settings").data
+    assert {s["key"] for s in schema["settings"]} == set(values), "a value for every setting, and no other"
+    assert api.get("/api/v2/ui/intro-animations").data["animations"]
+    # A key set through the page reads back as the mask, never as itself.
+    try:
+        assert api.call("PATCH", "/api/v2/settings", {"harvard_api_key": "not-a-real-key"}).status == 200
+        assert api.get("/api/v2/settings").data["harvard_api_key"] == "********"
+        assert "not-a-real-key" not in api.get("/api/v2/settings").body.decode()
+    finally:
+        api.call("PATCH", "/api/v2/settings", {"harvard_api_key": ""})
+    assert api.get("/api/v2/settings").data["harvard_api_key"] == ""
+
+
 def test_the_manifest_names_the_app_after_the_device(rig):
     reply = rig.api.get("/manifest.webmanifest")
     assert reply.status == 200 and reply.headers["content-type"] == "application/manifest+json"

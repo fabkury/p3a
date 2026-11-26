@@ -14,16 +14,15 @@ Rules (see `docs/2.0/README.md` and `AGENTS.md`):
 - When this folder is empty, it is removed, and that is a release gate for
   2.0 (milestone M6.2).
 
-What is here besides `components/` and `main/`:
+What is left (2026-11-25): the Makapix client (`components/makapix`, the
+`makapix_channel_*` files of `channel_manager`, and `p3a_core`'s current
+post and reaction dispatcher), which milestone M4.5 part 4 still reads,
+and:
 
 | File | What |
 |---|---|
-| `CMakeLists.txt` | The 1.x root project, including the release packaging and flasher build that M5.3 will draw on |
-| `partitions.csv` | The 1.x partition table |
 | `sdkconfig` | The full 1.x configuration as shipped. `tools/compare_sdkconfig.py` checks every 2.0 release build against it |
 | `sdkconfig.defaults` | The same configuration reduced to its departures from the IDF defaults (`idf.py save-defconfig`). The 2.0 `sdkconfig.defaults` was seeded from it |
-| `dependencies.lock` | The component versions 1.x was built with |
-| `flasher/` | The Windows flasher, to be brought back at M5.3 |
 | `managed_components/` | Not tracked. The downloaded 1.x dependencies, kept locally for reference |
 
 Already deleted and never to be moved: PICO-8, the dead code listed in the

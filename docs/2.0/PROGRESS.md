@@ -255,6 +255,52 @@ its own commit on `main`; nothing else of 2.0 goes there.
 What was deleted from `legacy/` without being moved, and why. Filled from
 M0.1 on.
 
+M6.2, 2026-11-25. Everything below was rewritten in 2.0 in the milestone
+named, and was left in the quarry until its features had all moved. The
+parity audit of this date is the check that they have (`PARITY.md`). 1.x's
+sources remain on `main`.
+
+- `components/play_scheduler/` (all of it): rewritten as 2.0's
+  `play_scheduler` (M2.3, M2.4, M4.1): pure core, pick, turn and history,
+  the content task. Its SWRR, LAi and refresh code were read, not moved.
+- `components/channel_manager/`, except the `makapix_channel_*` files:
+  the channel cache with its uthash tables, merge, eviction and
+  verification sweep became `p3a_library`'s index, blob store and
+  eviction (M2.2, M4.1). `psram_alloc.h` had moved earlier.
+- `components/config_store/` (all of it): the settings blob and its
+  per-source files became `p3a_settings`, generated from one schema
+  (M1.4). Every key's 1.x name is in the schema's `was` field.
+- `components/http_api/` (all of it): 7,400 lines of handlers across
+  three naming eras became `p3a_net`'s route tables under `/api/v2/`
+  (M1.5 to M5.2), each handler written with its feature.
+  `http_api_rest_debug_sd.c` is not carried over (D94).
+- `components/p3a_core/`, except `p3a_current_post` and
+  `p3a_reaction_dispatcher` (kept until M4.5 part 4): the state machine,
+  the render state and the touch router became `p3a_ui`'s model, screens
+  and `ui_route()` (M3.1 to M3.4). `fresh_boot.c` (build-time switches
+  to erase NVS and Wi-Fi) is not carried over: the lab's erase, the
+  factory reset and a release's `nvs-erased.bin` do it.
+- `components/ugfx/` and `main/ugfx_ui.c`: the uGFX graphics library
+  (264 files) and the screens drawn with it. 2.0 draws its own text and
+  screens (`ui_font`, `ui_canvas`, M3.2, M3.3).
+- `components/mem_stats/`, `components/debug_http_log/`: 2.0 has
+  `p3a_mem` (levels, the one-shot failure report) and `http_fetch`'s own
+  logging of hosts.
+- `main/` (what was left): `p3a_main.c` and `playback_service.c` (2.0's
+  `main/p3a_main.c` is the boot sequence only), `animation_player.c`
+  (rewritten at M2.1), `app_lcd_p4.c` (`p3a_board`), `app_touch.c`
+  (`ui_gesture.c`, `ui_touch.c`), `sd_format.c` (`p3a_storage_format()`
+  and `ui_card.c`), the 1.x Kconfig and manifest.
+- `CMakeLists.txt` (1.x's root project with its release packaging and
+  flasher build: `tools/make_release.py` and `host/p3a-flasher` now),
+  `partitions.csv` (1.x's table), `dependencies.lock`.
+
+Still in `legacy/`: `components/makapix`, `channel_manager`'s
+`makapix_channel_*`, and `p3a_core`'s two files about the current post
+and reactions, all for M4.5 part 4 to read; `sdkconfig` and
+`sdkconfig.defaults`, which `tools/compare_sdkconfig.py` compares every
+release build against.
+
 M5.3, 2026-11-25:
 
 - `flasher/build.ps1`: a manual PowerShell build of the flasher that
@@ -528,6 +574,13 @@ what was verified and at which tier, the commit.
   SD debug endpoints) and Q9 (`set_mirror`), still without an answer;
   the failure paths carried over on trust (SD self-repair, the stale
   index sweep, the Wi-Fi and link ladders).
+- **Afterwards, `legacy/` was emptied of what 2.0 has rewritten**: 368
+  of its 412 files, each group with its line in the deletion log. What
+  stays is what M4.5 part 4 still reads, and the 1.x configuration the
+  build check compares against. Q8 is answered by D94. `LICENSING.md`
+  still lists uGFX, DejaVu and the PICO-8 player: to rewrite for what 2.0
+  embeds.
+- Correction to the entry above: the node tests are 42 cases, not 44.
 
 ### 2026-11-25: M5.4 part 2, the rest of the documentation
 

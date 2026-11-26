@@ -103,6 +103,8 @@ def test_status_describes_the_device(api, uart, identity):
     assert data["storage"]["health"] == "ok" and data["storage"]["root"] == "/sdcard/p3a"
     assert data["storage"]["total_mb"] > 1000 and 0 < data["storage"]["free_mb"] <= data["storage"]["total_mb"]
     assert data["memory"]["level"] == "ok" and data["memory"]["free"] > 100_000
+    psram = data["memory"]["psram"]
+    assert psram["total"] > 30_000_000 and psram["min_free"] <= psram["free"] and psram["largest"] <= psram["free"]
     assert data["recovery_restarts"] == {"touch": 0, "wifi": 0, "link": 0}
     assert data["uptime_s"] >= 0 and data["reboot_needed"] is False
     assert data["coredump"]["checked"] is True

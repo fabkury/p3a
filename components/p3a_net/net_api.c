@@ -24,6 +24,7 @@
 #include "esp_chip_info.h"
 #include "esp_core_dump.h"
 #include "esp_log.h"
+#include "esp_heap_caps.h"
 #include "esp_memory_utils.h"
 #include "esp_partition.h"
 #include "esp_system.h"
@@ -154,6 +155,13 @@ static void get_status(p3a_http_request_t *req)
     cJSON_AddNumberToObject(memory, "largest", mem.largest_block);
     cJSON_AddNumberToObject(memory, "min_free", mem.min_free_bytes);
     cJSON_AddNumberToObject(memory, "total", mem.total_bytes);
+    // The numbers above are the internal pool, the one that runs short first.
+    // The external RAM holds the indices, the decoders and the frames.
+    cJSON *psram = cJSON_AddObjectToObject(memory, "psram");
+    cJSON_AddNumberToObject(psram, "free", heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+    cJSON_AddNumberToObject(psram, "largest", heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
+    cJSON_AddNumberToObject(psram, "min_free", heap_caps_get_minimum_free_size(MALLOC_CAP_SPIRAM));
+    cJSON_AddNumberToObject(psram, "total", heap_caps_get_total_size(MALLOC_CAP_SPIRAM));
 
     // What the board is. The co-processor's firmware is flashed by this one at boot.
     esp_chip_info_t chip_info;

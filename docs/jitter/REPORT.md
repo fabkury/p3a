@@ -35,6 +35,7 @@ in-scope stalls per hour as reported by `host/jitter-lab/analyze.py`
 | fixes 1–8 + Phase 6 | + yielding SD idle wait | RUN-20260830-05 | 2.70 | **0** | **0** | **0** | 37.6 ms |
 | Phase 7: release config + trace | same code, no diag scheduler | RUN-20260830-06 | 3.06 | **0** | **0** | **0** | 36.7 ms |
 | **p3a 2.0** (`v2`, release config + trace) | the same fixes, carried into the rebuilt firmware | RUN-20261125-02 | 3.03 | **0** | **0** | **0** | 47.5 ms |
+| **p3a 2.0**, 63 channels | the playset shape that livelocked 1.x's card | RUN-20261126-01 | 3.02 | **0** | **0** | **0** | 41.0 ms |
 
 \* p99 in the unfixed run is dominated by the overrun sawtooth that Phase 6
 later removed; the stall column is the comparable number.

@@ -120,7 +120,15 @@ def main() -> int:
     a = ap.parse_args()
     dev = Device(a.host)
 
-    status = dev.call("GET", "/api/v2/status")
+    # Just flashed, the unit takes a while to join the network and announce its name.
+    for attempt in range(12):
+        try:
+            status = dev.call("GET", "/api/v2/status")
+            break
+        except requests.exceptions.ConnectionError:
+            if attempt == 11:
+                raise
+            time.sleep(10)
     if status["network"]["hostname"] != EXPECTED_HOSTNAME:
         raise SystemExit(f"REFUSING: {a.host} is {status['network']['hostname']!r}, not {EXPECTED_HOSTNAME!r}")
     probe = requests.get(dev.host + "/api/v2/debug/frames/stats", timeout=15)

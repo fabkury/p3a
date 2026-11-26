@@ -10,7 +10,7 @@ times.
 |---|---|
 | Phase | 4, remote sources (Phases 0 to 3 complete but for their manual checks) |
 | Current milestone | Phase 6: M6.1 (soaks) and M6.2 (parity audit) together. Phase 5 is done but for what waits on Fab (M4.5-a, M5.2-a, M5.3-a, M5.3-b) |
-| Next action | The memory soak is running or next: `python host/p3a-lab/lab.py flash trace`, then `python host/jitter-lab/soak.py --mix stress64 --hours 3` (64 channels across every source; the playset shape that livelocked 1.x's card). Read its report and `uart.log` in `host/jitter-lab/runs/<RUN>/` for an assert, a reset, a channel that failed for want of memory, or downloads that stopped. Then put the test build back (`lab.py up`, `lab.py provision`). After that: a multi-day run before release (tell Fab first: it occupies the dev unit); M6.3, the field test, is Fab's. Open and small: the "Followed" pill and the server's playsets by name (M4.5 part 4, needs M4.5-a); clicking what was not clicked (upload on the home page, the Makapix registration on the settings page, drag to reorder, Harvard and the Smithsonian in the museum browser); `test_the_setup_network_is_on_the_air` if it fails again in a whole suite; the whole device suite after this session's changes (last whole run: 350 passed, before the audit's fixes); `legacy/` still holds the Makapix client for M4.5 part 4 and the 1.x `sdkconfig` for `tools/compare_sdkconfig.py`. Chrome is connected to this session; stub `window.confirm` before clicking a button that asks. If Fab has registered the unit (M4.5-a), M4.5 part 4 comes first |
+| Next action | Phase 6's machine work is done as far as it goes without Fab: the jitter and memory soaks passed (RUN-20261125-02, RUN-20261126-01), the parity audit is in `PARITY.md`, `legacy/` holds only what M4.5 part 4 reads. The dev unit has the test build, provisioned, playing the card. Next, in order of use: (1) if Fab has registered the unit (M4.5-a), M4.5 part 4: live Makapix tests, the "Followed" pill, the server's playsets by name, `get_post`, then delete `legacy/components/makapix` and the rest of `legacy/` but the 1.x `sdkconfig`. (2) O21 if Fab answers it (large artworks skipped when memory is short at a swap). (3) Click what was never clicked: upload on the home page, the Makapix registration on the settings page, drag to reorder, Harvard and the Smithsonian in the museum browser. Chrome is connected; stub `window.confirm` before clicking a button that asks. (4) The intermittent failure of `test_giphy.py::test_a_swipe_up_on_a_gif_is_told_to_giphy` (the swipe down did not unpin, once in a whole suite), and `test_the_setup_network_is_on_the_air` once back on the former LAN. (5) A multi-day soak before release (tell Fab first: it occupies the dev unit): `lab.py flash trace`, `python host/jitter-lab/soak.py --hours 72`. M6.3, the field test, is Fab's |
 | Blocked on | M4.5 part 4 only: M4.5-a (Fab registers the dev unit with Makapix Club). Nothing else waits on it |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -218,6 +218,7 @@ and proposals are in [DECISIONS.md](DECISIONS.md) under "Open decisions".
 | O19 | How does a person tell the device its time zone? The setting is a POSIX TZ string, which nobody types. The web page could offer a list of regions, or send the browser's own zone | M5.1 |
 | O6 | May p3a ship Giphy's and Klipy's own marks, and which? The source is credited in words meanwhile (D72) | when Fab has an answer; holds nothing |
 | O20 | What should 2.0 tell the museums it is? 1.x sent "p3a/{version}" with a contact e-mail address. 2.0 sends "p3a/{version}" alone for now. Museums like a way to reach whoever runs a client; the choices are an address, the project's public page, or nothing | M4.3 ends; holds nothing |
+| O21 | Large artworks are skipped when memory is short at a swap (measured: one swap in forty-five with 63 channels). Leave it, lower the 16 MB file limit, or let the outgoing artwork go first when memory is short? Details in DECISIONS.md | Before release; holds nothing |
 | O1 | Exact name of the 2.x firmware asset: working answer D85, to confirm | M5.2 |
 | O12 | OTA hardening choices: working answer D86, to confirm | M5.2 |
 | O14 | A second board for the field test | M6.3 |
@@ -526,6 +527,53 @@ M4.3, 2026-11-25:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-26: M6.1 part 2, the memory soak with 63 channels
+
+- **RUN-20261126-01**: the trace build, 63 channels across every source
+  (the card, Makapix, 21 Giphy, 34 Klipy, 6 museum), 3.02 hours,
+  109,834 frames. The jitter pass bar holds here too: no in-scope
+  stall, no warning, no reset, no gap. p99 lateness 41.0 ms. Every
+  channel listed and downloaded; the card did not livelock.
+- **Eight artworks were refused for want of memory** (`cannot play ...
+  ESP_ERR_NO_MEM`, about one swap in forty-five). The scheduler moved
+  on each time, as it is written to (nothing is marked against the
+  artwork). The first refusal's snapshot: 1.0 MB of external RAM free,
+  the largest block 0.4 MB, for a file of 0.6 MB.
+- **Where the memory goes, measured** (the status API now reports the
+  external RAM: `memory.psram`). On the test build, player held: 25.7
+  MB free with the card alone, 20.0 MB with the 63 channels (their
+  indices take 5.7 MB, about 90 KB a channel), and steady over minutes.
+  Playing, at a dwell of 5 s for nine minutes: free memory returns to
+  18 to 20 MB between artworks, so nothing leaks; one large GIF takes
+  up to 11 MB while it plays (the file is held in memory, with its
+  frames); and at a swap two artworks are held at once, which took the
+  minimum down to 1.1 MB. Two large files in a row are what was
+  refused.
+- **What this says about D91**: the budget (13 MB of indices) is the
+  same worst case 1.x allowed (16 channels of 4,096), and it leaves
+  about 13 MB for two artworks, less than this run had. A playset that
+  fills it will skip large artworks more often than this one did. Not
+  changed here: the remedy is not a smaller budget but not holding two
+  whole files at a swap, or a lower limit on a file's size, and either
+  is a decision. Recorded as O21.
+- One SD read timeout in the three hours (`sdmmc_read_blocks failed
+  (0x107)`, at 03:30): one download failed and was retried; the card
+  stayed in service. One Klipy file of 22.5 MB was refused for size
+  twice (over the 16 MB limit); a third refusal retires it.
+- `soak.py` waits for a unit that has just been flashed to join the
+  network (the first start of this run failed on that).
+- Tested: the soak; `test_api.py` reads the new field (device tier, in
+  the whole suite that followed).
+- **The whole device suite after the audit's fixes: 359 passed, 2
+  failed, 6 skipped** (33 minutes). The two:
+  `test_setup.py::test_the_setup_network_is_on_the_air` again (the
+  device reports its access point up; the workstation's scan does not
+  list it: the third time on this LAN, never on the former one), and
+  `test_giphy.py::test_a_swipe_up_on_a_gif_is_told_to_giphy`, where
+  the swipe down did not take the pin out within ten seconds. The Giphy
+  file then passed twice whole (8 of 8), so that one is intermittent
+  and its cause is not known. Watch for it.
 
 ### 2026-11-26: M6.1 part 1, the jitter pass bar on 2.0
 

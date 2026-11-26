@@ -481,6 +481,33 @@ M4.3, 2026-11-25:
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
 
+### 2026-11-25: M5.4 part 1, the README, and what a new device plays
+
+- **Found while checking the quick-start guide against the code**: a 2.0
+  device that was never told what to play played the files on its card
+  and nothing else. 1.x shows Makapix Club's promoted artworks on first
+  run, with no account, and the guide's fourth step is that. Now the
+  default is two channels, the card's files and promoted (D90). It is
+  not written down: a device told nothing stays one that was told
+  nothing.
+- **`README.md`** rewritten for 2.0 where 2.0 differs: the web interface
+  as part of the firmware, the API under `/api/v2/` (the three examples
+  were run against the dev unit), updates (one file, a way back,
+  self-recovery), registration as the page words it, the layers and the
+  storage layout in place of 1.x's component and partition tables, no
+  PICO-8, a pointer to the migration page. No em dashes are left in it.
+- Verified, device test (1 new case in `test_playsets.py`): with the
+  active playset's file removed and after a restart, the channels are
+  the card and Makapix promoted, promoted lists from the public feed,
+  and nothing was written. Smoke, playsets and scheduler: 16 passed.
+- Not verified: a truly new device's first minutes end to end (flash,
+  setup, art on the screen), which is manual check M6.3's.
+- The README still shows 1.x's screenshot of the web page
+  (`images/screenshots/p3a-web-ui-2.20.png`): to retake.
+- Left of M5.4: `docs/QUICK-START.md`, `docs/HOW-TO-USE.md`,
+  `docs/flash-p3a.md`, `docs/infrastructure/`, `docs/known-issues.md`
+  and `docs/deferred/` re-triaged, `AGENTS.md` final.
+
 ### 2026-11-25: M5.3 part 1, the release folder and the two flashers
 
 - **`tools/make_release.py`**: reads a release build (`flasher_args.json`,

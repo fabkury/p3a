@@ -1,6 +1,6 @@
 <img src="images/brand/p3a-alpha-x2-128p.png" alt="p3a" align="left" width="128" height="128" />
 
-# p3a — Pixel Art Player
+# p3a: Pixel Art Player
 
 **A 4-inch smart art frame powered by ESP32-P4.** Plays animated pixel art from [Makapix Club](https://makapix.club/), trending GIFs from [Giphy](https://giphy.com/) and [Klipy](https://klipy.com/), masterpieces from major museums via [IIIF](https://iiif.io/), and your own files on a 24-bit 720x720 IPS touchscreen you control from anywhere. Build it yourself from a $40 board, in about 15 minutes. After that, it just keeps playing.
 
@@ -56,11 +56,13 @@ Every p3a was assembled by the person who owns it. Joining them takes a screwdri
 **Setup steps:**
 
 1. **Insert the microSD card** (requires unscrewing the back plate)
-2. **Flash the firmware** using the [p3a Web Flasher](https://fabkury.github.io/p3a/web-flasher/) — connect, click, done. No software to install. ([Alternative methods](docs/flash-p3a.md))
-3. **Connect to Wi-Fi** — on first boot, join the `p3a-setup` network and configure your Wi-Fi at `http://p3a.local/`
-4. **Start playing art** — add a [Giphy](https://developers.giphy.com/) or [Klipy](https://partner.klipy.com/) API key for trending GIFs, register at [makapix.club](https://makapix.club/) to send artworks, or copy your own files via USB
+2. **Flash the firmware** using the [p3a Web Flasher](https://fabkury.github.io/p3a/web-flasher/). Connect, click, done. No software to install. ([Alternative methods](docs/flash-p3a.md))
+3. **Connect to Wi-Fi**: on first boot, join the `p3a-setup` network and enter your Wi-Fi on the page that opens
+4. **Start playing art**: add a [Giphy](https://developers.giphy.com/) or [Klipy](https://partner.klipy.com/) API key for trending GIFs, register at [makapix.club](https://makapix.club/) to send artworks, or copy your own files via USB
 
 > The initial flash requires a computer with USB. After that, all updates are wireless.
+>
+> Coming from p3a 1.x? 2.0 is installed once over USB and starts the device fresh. See [Moving a p3a from 1.x to 2.0](docs/migrating-to-2.0.md).
 
 For a step-by-step walkthrough written for first-time owners, see the [Quick Start Guide](docs/QUICK-START.md). For full usage instructions, see [HOW-TO-USE.md](docs/HOW-TO-USE.md). Stuck on any step? The [Discord server](https://discord.gg/xk9umcujXV) is friendly, ask there.
 
@@ -74,7 +76,7 @@ For a step-by-step walkthrough written for first-time owners, see the [Quick Sta
 |--------|-------------|
 | **[Makapix Club](https://makapix.club/)** | Browse a pixel art social network and send artworks directly to your p3a. Play entire channels like "Promoted Artworks" and "All Artworks", or hashtags like "#nintendo". Control your device remotely from anywhere. |
 | **[Giphy](https://giphy.com/)** | Automatically fetches and cycles through trending GIFs and GIF searches. Configurable content rating (G through R) and refresh interval. |
-| **[Klipy](https://klipy.com/)** | Automatically fetches and cycles through trending, search, and category channels — GIFs and stickers. Configurable content rating, format (GIF/WebP), and refresh interval. |
+| **[Klipy](https://klipy.com/)** | Automatically fetches and cycles through trending, search, and category channels of GIFs and stickers. Configurable content rating, format (GIF/WebP), and refresh interval. |
 | **Museums** | Browse public collections from the Rijksmuseum, Victoria and Albert Museum, Wellcome Collection, the Statens Museum for Kunst (SMK), Harvard Art Museums, the Smithsonian, the Cleveland Museum of Art, and the Minneapolis Institute of Art. Pick a department, category, or curated set; the device refreshes the listing on schedule. |
 | **Local files** | Copy your own WebP, GIF, PNG/APNG, JPEG, or BMP files via USB or Wi-Fi. No cloud account needed, no internet required. |
 
@@ -101,11 +103,11 @@ Mix them all in a single "playset" for an ever-changing display.
 
 ### Smooth, Gapless Playback
 
-- **Animated WebP, GIF, and APNG; static PNG, JPEG, and BMP** — with alpha/transparency where the format supports it
-- **Smart upscaling** — pixel art and local files use nearest-neighbor scaling to keep edges crisp; Giphy, Klipy, and museum content use hardware-accelerated bilinear interpolation for smooth results
-- **Triple-buffered rendering** with VSYNC — no tearing, no freezing
-- **Aspect ratio preservation** — non-square art is centered on the display with a configurable background color
-- **Auto-advance** — cycles to a new artwork every 30 seconds (configurable)
+- **Animated WebP, GIF, and APNG; static PNG, JPEG, and BMP**: with alpha/transparency where the format supports it
+- **Smart upscaling**: pixel art and local files use nearest-neighbor scaling to keep edges crisp; Giphy, Klipy, and museum content use hardware-accelerated bilinear interpolation for smooth results
+- **Triple-buffered rendering** with VSYNC: no tearing, no freezing
+- **Aspect ratio preservation**: non-square art is centered on the display with a configurable background color
+- **Auto-advance**: cycles to a new artwork every 30 seconds (configurable)
 
 ### Touch Controls
 
@@ -125,12 +127,12 @@ All controls are also available via the web UI and REST API.
   <img src="images/hardware/p3a-buttons-ports-gestures-transparent.webp" alt="p3a side view: PAUSE (BOOT) and REBOOT (RESET) buttons, USB-HS port for SD card access, USB-UART port for flashing; touch gestures: tap right half for next artwork, tap left half for previous, swipe up to pin, two-finger rotate to rotate the screen" width="600">
 </p>
 
-- **BOOT** (top button, farther from the USB-C ports) — pause/unpause: the screen goes black, then resumes on the same artwork
-- **RESET** (bottom button) — hardware reset: reboots the device immediately
+- **BOOT** (top button, farther from the USB-C ports): pause/unpause: the screen goes black, then resumes on the same artwork
+- **RESET** (bottom button): hardware reset: reboots the device immediately
 
 ### Web Interface & REST API
 
-Open `http://p3a.local/` from any browser on the same Wi-Fi network for a full dashboard — playback controls, configuration, firmware updates, Giphy and Klipy settings, and more.
+Open `http://p3a.local/` from any browser on the same Wi-Fi network for the full dashboard: playback controls, playsets, pin lists, every setting, and firmware updates. It is part of the firmware, so it is always the version that matches the device.
 
 <p align="center">
   <img src="images/screenshots/p3a-web-ui-2.20.png" alt="p3a web UI" width="350">
@@ -138,39 +140,32 @@ Open `http://p3a.local/` from any browser on the same Wi-Fi network for a full d
   <em>p3a web UI: control everything from the browser</em>
 </p>
 
-Every action is also exposed as a JSON API endpoint for scripting and automation.
+Everything the pages do goes through a JSON API under `/api/v2/`, open to scripts on your network.
 
 ```bash
-curl http://p3a.local/status                        # Device status
-curl -X POST http://p3a.local/action/swap_next      # Next artwork
-curl -X POST http://p3a.local/rotation \
+curl http://p3a.local/api/v2/status                    # Device status
+curl -X POST http://p3a.local/api/v2/player/next       # Next artwork
+curl -X PATCH http://p3a.local/api/v2/settings \
   -H "Content-Type: application/json" \
-  -d '{"rotation": 90}'                             # Rotate screen
+  -d '{"rotation": 90}'                                # Rotate screen
 ```
 
 > The web interface is LAN-only. For remote control, use Makapix Club.
 
 ### Wireless Updates
 
-After the first USB flash, everything is over-the-air:
-- **One-click install** from the web UI, with progress shown on both screen and browser
-- **Automatic update checks** every 12 hours (not installed without your approval)
-- **Manual rollback** to the previous version at any time
-- **SHA256 verification** of every download
+After the first USB flash, updates arrive over Wi-Fi:
+- **One file**: the firmware carries the web interface, so there is one update, not two
+- **You decide**: the device looks for new releases by itself and never installs one without you
+- **One-click install** from the Update page, with progress on the screen and in the browser
+- **A way back**: the previous firmware stays on the device, and one click returns to it
+- **Self-recovery**: a new firmware that cannot rejoin your network is undone automatically
+- **SHA-256 verification** of every download
 - **ESP32-C6 co-processor** firmware updates automatically when needed
-- **Web UI updates** are also delivered over-the-air
-
-### PICO-8 Game Streaming
-
-Stream [PICO-8](https://www.lexaloffle.com/pico-8.php) games to the display over Wi-Fi. A WebAssembly emulator runs in your browser and sends frames to the device via WebSocket, which upscales them to 720x720. The 720x720 screen is a perfect square canvas for PICO-8's 128x128 output. The device returns to artwork playback when you exit PICO-8 mode.
-
-<p align="center">
-  <img src="images/pico-8/pico-8-gameplay-2.gif" alt="PICO-8 gameplay on p3a">
-</p>
 
 ### USB Storage
 
-Connect via USB-C to mount the microSD card as a removable drive — drag and drop your own artwork files directly.
+Connect via USB-C to mount the microSD card as a removable drive, then drag and drop your own artwork files onto it.
 
 ---
 
@@ -204,11 +199,11 @@ p3a runs on the **[Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.
 [Makapix Club](https://makapix.club/) is a pixel art social network where artists share animated creations. Register your p3a to unlock:
 
 - **Browse and send** artworks or entire channels (e.g. "Promoted Artworks", "All Artworks") directly to your device
-- **Remote control** from any browser — change artwork and switch channels from anywhere
+- **Remote control** from any browser: change artwork and switch channels from anywhere
 - **Secure connection** via mutual TLS (mTLS) with per-device certificates
-- **Real-time updates** — your device receives artworks and commands instantly over encrypted MQTT
+- **Real-time updates**: your device receives artworks and commands instantly over encrypted MQTT
 
-**To register:** open the Settings page of the web UI (http://p3a.local/), go to the "Makapix" tab, and click "Enter provisioning mode". The device will display a 6-character code, enter it at [makapix.club](https://makapix.club/). After that point, the device connects automatically.
+**To register:** open Settings in the web UI (`http://p3a.local/settings`), go to the Makapix tab, and click "Register this device". The device and the page both show a 6-character code. Enter it at [makapix.club](https://makapix.club/). From then on the device connects automatically.
 
 > [Join the Makapix Club Discord](https://discord.gg/xk9umcujXV) to connect with other p3a users and the pixel art community.
 
@@ -216,29 +211,35 @@ p3a runs on the **[Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.
 
 ## For Developers
 
-### Key Components
+### How the Firmware Is Built
+
+The firmware is layered, and a component may depend only on layers below its own:
 
 | Layer | Components |
 |-------|------------|
-| **Core** | `p3a_core` (state machine), `config_store` (NVS settings), `event_bus` |
-| **Playback** | `play_scheduler`, `playback_queue`, `channel_manager` |
-| **Decoders** | `animation_decoder` (WebP/PNG/APNG/JPEG/BMP), `animated_gif_decoder` (GIF), `libwebp_decoder` |
-| **Connectivity** | `wifi_manager` (provisioning, captive portal, mDNS), `http_api` (REST + WebSocket), `makapix` (MQTT/TLS) |
-| **Content** | `giphy` and `klipy` (API + SD caching), `art_institution` (museum IIIF channels), `content_cache`, `loader_service`, `storage_eviction` |
-| **System** | `ota_manager`, `slave_ota` (C6 firmware), `p3a_board_ep44b` (HAL), `sdio_bus` |
-| **Extras** | `pico8` (game streaming), `show_url` (URL artwork download), `ugfx` (on-screen text/font rendering) |
+| **util** | `p3a_util` (tasks, jobs, events, memory pressure, errors) |
+| **board** | `p3a_board` (display, touch, buttons), `sdio_bus`, `slave_ota` (ESP32-C6 firmware) |
+| **storage** | `p3a_storage` (SD card, atomic writes, repair), `p3a_settings` (one schema, one store) |
+| **library** | `p3a_library` (artwork records, the blob store, pin lists), `p3a_fetch` (every HTTP request) |
+| **sources** | `source_local`, `source_makapix`, `source_giphy`, `source_klipy`, `source_museum`, `source_pinned` |
+| **player** | `animation_decoder`, `display_renderer`, `animation_player`, `play_scheduler` |
+| **ui** | `p3a_ui` (screens, overlays, touch), `p3a_usb` |
+| **net** | `p3a_net` (Wi-Fi, setup, the HTTP server and the web pages), `p3a_update` (firmware updates) |
+
+What decides behaviour (which artwork plays next, when a channel refreshes, what a screen shows, which release to install) is plain C without hardware, tested on a workstation. The device adds the hardware around it.
 
 ### Storage Layout
 
-| Partition | Mount | Size | Purpose |
-|-----------|-------|------|---------|
-| LittleFS | `/webui` | 4 MB | Web UI assets |
-| NVS | — | 64 KB | Wi-Fi credentials, settings, state |
-| OTA 0 / OTA 1 | — | 8 MB each | Dual firmware slots |
-| Slave FW | — | 2 MB | ESP32-C6 co-processor firmware |
-| **SD Card** | `/sdcard` | — | All artwork storage |
+| Partition | Size | Purpose |
+|-----------|------|---------|
+| NVS | 64 KB | Settings, Wi-Fi credentials, registrations |
+| Co-processor firmware | 2 MB | The ESP32-C6 image |
+| Crash record | 256 KB | The last crash, if any, for diagnosis |
+| App slot A / B | 10 MB each | The running firmware and the one before |
+| Spare | 9.6 MB | Reserved |
+| **SD card** | | All artwork |
 
-SD card layout: `/sdcard/p3a/animations/` (local files), `/sdcard/p3a/vault/` (Makapix cache, hash-sharded), `/sdcard/p3a/giphy/` (Giphy cache), `/sdcard/p3a/klipy/` (Klipy cache), `/sdcard/p3a/museum/{museum_id}/` (museum IIIF cache, hash-sharded per museum), `/sdcard/p3a/lost/` (folders the SD card corrupted, quarantined by the self-repair described in `docs/HOW-TO-USE.md`).
+SD card layout, under the root folder you choose (default `/p3a`): `animations/` (your own files), `blobs/` (everything downloaded, stored once whatever plays it), `channels/` (each channel's listing), `playsets/`, `pins/`.
 
 ---
 
@@ -246,16 +247,17 @@ SD card layout: `/sdcard/p3a/animations/` (local files), `/sdcard/p3a/vault/` (M
 
 | Document | Description |
 |----------|-------------|
-| [QUICK-START.md](docs/QUICK-START.md) | Quick Start Guide — the fastest path from box to art on the screen |
-| [HOW-TO-USE.md](docs/HOW-TO-USE.md) | Full user guide — setup, touch controls, Wi-Fi, web UI, REST API, Giphy, Klipy, PICO-8 |
+| [QUICK-START.md](docs/QUICK-START.md) | Quick Start Guide: the fastest path from box to art on the screen |
+| [HOW-TO-USE.md](docs/HOW-TO-USE.md) | Full user guide: setup, touch controls, Wi-Fi, web UI, REST API, Giphy, Klipy, museums |
+| [migrating-to-2.0.md](docs/migrating-to-2.0.md) | Moving a device from p3a 1.x to 2.0 |
 | [flash-p3a.md](docs/flash-p3a.md) | Flashing instructions (web flasher and alternatives) |
 | [Infrastructure docs](docs/infrastructure/README.md) | Technical architecture for developers and contributors |
 
 ## Community
 
-- **Discord** — [Makapix Club Discord](https://discord.gg/xk9umcujXV) for discussion, tips, and pixel art
-- **Makapix Club** — [makapix.club](https://makapix.club/) to browse and share pixel art
-- **Issues** — [GitHub Issues](../../issues) for bug reports and feature requests
+- **Discord**: [Makapix Club Discord](https://discord.gg/xk9umcujXV) for discussion, tips, and pixel art
+- **Makapix Club**: [makapix.club](https://makapix.club/) to browse and share pixel art
+- **Issues**: [GitHub Issues](../../issues) for bug reports and feature requests
 
 ## Contributing
 
@@ -265,7 +267,7 @@ Start with the [infrastructure docs](docs/infrastructure/README.md) for technica
 
 ## License
 
-Apache License 2.0 — see [LICENSE](LICENSE). For dependency licenses, see [LICENSING.md](LICENSING.md).
+Apache License 2.0. See [LICENSE](LICENSE). For dependency licenses, see [LICENSING.md](LICENSING.md).
 
 ## Acknowledgements
 

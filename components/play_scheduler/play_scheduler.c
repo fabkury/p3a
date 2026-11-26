@@ -939,14 +939,20 @@ esp_err_t play_scheduler_start(void)
 
     const esp_err_t loaded = playset_store_load_active(playset);
     if (loaded != ESP_OK) {
-        if (loaded != P3A_ERR_MISSING) {
-            ESP_LOGW(TAG, "the active playset could not be read (%s); playing the user's own files",
-                     p3a_err_to_name(loaded));
-        }
-        // A device that was never told what to play plays what is on its card.
         memset(playset, 0, sizeof(*playset));
         playset->count = 1;
         playset->channels[0].source = PLAYSET_SOURCE_LOCAL;
+        if (loaded == P3A_ERR_MISSING) {
+            // A device that was never told what to play: what is on its card, and
+            // Makapix Club's promoted artworks, which need no account and no key
+            // (decision D90). A new device shows art as soon as it is on Wi-Fi.
+            playset->count = 2;
+            playset->channels[1].source = PLAYSET_SOURCE_MAKAPIX;
+            snprintf(playset->channels[1].kind, sizeof(playset->channels[1].kind), "promoted");
+        } else {
+            ESP_LOGW(TAG, "the active playset could not be read (%s); playing the user's own files",
+                     p3a_err_to_name(loaded));
+        }
     }
     const esp_err_t err = sched_content_start();
     LOCK();

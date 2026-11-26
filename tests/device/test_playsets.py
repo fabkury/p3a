@@ -4,7 +4,12 @@ kept across a restart, and refused rather than overwritten when damaged.
 
 What a playset may contain is host-tested (tests/host/player/test_playset.c).
 """
+import time
+
 import pytest
+
+import lab
+from test_api import Api
 
 MIX = {"name": "Evening mix", "channels": [
     {"source": "makapix", "kind": "promoted", "weight": 3},
@@ -92,3 +97,30 @@ def test_the_active_playset_survives_a_restart(clean):
     got = uart.command("playset active-load")
     assert got["result"] == "ok" and stripped(got["playset"]) == unnamed
     assert uart.command("playset list")["playsets"] == {}, "the active playset is not one of the saved ones"
+
+
+@pytest.mark.live
+def test_a_device_never_told_what_to_play_plays_its_card_and_makapix_promoted(clean):
+    uart = clean
+    lab.provision(uart)
+    try:
+        assert uart.command("playset active-forget")["result"] == "ok"
+        start = uart.mark()
+        uart.command("reboot")
+        uart.wait_ready(since=start, timeout=40)
+        channels = uart.command("sched status")["channels"]
+        assert [c["source"] for c in channels] == ["local", "makapix"]
+        # Promoted needs no account and no key (D90): on Wi-Fi it is listed from the site's public feed.
+        api = Api(lab.wait_online(uart, timeout=60)["ip"])
+        assert [(c["source"], c["kind"]) for c in api.get("/api/v2/player").data["channels"]] == \
+            [("local", ""), ("makapix", "promoted")]
+        deadline = time.monotonic() + 90
+        promoted = channels[1]
+        while promoted["records"] == 0 and time.monotonic() < deadline:
+            time.sleep(2)
+            promoted = uart.command("sched status")["channels"][1]
+        assert promoted["records"] > 0 and "error" not in promoted, promoted
+        # The default is not written down: told nothing, the device stays one that was told nothing.
+        assert uart.command("playset active-load")["result"] != "ok"
+    finally:
+        uart.command("sched activate", {"name": "", "channels": [{"source": "local"}]})

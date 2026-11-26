@@ -7,11 +7,14 @@
 // !playset list                      names and channel counts, and how many files could not be read
 // !playset active-save {playset}     the active playset
 // !playset active-load
+// !playset active-forget             removes the active playset's file: at the next boot the device
+//                                    is one that was never told what to play
 // !playset damage {"name": ...}      flips one byte in that playset's file
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "cJSON.h"
 #include "p3a_err.h"
@@ -84,6 +87,19 @@ static void cmd_playset(const char *args)
         reply_playset(playset_store_load(name, playset), playset);
     } else if (strcmp(args, "active-load") == 0) {
         reply_playset(playset_store_load_active(playset), playset);
+    } else if (strcmp(args, "active-forget") == 0) {
+        // The active playset's file sits beside the saved ones.
+        char path[220];
+        char *slash = playset_store_path("x", path, sizeof(path) - 24) == ESP_OK ? strrchr(path, '/') : NULL;
+        if (slash == NULL) {
+            p3a_test_reply_err("no playsets folder");
+        } else {
+            strcpy(slash + 1, "active.p3af");
+            unlink(path);
+            strcat(path, ".bak");
+            unlink(path);
+            reply_result(ESP_OK, NULL);
+        }
     } else if (strncmp(args, "delete ", 7) == 0 && name_arg(args + 7, name, sizeof(name))) {
         reply_result(playset_store_delete(name), NULL);
     } else if (strncmp(args, "damage ", 7) == 0 && name_arg(args + 7, name, sizeof(name))) {
@@ -117,7 +133,7 @@ static void cmd_playset(const char *args)
         cJSON_free(text);
         cJSON_Delete(out);
     } else {
-        p3a_test_reply_err("playset save|load|delete|list|active-save|active-load|damage");
+        p3a_test_reply_err("playset save|load|delete|list|active-save|active-load|active-forget|damage");
     }
     free(playset);
 }

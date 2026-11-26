@@ -4,6 +4,7 @@
 
 #include "source_makapix.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -169,6 +170,28 @@ void source_makapix_status(source_makapix_status_t *out)
     makapix_register_status(out);
     makapix_link_status(out);
     makapix_renew_status(out);
+}
+
+// --- the server's playsets ------------------------------------------------------------
+
+esp_err_t source_makapix_get_playset(const char *name, char *out, size_t out_len)
+{
+    if (name == NULL || name[0] == '\0' || out == NULL || out_len == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    for (const char *c = name; *c != '\0'; c++) {
+        const bool plain = (*c >= 'a' && *c <= 'z') || (*c >= 'A' && *c <= 'Z') || (*c >= '0' && *c <= '9') ||
+                           *c == '_' || *c == '-';
+        if (!plain || c - name >= 48) {
+            return ESP_ERR_INVALID_ARG;  // it goes into a JSON string as it is
+        }
+    }
+    if (!makapix_store_registered()) {
+        return P3A_ERR_NO_KEY;
+    }
+    char body[128];
+    snprintf(body, sizeof(body), "{\"request_type\":\"get_playset\",\"playset_name\":\"%s\"}", name);
+    return makapix_rpc(body, out, out_len, NULL, NULL);
 }
 
 // --- a like ---------------------------------------------------------------------------

@@ -192,10 +192,13 @@ export function banners(player, status, update) {
 // --- the pill bar ---------------------------------------------------------------
 
 // The playsets the home page always offers. `needs`: 'registration' when
-// the channel lists nothing without one.
+// the channel lists nothing without one. `server`: a playset Makapix Club
+// makes for the player's owner, asked for by that name each time (it plays
+// under that name and is not saved).
 export const BUILTINS = [
     { id: 'builtin:makapix-all', label: 'All Makapix', needs: 'registration',
       playset: { name: '', channels: [{ source: 'makapix', kind: 'all' }] } },
+    { id: 'builtin:makapix-followed', label: 'Followed', needs: 'registration', server: 'followed_artists' },
     { id: 'builtin:makapix-promoted', label: 'Promoted',
       playset: { name: '', channels: [{ source: 'makapix', kind: 'promoted' }] } },
     { id: 'builtin:local', label: 'SD Card',
@@ -209,7 +212,10 @@ export const BUILTINS = [
 // (a pin channel with no identifier plays that one).
 export function activePill(player, activeSlug) {
     if (!player) return '';
-    if (player.playset) return `playset:${player.playset}`;
+    if (player.playset) {
+        const served = BUILTINS.find((b) => b.server === player.playset);
+        return served ? served.id : `playset:${player.playset}`;
+    }
     const channels = player.channels || [];
     if (channels.length !== 1) return '';
     const ch = channels[0];
@@ -218,6 +224,7 @@ export function activePill(player, activeSlug) {
         return slug ? `pins:${slug}` : '';
     }
     for (const b of BUILTINS) {
+        if (!b.playset) continue;
         const want = b.playset.channels[0];
         if (want.source === ch.source && (want.kind || '') === (ch.kind || '') && !ch.identifier && !ch.offset) {
             return b.id;
@@ -229,7 +236,10 @@ export function activePill(player, activeSlug) {
 // The name over the now-playing card.
 export function playingName(player, pinLists) {
     if (!player) return '';
-    if (player.playset) return player.playset;
+    if (player.playset) {
+        const served = BUILTINS.find((b) => b.server === player.playset);
+        return served ? served.label : player.playset;
+    }
     const channels = player.channels || [];
     if (channels.length === 1) {
         const ch = channels[0];

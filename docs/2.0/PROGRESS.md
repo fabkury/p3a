@@ -11,7 +11,7 @@ times.
 | Phase | 4, remote sources (Phases 0 to 3 complete but for their manual checks) |
 | Current milestone | Phase 6: M6.1 (soaks) and M6.2 (parity audit) together. Phase 5 is done but for what waits on Fab (M4.5-a, M5.2-a, M5.3-a, M5.3-b) |
 | Next action | Phase 6's machine work is done as far as it goes without Fab: the jitter and memory soaks passed (RUN-20261125-02, RUN-20261126-01), the parity audit is in `PARITY.md`, `legacy/` holds only what M4.5 part 4 reads. The dev unit has the test build, provisioned, playing the card. Next, in order of use: (1) if Fab has registered the unit (M4.5-a), M4.5 part 4: live Makapix tests, the "Followed" pill, the server's playsets by name, `get_post`, then delete `legacy/components/makapix` and the rest of `legacy/` but the 1.x `sdkconfig`. (2) O21 if Fab answers it (large artworks skipped when memory is short at a swap). (3) Click what was never clicked: upload on the home page, the Makapix registration on the settings page, drag to reorder, Harvard and the Smithsonian in the museum browser. Chrome is connected; stub `window.confirm` before clicking a button that asks. (4) The intermittent failure of `test_giphy.py::test_a_swipe_up_on_a_gif_is_told_to_giphy` (the swipe down did not unpin, once in a whole suite), and `test_the_setup_network_is_on_the_air` once back on the former LAN. (5) A multi-day soak before release (tell Fab first: it occupies the dev unit): `lab.py flash trace`, `python host/jitter-lab/soak.py --hours 72`. M6.3, the field test, is Fab's |
-| Blocked on | M4.5 part 4 only: M4.5-a (Fab registers the dev unit with Makapix Club). Nothing else waits on it |
+| Blocked on | M4.5 part 4's last checks: M4.5-a again (the dev unit's registration was removed by a test on 2026-11-26; see the session log). Nothing else waits on it |
 | In flight | Nothing |
 | Uncommitted work | None |
 
@@ -85,6 +85,7 @@ Open:
   install, and see the device restart into it and be kept. The cycle is
   device-tested against a mirror on the LAN; this adds GitHub's redirect
   and its TLS.
+- **M4.5-a is open again (2026-11-26).** Fab registered the unit; a device test then removed the registration (fixed: D97). To do again: at makapix.club remove the player registered on 2026-11-26 (the device no longer has its key), then register as below. After that a session runs `python -m pytest tests/device/test_makapix.py` and, with Fab, the three things only an owner can do: a like and its taking back (swipe up, then down, on a Makapix artwork: public, under his name), a command from the site's buttons, and the "Followed" pill on the home page.
 - **M4.5-a, registering the dev unit with Makapix Club** (D13). Needed
   before anything a registered player does can be tested (part 3 on).
   With the unit on and on the network: `curl -X POST
@@ -218,7 +219,7 @@ and proposals are in [DECISIONS.md](DECISIONS.md) under "Open decisions".
 | O19 | How does a person tell the device its time zone? The setting is a POSIX TZ string, which nobody types. The web page could offer a list of regions, or send the browser's own zone | M5.1 |
 | O6 | May p3a ship Giphy's and Klipy's own marks, and which? The source is credited in words meanwhile (D72) | when Fab has an answer; holds nothing |
 | O20 | What should 2.0 tell the museums it is? 1.x sent "p3a/{version}" with a contact e-mail address. 2.0 sends "p3a/{version}" alone for now. Museums like a way to reach whoever runs a client; the choices are an address, the project's public page, or nothing | M4.3 ends; holds nothing |
-| O21 | Large artworks are skipped when memory is short at a swap (measured: one swap in forty-five with 63 channels). Leave it, lower the 16 MB file limit, or let the outgoing artwork go first when memory is short? Details in DECISIONS.md | Before release; holds nothing |
+| O21 | Answered 2026-11-26: leave it (D95) | closed |
 | O1 | Exact name of the 2.x firmware asset: working answer D85, to confirm | M5.2 |
 | O12 | OTA hardening choices: working answer D86, to confirm | M5.2 |
 | O14 | A second board for the field test | M6.3 |
@@ -527,6 +528,57 @@ M4.3, 2026-11-25:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-26: M4.5 part 4, a registered player; and the registration lost to a test
+
+Fab registered the dev unit (M4.5-a) and answered O21 (leave it: D95).
+
+- **Live, on the registered unit**: the link connected; every kind of
+  channel asked of the server with the player's token and listed
+  (promoted, all, the owner's posts, a tag, a person's reactions, an
+  artist), and a person who is not there answered as MISSING; views
+  acknowledged by the server (with `makapix_view_ack` on); the owner's
+  followed artists played (nine channels).
+- **"Followed"**: the home page's pill, 1.x's `followed_artists`. The
+  device asks the server for the playset by name
+  (`source_makapix_get_playset()`, `POST /api/v2/makapix/playset`, a
+  job), reads the answer with the reader of the server's `play_playset`
+  command, and plays it under the server's name without saving it
+  (D96). Following nobody is said in words on the page. More artists
+  than a playset holds: the first 64, which the server puts first.
+- **A finished job could be forgotten in three seconds.** The record of
+  jobs holds 16 and the UI's own jobs churn through it while channels
+  load. A job whose id was given out now outlives those (D98,
+  `p3a_job_table_watch()`, host-tested).
+- **The dev unit's registration was removed by a device test.**
+  `test_a_registration_shows_a_code_and_a_cancel_leaves_the_device_as_it_was`
+  ended with `DELETE /api/v2/makapix/registration`. That call cancelled
+  a registration under way and, with none under way, removed the
+  registration. On a registered unit, with the second code request
+  refused by the service's rate limit, the clean-up found nothing under
+  way and unregistered the unit. The test was written when the unit had
+  no registration to lose.
+- **The call is split** (D97): `DELETE /api/v2/makapix/registration`
+  only cancels and says whether there was anything to cancel;
+  `DELETE /api/v2/makapix` removes the registration. The settings page
+  and the API page follow. The same race was open to a person: a
+  "Cancel" clicked as a code ran out.
+- The player Fab registered is still on his account at makapix.club; the
+  device no longer has its key. **M4.5-a is open again**, with one more
+  step: remove the stale player on the site.
+- Test corrections found on the way: `play_promoted()` took an artwork
+  of an earlier Makapix playset for its own; a channel known from its
+  index on the card has `listings` 0; a channel listed while registered
+  plays from the card after the registration is gone (right, and the
+  unregistered test now uses channels the unit has never listed).
+- Tested: host tests (43), node (42), tree checks. On the device:
+  `test_makapix.py` registered (the three live tests passed before the
+  registration was lost) and unregistered (6 passed, 4 skipped), smoke,
+  web, jobs. Not tested: the split call on a registered unit (there is
+  none now); a like on a Makapix post (it is public, under Fab's name:
+  to do with him or by him); a command arriving from the site's
+  buttons; the "Followed" pill clicked in a browser (the endpoint under
+  it was called by hand and by the test).
 
 ### 2026-11-26: clicking through what was never clicked, and what it found
 

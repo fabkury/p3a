@@ -96,7 +96,9 @@ A playset is `{"name", "channels": [{"source", "kind", "identifier", "display_na
 | POST | `/api/v2/sources/giphy/reset-id` | Forget the anonymous id Giphy gave this device |
 | GET | `/api/v2/makapix` | Whether the device is registered, a registration under way (its code and seconds left), the link's state |
 | POST | `/api/v2/makapix/registration` | Start registering: the device asks Makapix Club for a code and shows it |
-| DELETE | `/api/v2/makapix/registration` | Cancel a registration under way; with none under way, remove the registration |
+| DELETE | `/api/v2/makapix/registration` | Cancel a registration under way. With none under way it does nothing (`"cancelled": false`) |
+| DELETE | `/api/v2/makapix` | Remove the device's registration. It cannot be undone: the device must be registered again |
+| POST | `/api/v2/makapix/playset` | `{"name"}`: play one of the server's own playsets (`followed_artists`: a channel for each artist the owner follows). A job; it fails with `ESP_ERR_NOT_FOUND` when the playset is empty. Not saved |
 
 ## Firmware updates
 

@@ -33,6 +33,7 @@ typedef struct {
     p3a_job_state_t state;
     esp_err_t result;   // meaningful once DONE
     uint8_t progress;   // 0..100; 100 once DONE with ESP_OK
+    bool watched;       // somebody was given its id and may come back to ask
     char name[P3A_JOB_NAME_MAX];
 } p3a_job_info_t;
 
@@ -44,9 +45,16 @@ typedef struct {
 void p3a_job_table_init(p3a_job_table_t *table);
 
 // Records a new QUEUED job and returns its id. Uses a free slot, or replaces
-// the oldest finished job. Returns P3A_JOB_ID_NONE when every slot holds a
-// job that is still queued or running. A long name is truncated.
+// a finished job: the oldest that nobody watches, and only when there is
+// none of those the oldest watched one. (The device runs many small jobs of
+// its own, whose ids nobody has; without the preference they pushed out,
+// within seconds, the job a web page was about to ask after.) Returns
+// P3A_JOB_ID_NONE when every slot holds a job that is still queued or
+// running. A long name is truncated.
 p3a_job_id_t p3a_job_table_add(p3a_job_table_t *table, const char *name);
+
+// Marks a job as one whose id was given out. False when the id is unknown.
+bool p3a_job_table_watch(p3a_job_table_t *table, p3a_job_id_t id);
 
 // State changes. Each returns false, changing nothing, when the id is
 // unknown (never issued, or its record was replaced) or the change makes no

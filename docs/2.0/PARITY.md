@@ -30,7 +30,7 @@ describe what a client can do, not the 1.x URL.
 | [ ] | The home page shrinks oversized JPEGs in the browser before upload | keep | M5.1 | |
 | [ ] | Makapix channels: all, promoted, by user, by hashtag, a user's reactions, single artwork | keep | M4.5 | |
 | [x] | Promoted refreshes over public HTTPS on an unregistered device, so a new device plays art with no account | keep | M4.5 | Promoted is listed from the public feed when unregistered (M4.5 part 1) and is in the default playset with the card's files (D90) |
-| [ ] | `followed_artists` and other playsets fetched from the Makapix server by name | keep | M4.5 | |
+| [x] | `followed_artists` and other playsets fetched from the Makapix server by name | keep | M4.5 | D96. `test_makapix.py::test_the_servers_playset_of_followed_artists_is_asked_for_and_played`, and seen live (nine artists) |
 | [x] | Giphy: trending and search channels; rating; country code; refresh interval; cache size | keep | M4.2 | M4.2. Live device tests for trending, search, rating, cache size and interval; country code and offset are in the request (host-tested), not seen on the device |
 | [x] | Giphy: rejected-key latch with hourly re-probe, 429 cooldown, analytics id with reset, click registered on swipe up | keep | M4.2 | The waits are the content task's for every source (D66): an hour or a settings change after a refused key, at least 15 minutes after a 429. The id, its reset and the click are device-tested; a 429 was not provoked |
 | [x] | Giphy: rendition, format and prefer-downsized, settable through the API only | keep | M4.2 | D29: settings, kept off the page. `test_giphy_parse`, `test_settings_model` |

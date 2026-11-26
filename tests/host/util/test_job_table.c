@@ -140,6 +140,35 @@ static void test_oldest_finished_job_is_replaced_first(void)
     }
 }
 
+static void test_a_watched_job_outlives_the_ones_nobody_asked_about(void)
+{
+    // A web page was given this job's id, and it has finished.
+    const p3a_job_id_t watched = p3a_job_table_add(&t, "asked for");
+    TEST_ASSERT_TRUE(p3a_job_table_watch(&t, watched));
+    p3a_job_table_finish(&t, watched, ESP_ERR_NOT_FOUND);
+    // The device then runs many jobs of its own, more than the table holds.
+    for (int i = 0; i < P3A_JOB_TABLE_SIZE * 5; i++) {
+        const p3a_job_id_t own = p3a_job_table_add(&t, "own");
+        TEST_ASSERT_NOT_EQUAL(P3A_JOB_ID_NONE, own);
+        p3a_job_table_finish(&t, own, ESP_OK);
+    }
+    TEST_ASSERT_EQUAL(ESP_ERR_NOT_FOUND, info(watched).result);
+    TEST_ASSERT_TRUE(info(watched).watched);
+
+    // Watched jobs make room for each other, the oldest first, once nothing else can go.
+    p3a_job_id_t more[P3A_JOB_TABLE_SIZE];
+    for (int i = 0; i < P3A_JOB_TABLE_SIZE; i++) {
+        more[i] = p3a_job_table_add(&t, "asked for too");
+        TEST_ASSERT_NOT_EQUAL(P3A_JOB_ID_NONE, more[i]);
+        p3a_job_table_watch(&t, more[i]);
+        p3a_job_table_finish(&t, more[i], ESP_OK);
+    }
+    TEST_ASSERT_FALSE(p3a_job_table_get(&t, watched, NULL));
+    TEST_ASSERT_TRUE(p3a_job_table_get(&t, more[0], NULL));
+    TEST_ASSERT_FALSE(p3a_job_table_watch(&t, P3A_JOB_ID_NONE));
+    TEST_ASSERT_FALSE(p3a_job_table_watch(&t, 999999));
+}
+
 static void test_many_jobs_through_a_small_table(void)
 {
     p3a_job_id_t previous = P3A_JOB_ID_NONE;
@@ -183,6 +212,7 @@ int main(void)
     RUN_TEST(test_long_and_missing_names);
     RUN_TEST(test_full_table_of_live_jobs_refuses_more);
     RUN_TEST(test_oldest_finished_job_is_replaced_first);
+    RUN_TEST(test_a_watched_job_outlives_the_ones_nobody_asked_about);
     RUN_TEST(test_many_jobs_through_a_small_table);
     RUN_TEST(test_id_wraps_past_zero);
     RUN_TEST(test_state_names);

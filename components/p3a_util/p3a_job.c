@@ -111,6 +111,9 @@ esp_err_t p3a_job_submit(p3a_job_runner_t runner_id, const char *name, p3a_job_f
     esp_err_t err = ESP_OK;
     xSemaphoreTake(s_lock, portMAX_DELAY);
     job_item_t item = {.id = p3a_job_table_add(&s_table, name), .fn = fn, .arg = arg};
+    if (out_id != NULL) {
+        p3a_job_table_watch(&s_table, item.id);  // the caller will be asked about it
+    }
     if (item.id == P3A_JOB_ID_NONE) {
         err = ESP_ERR_NO_MEM;
     } else if (xQueueSend(runner->queue, &item, 0) != pdTRUE) {

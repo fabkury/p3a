@@ -331,7 +331,7 @@ document.addEventListener('click', async (e) => {
             } else if (t.dataset.makapix === 'cancel') {
                 await del('/api/v2/makapix/registration');
             } else if (window.confirm('Remove the Makapix Club registration? You can register again later.')) {
-                await del('/api/v2/makapix/registration');
+                await del('/api/v2/makapix');
                 toast('Makapix Club registration removed');
             }
             makapixPoll.soon(300);

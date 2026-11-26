@@ -76,9 +76,104 @@ def test_the_other_channels_need_a_registration(rig):
         pytest.skip("this unit is registered")
     for kind, identifier in (("all", ""), ("user", ""), ("by_user", "QVJ"), ("hashtag", "pixelart"),
                              ("reactions", "QVJ")):
-        assert rig.uart.command("sched activate", playset(kind, identifier)) == {"result": "ok"}
+        # With an offset of this run's own the channel is one the unit has never listed: a channel it
+        # listed while it was registered is on the card, and plays from there until it is due again.
+        fresh = playset(kind, identifier)
+        fresh["channels"][0]["offset"] = int(time.time()) % 100000
+        assert rig.uart.command("sched activate", fresh) == {"result": "ok"}
         status = rig.wait(f"{kind} refused", lambda s: channel(s)["state"] == "failed", timeout=15)
         assert channel(status)["error"] == "NO_KEY", kind
+
+
+# --- a registered player, against Makapix Club itself ------------------------------------
+#
+# These need a unit its owner has registered (M4.5-a) and skip on one that is not. They read
+# and play; nothing here reacts to a post or changes anything on the owner's account.
+
+def job_result(rig, job: int, timeout: float = 60.0) -> dict:
+    deadline = time.monotonic() + timeout
+    info = rig.api.get(f"/api/v2/jobs/{job}").data
+    while info["state"] != "done" and time.monotonic() < deadline:
+        time.sleep(0.5)
+        info = rig.api.get(f"/api/v2/jobs/{job}").data
+    assert info["state"] == "done", info
+    return info
+
+
+def test_a_registered_player_connects_and_lists_every_kind_of_channel(rig):
+    if not registered(rig):
+        pytest.skip("this unit is not registered with Makapix Club")
+    deadline = time.monotonic() + 90
+    while rig.api.get("/api/v2/makapix").data["link"] != "connected" and time.monotonic() < deadline:
+        time.sleep(1)
+    state = rig.api.get("/api/v2/makapix").data
+    assert state["link"] == "connected", state
+    # Read from the certificate when the renewal first looks at it, a little after the boot.
+    assert state.get("certificate_ends", time.time() + 1) > time.time()
+    assert "player_key" not in state and "token" not in state
+    # Every kind is asked of the server with the player's token and answered. The owner's own
+    # posts and a person's reactions may be none; the open ones are never none.
+    for kind, identifier, some in (("promoted", "", True), ("all", "", True), ("user", "", False),
+                                   ("hashtag", "pixelart", False), ("reactions", "QVJ", False),
+                                   ("by_user", "QVJ", False)):
+        assert rig.uart.command("sched activate", playset(kind, identifier)) == {"result": "ok"}
+        # Listed now, or known from an index on the card that is not yet due again.
+        status = rig.wait(f"{kind} listed", lambda s: channel(s)["state"] in ("ready", "failed") and
+                          (channel(s)["listings"] >= 1 or channel(s)["records"] > 0), timeout=60)
+        ch = channel(status)
+        assert ch["state"] == "ready" and "error" not in ch, (kind, ch)
+        assert ch["records"] <= 32 and (ch["records"] > 0 or not some), (kind, ch)
+    # A person who is not there is an answer too, not a failure of the device.
+    assert rig.uart.command("sched activate", playset("by_user", "zzzzzzzzzzzz")) == {"result": "ok"}
+    status = rig.wait("nobody of that name", lambda s: channel(s)["listings"] >= 1 and channel(s)["state"] == "failed",
+                      timeout=60)
+    assert channel(status)["error"] == "MISSING"
+
+
+def test_a_registered_players_views_are_taken_by_the_server(rig):
+    if not registered(rig):
+        pytest.skip("this unit is not registered with Makapix Club")
+    rig.uart.command("settings set", {"makapix_view_ack": True})
+    try:
+        assert rig.uart.command("sched activate", playset("all")) == {"result": "ok"}
+        mark = rig.api.get("/api/v2/test/log?since=0").data["next"]
+        rig.wait("one of them playing", lambda s: s["playing"] and not s["loading"] and s["current_source"] == "makapix",
+                 timeout=180)
+        post = rig.api.get("/api/v2/player").data["current"]["post_id"]
+        assert post > 0 and rig.api.get("/api/v2/makapix").data  # the first view is told after five seconds seen
+        deadline = time.monotonic() + 30
+        text = ""
+        while "view acknowledged" not in text and time.monotonic() < deadline:
+            time.sleep(1)
+            text = " ".join(str(line) for line in rig.api.get(f"/api/v2/test/log?since={mark}").data["lines"])
+        assert "view acknowledged" in text, "the server answered the view it was asked to acknowledge"
+    finally:
+        rig.uart.command("settings set", {"makapix_view_ack": False})
+
+
+def test_the_servers_playset_of_followed_artists_is_asked_for_and_played(rig):
+    if not registered(rig):
+        pytest.skip("this unit is not registered with Makapix Club")
+    api = rig.api
+    assert api.call("POST", "/api/v2/makapix/playset", {}).status == 400
+    assert api.call("POST", "/api/v2/makapix/playset", {"name": ""}).status == 400
+    # A name the server does not have.
+    info = job_result(rig, api.call("POST", "/api/v2/makapix/playset", {"name": "no_such_playset"}).data["job"])
+    assert info["succeeded"] is False and info["error"] == "MISSING", info
+    # The one it has. What is in it is the owner's to decide: either a channel for each artist
+    # followed, or the answer that there is none.
+    assert rig.uart.command("sched activate", LOCAL_ONLY) == {"result": "ok"}
+    info = job_result(rig, api.call("POST", "/api/v2/makapix/playset", {"name": "followed_artists"}).data["job"])
+    player = api.get("/api/v2/player").data
+    if info["succeeded"]:
+        assert player["playset"] == "followed_artists" and 1 <= len(player["channels"]) <= 64
+        for ch in player["channels"]:
+            assert ch["source"] == "makapix" and ch["kind"] == "by_user" and ch["identifier"], ch
+        assert "followed_artists" not in [p["name"] for p in api.get("/api/v2/playsets").data["playsets"]], \
+            "the server's playset is played, not saved"
+    else:
+        assert info["error"] == "ESP_ERR_NOT_FOUND", info
+        assert player["playset"] == "", "nothing changed"
 
 
 def test_a_kind_makapix_does_not_have_is_refused_without_asking(rig):
@@ -133,7 +228,9 @@ def test_a_registration_shows_a_code_and_a_cancel_leaves_the_device_as_it_was(ri
         state = wait_registration(rig, "another code", lambda r: r["phase"] == "showing_code" and r["code"] != code
                                   or r.get("last_result", "").startswith("no code"))
     finally:
-        assert rig.api.call("DELETE", "/api/v2/makapix/registration").status in (200, 409)
+        # Cancelling only ever cancels. (It once also removed the registration when no code was
+        # waiting, and this line, reached after a code request was refused, unregistered the unit.)
+        assert rig.api.call("DELETE", "/api/v2/makapix/registration").status == 200
     state = wait_registration(rig, "cancelled", lambda r: r["phase"] == "idle")
     assert state["registration"]["last_result"] in ("cancelled", "no code: RATE_LIMITED")
     assert state["registered"] == was["registered"]
@@ -141,8 +238,11 @@ def test_a_registration_shows_a_code_and_a_cancel_leaves_the_device_as_it_was(ri
     while rig.api.get("/api/v2/ui").data["screen"] == "registration" and time.monotonic() < deadline:
         time.sleep(0.3)
     assert rig.api.get("/api/v2/ui").data["screen"] != "registration"
+    # With nothing under way a cancel does nothing, on a registered unit above all.
+    assert rig.api.call("DELETE", "/api/v2/makapix/registration").data == {"cancelled": False}
+    assert rig.api.get("/api/v2/makapix").data["registered"] == was["registered"]
     if not was["registered"]:
-        rig.api.call("DELETE", "/api/v2/makapix/registration").error(409, "NOT_REGISTERED")
+        rig.api.call("DELETE", "/api/v2/makapix").error(409, "NOT_REGISTERED")
 
 
 # --- what the link is told, and what a command does ---------------------------------
@@ -182,7 +282,9 @@ def wait_makapix(rig, what, test, timeout=10.0) -> dict:
 def play_promoted(rig) -> dict:
     assert rig.uart.command("sched activate", playset("promoted")) == {"result": "ok"}
     rig.wait("a Makapix artwork plays", lambda s: s["playset"] == "Makapix" and s["playing"] and not s["loading"]
-             and s["current_source"] == "makapix", timeout=120)
+             and s["current_source"] == "makapix" and channel(s)["available"] >= 3, timeout=120)
+    # An artwork of an earlier Makapix playset may be up still, and would pass for this one's: move on to one of its own.
+    rig.step("next")
     return player(rig)
 
 

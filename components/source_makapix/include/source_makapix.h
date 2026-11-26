@@ -97,6 +97,21 @@ esp_err_t source_makapix_register_cancel(void);
 // is not told: the player stays on its owner's account until removed there.
 esp_err_t source_makapix_unregister(void);
 
+// --- the server's playsets ----------------------------------------------------------
+//
+// The server makes some playsets itself, by name, for the player's owner:
+// today one, "followed_artists" (a channel for each artist the owner
+// follows, the latest followed first). This asks for one and gives the
+// server's answer as it came ({"success", "playset_name", "channels": [{"type",
+// "name", "identifier", "display_name", "weight"}], ...}): the same shape
+// its play_playset command carries, for the same reader. Blocks for one
+// HTTPS exchange: call it from a job.
+//   ESP_ERR_INVALID_ARG   a name that is not letters, digits, '_' and '-'
+//   P3A_ERR_NO_KEY        the device is not registered
+//   P3A_ERR_MISSING       the server has no playset of that name
+// and makapix_rpc's other answers.
+esp_err_t source_makapix_get_playset(const char *name, char *out, size_t out_len);
+
 // --- commands -----------------------------------------------------------------------
 //
 // The server can tell a player what to do (the owner's buttons on the

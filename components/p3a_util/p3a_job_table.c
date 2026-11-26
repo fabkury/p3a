@@ -23,8 +23,9 @@ static p3a_job_info_t *find(p3a_job_table_t *table, p3a_job_id_t id)
 
 p3a_job_id_t p3a_job_table_add(p3a_job_table_t *table, const char *name)
 {
-    // Prefer a slot never used; otherwise the finished job with the lowest id,
-    // which is the oldest because ids only grow.
+    // Prefer a slot never used; otherwise a finished job, one nobody watches
+    // before one somebody does, and among equals the lowest id, which is the
+    // oldest because ids only grow.
     p3a_job_info_t *slot = NULL;
     for (int i = 0; i < P3A_JOB_TABLE_SIZE; i++) {
         p3a_job_info_t *s = &table->slots[i];
@@ -32,7 +33,10 @@ p3a_job_id_t p3a_job_table_add(p3a_job_table_t *table, const char *name)
             slot = s;
             break;
         }
-        if (s->state == P3A_JOB_DONE && (!slot || s->id < slot->id)) {
+        if (s->state != P3A_JOB_DONE) {
+            continue;
+        }
+        if (!slot || (slot->watched && !s->watched) || (slot->watched == s->watched && s->id < slot->id)) {
             slot = s;
         }
     }
@@ -51,6 +55,16 @@ p3a_job_id_t p3a_job_table_add(p3a_job_table_t *table, const char *name)
         strncpy(slot->name, name, sizeof(slot->name) - 1);
     }
     return slot->id;
+}
+
+bool p3a_job_table_watch(p3a_job_table_t *table, p3a_job_id_t id)
+{
+    p3a_job_info_t *job = find(table, id);
+    if (!job) {
+        return false;
+    }
+    job->watched = true;
+    return true;
 }
 
 bool p3a_job_table_start(p3a_job_table_t *table, p3a_job_id_t id)

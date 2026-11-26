@@ -207,6 +207,10 @@ async function choosePill(id) {
         if (!builtin) return;
         label = builtin.label;
         playset = builtin.playset;
+        if (builtin.server) {
+            await chooseServerPlayset(builtin);
+            return;
+        }
     }
     state.pendingPill = id;
     renderPills();
@@ -218,6 +222,27 @@ async function choosePill(id) {
         state.pendingPill = '';
         renderPills();
         toast(explain(e), true);
+    }
+}
+
+// A playset Makapix Club makes for the owner: the device asks for it and plays it.
+async function chooseServerPlayset(builtin) {
+    state.pendingPill = builtin.id;
+    renderPills();
+    try {
+        const started = await post('/api/v2/makapix/playset', { name: builtin.server });
+        await job(started.job, null, { timeout: 60000 });
+        toast(`Switching to ${builtin.label}…`);
+        poll.soon(400);
+    } catch (e) {
+        state.pendingPill = '';
+        renderPills();
+        // The job's error is the code: an empty playset is the one worth its own words.
+        toast(e.code === 'ESP_ERR_NOT_FOUND'
+            ? 'You follow no artists on Makapix Club yet. Follow some there, then tap again.'
+            : e.code === 'MISSING' || e.code === 'AUTH' || e.code === 'RATE_LIMITED' || e.code === 'NOT_PLAYABLE'
+                ? `Makapix Club did not give that playset (${e.code}).`
+                : explain(e), true);
     }
 }
 

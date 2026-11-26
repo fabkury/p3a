@@ -121,6 +121,10 @@ test('the pill that stands for what is playing', () => {
     assert.equal(activePill({ playset: '', channels: [{ source: 'makapix', kind: 'promoted', identifier: '' }] }),
         'builtin:makapix-promoted');
     assert.equal(activePill({ playset: '', channels: [{ source: 'makapix', kind: 'all' }] }), 'builtin:makapix-all');
+    // The server's playset plays under its own name, and is the "Followed" pill.
+    const followed = { playset: 'followed_artists', channels: [{ source: 'makapix', kind: 'by_user', identifier: 'abc' }] };
+    assert.equal(activePill(followed), 'builtin:makapix-followed');
+    assert.equal(playingName(followed), 'Followed');
     assert.equal(activePill({ playset: '', channels: [{ source: 'giphy', kind: 'trending' }] }), 'builtin:giphy-trending');
     // A search is not the Giphy pill, and two channels are no pill.
     assert.equal(activePill({ playset: '', channels: [{ source: 'giphy', kind: 'search', identifier: 'cats' }] }), '');
@@ -130,7 +134,13 @@ test('the pill that stands for what is playing', () => {
     assert.equal(activePill({ playset: '', channels: [{ source: 'pinned' }] }), '');
     assert.equal(activePill({ playset: '', channels: [] }), '');
     // Every built-in is one channel the device can be handed as it is.
+    // (or, for one the server makes, its name there).
     for (const b of BUILTINS) {
+        if (b.server) {
+            assert.equal(b.playset, undefined);
+            assert.equal(activePill({ playset: b.server, channels: [] }), b.id);
+            continue;
+        }
         assert.equal(b.playset.channels.length, 1);
         assert.equal(activePill({ playset: '', channels: b.playset.channels }), b.id);
     }

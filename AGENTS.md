@@ -82,7 +82,7 @@ The firmware is public (Apache 2.0). 1.x runs on real users' devices from
 | `docs/2.0/` | The work stream: protocol, plan, ledger, decisions, testing, parity. |
 | `docs/2.0-architecture-review/` | The design of 2.0. |
 | `host/` | Host tooling. `intro-anim-lab` builds the boot animations from `components/p3a_ui/intro/` and checks their contract (`--check`); run it after touching one. In `jitter-lab` the puller and the analyzer work against 2.0; the rest still targets 1.x and is adapted with the soak (M6.1). |
-| `docs/` (the rest), `README.md` | Still describe 1.x. They are rewritten in one pass at M5.4; do not patch them piecemeal. |
+| `docs/` (the rest), `README.md` | The user's documentation, for 2.0: `README.md`, `docs/QUICK-START.md`, `docs/HOW-TO-USE.md`, `docs/flash-p3a.md`, `docs/migrating-to-2.0.md`. Outward text: no em dashes, and every instruction is one that was tried. |
 
 ### Layers
 
@@ -380,12 +380,13 @@ idf.py fullclean
 |-------|------|
 | `docs/2.0/` | The 2.0 work stream: `README.md` (session protocol and rules), `PROGRESS.md` (the ledger), `PLAN.md` (milestones), `DECISIONS.md`, `TESTING.md`, `PARITY.md`. |
 | `docs/2.0-architecture-review/` | The design: `README.md` holds the thesis and the 25-row verdict table; one page per area; `target-architecture.md` is the 2.0 skeleton; `ideas.md` is the running list of 2.0 ideas, append new ones there. |
-| `docs/known-issues.md` | Open 1.x problems with root causes. Check it for every file that leaves `legacy/`. |
+| `docs/known-issues.md` | 1.x's open problems with root causes, and at the top what became of each in 2.0. Check it for every file that leaves `legacy/`. |
 | `docs/deferred/` | Parked ideas, one page each. |
 | `docs/art-institutions/finalized-design.md` | The museums as 1.x built them: each museum's API and its quirks are still right; the device's side is now `components/source_museum`, whose files say what changed. |
 | `docs/jitter/` | The playback-jitter work: the fixes that must survive the move, the pass bar, the lab tooling. |
 | `docs/reference/` | Makapix MQTT protocol and player API, ESP-IDF 5.5.4 setup. |
-| `docs/infrastructure/`, `docs/HOW-TO-USE.md`, `docs/QUICK-START.md`, `README.md` | 1.x as shipped. Useful for understanding `legacy/`; rewritten at M5.4. |
+| `docs/infrastructure/` | For developers: the architecture in one page, and the HTTP API. |
+| `README.md`, `docs/QUICK-START.md`, `docs/HOW-TO-USE.md`, `docs/flash-p3a.md`, `docs/migrating-to-2.0.md` | For users, describing 2.0. 1.x's versions are on `main`. |
 
 Outreach, talks, and retired research corpora live in the private
 `fabkury/p3a-private` repository, not here.

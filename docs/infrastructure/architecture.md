@@ -1,111 +1,81 @@
 # Architecture
 
-## Platform
+p3a 2.x runs on an ESP32-P4 (two RISC-V cores, 32 MB PSRAM, 32 MB flash) with an ESP32-C6 for Wi-Fi, reached over SDIO. It is built on ESP-IDF 5.5.4 and FreeRTOS. One firmware image holds everything, the web pages included.
 
-- **SoC**: dual-core ESP32-P4 (RISC-V), with an ESP32-C6 co-processor for
-  Wi-Fi 6 / BLE reached through esp_hosted over SDIO.
-- **Framework**: ESP-IDF v5.5.4.
-- **Code**: the `main/` application component plus 32 components under
-  `components/` (see [components.md](components.md)).
-- **Flash budget**: two 8 MB OTA app slots, a 4 MB LittleFS web UI image, a
-  2 MB slot for the ESP32-C6 image, and a 256 KB core dump partition
-  (`partitions.csv`). The feature list lives in the root `README.md`.
+This page is the overview. The rules that keep the code in this shape are in [`AGENTS.md`](../../AGENTS.md), each with the header that explains it.
 
-## System Overview
+## Layers
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                          p3a_main.c                              │
-│                     (Application Entry Point)                    │
-└──────┬──────────┬──────────────┬──────────────┬─────────────────┘
-       │          │              │              │
-┌──────▼───┐ ┌───▼─────────┐ ┌─▼───────────┐ ┌▼───────────────┐
-│ p3a_core │ │Service Layer│ │Hardware Init│ │   event_bus    │
-│  (State  │ │             │ │             │ │  (Pub/Sub)     │
-│  Machine)│ │connectivity │ │ app_lcd_p4  │ └────────────────┘
-│          │ │  _service   │ │ app_touch   │
-│p3a_state │ │content      │ │ app_usb     │
-│p3a_render│ │  _service   │ └─────────────┘
-│p3a_touch │ │playback     │
-│  _router │ │  _service   │
-│sd_path   │ │render_engine│
-└──────────┘ └──────┬──────┘
-                    │
-     ┌──────────────┼────────────────────┐
-     │              │                    │
-┌────▼──────┐ ┌────▼─────────────┐ ┌───────▼────────┐
-│play       │ │content_cache     │ │wifi_manager    │
-│_scheduler │ │loader_service    │ │ota_manager     │
-│           │ │storage_eviction  │ │makapix         │
-│playback   │ │giphy · klipy     │ │art_institution │
-│  _queue   │ └──────────────────┘ └────────────────┘
-└────┬──────┘
-     │
-┌────▼──────────────────────────────────────────────┐
-│                channel_manager                     │
-│  sdcard_channel · makapix_channel · vault          │
-│  (institution channels persist via playset_store + │
-│   per-museum cache at /sdcard/p3a/museum/...)      │
-└────┬──────────────────────────────────────────────┘
-     │
-┌────▼──────────────────────────────────────────┐
-│            animation_player                    │
-│  animation_player_render · animation_player    │
-│  _loader · display_renderer · decoders         │
-└───────────────────────────────────────────────┘
-```
+Every component belongs to a layer and may depend only on its own layer and the ones below it. `components/LAYERS.txt` assigns them and `tools/check_tree.py` enforces it in CI.
 
-## Initialization Sequence
+| Layer | Components | What it holds |
+|---|---|---|
+| util | `p3a_util`, `frame_trace` | Tasks, jobs, events, memory pressure, errors, the clock. No knowledge of the product |
+| board | `p3a_board`, `sdio_bus`, `slave_ota` | The display, touch, buttons, the SDIO bus shared by Wi-Fi and the SD card, the ESP32-C6's firmware |
+| storage | `p3a_storage`, `p3a_settings` | The SD card (paths, atomic writes, health, repair, USB hand-over) and the settings store |
+| library | `p3a_library`, `p3a_fetch` | Artwork records and indices, the blob store, pin lists, eviction; every HTTP request the device makes |
+| sources | `source_local`, `source_makapix`, `source_giphy`, `source_klipy`, `source_museum`, `source_pinned` | One component per place artworks come from |
+| player | `animation_decoder`, `display_renderer`, `animation_player`, `play_scheduler` | Decoding, the display pipeline, playing a file, deciding what plays next |
+| ui | `p3a_ui`, `p3a_usb` | Screens, notices, overlays, touch; the card as a USB drive |
+| net | `p3a_net`, `p3a_update` | Wi-Fi, setup, the clock, the HTTP server with its API and pages; firmware updates |
+| main | `main/` | `app_main`: the boot sequence, nothing else |
 
-The `app_main()` function in `main/p3a_main.c` executes the following boot sequence:
+A lower layer never calls up. Where it must tell an upper one something, it emits an event (`p3a_event.h`) or calls a hook the upper layer registered (`p3a_ui_hooks.h`, a source's command handler).
 
-1. **NVS flash init** — initialize non-volatile storage; erase and retry on corruption
-2. **Timezone** — set UTC timezone via `setenv("TZ", "UTC")` and `tzset()`
-3. **`sdio_bus_init()`** — SDIO bus mutex coordinator (shared between WiFi and SD card)
-4. **`p3a_state_init()`** — unified state machine; loads remembered playset name from NVS, sets initial state (channel restore happens later during animation player init)
-5. **`event_bus_init()`** — async event pub/sub bus; subscribes to playback, system, and Makapix events
-6. **`content_service_init()`** — channel cache subsystem (LAi persistence, debounced saves)
-7. **`playback_service_init()`** — deterministic playback engine (play scheduler)
-8. **`ota_manager_validate_boot()`** — marks new OTA firmware as valid to prevent rollback
-9. **`esp_netif_init()` + `esp_event_loop_create_default()`** — network interface and event loop
-10. **`p3a_board_littlefs_mount()`** — mount LittleFS partition; check web UI health
-11. **`makapix_init()`** — Makapix MQTT/TLS API layer (before channel refresh tasks start)
-12. **`app_lcd_init()` + `app_touch_init()`** — LCD display and touch controller
-13. **`p3a_board_button_init()`** — BOOT button for pause/resume (conditional, if `P3A_HAS_BUTTONS`)
-14. **`p3a_render_init()`** — state-aware rendering dispatch
-15. **`app_usb_init()`** — USB composite device (CDC-ACM + Mass Storage)
-16. **`connectivity_service_init()`** — Wi-Fi (captive portal or saved network)
-17. **`show_url_init()`** — URL artwork download task
-18. **`slave_ota_check_and_update()`** — ESP32-C6 co-processor firmware check/update
-19. **`ota_manager_init()`** — OTA manager with periodic update checks
+## From a source to the panel
 
-## Runtime Operation
+1. **A playset** is a list of channels, each with a source, a kind, an identifier and a weight (`playset.h`). One playset is active.
+2. **A source** is a table of functions (`p3a_source_ops_t`). For a channel it can list the artworks (`refresh`, into an index of `p3a_record_t`) and say where an artwork's bytes are (`url`). It does not download, schedule or delete.
+3. **The content task** (`sched_content.c`) does the rest for every source alike: it lists channels when they are due, keeps their indices on the card, downloads artworks one at a time into the **blob store**, waits after a refusal, and makes room when the card fills. A blob is stored once under the hash of its content, whatever plays it.
+4. **The scheduler** (`play_scheduler`) picks the next channel and the next artwork in it, moves on when the dwell time is up, and keeps the history. It is the only thing that asks the player for a file.
+5. **The animation player** decodes the file (`animation_decoder`: WebP, GIF, PNG and APNG, JPEG, BMP) and reports each request as ready, shown or failed. What must happen when an artwork is really on the panel (history, counting a view) hangs off "shown".
+6. **The display renderer** presents frames: decoded frames are scaled to the 720x720 panel (nearest-neighbour or hardware bilinear, as the source says), overlays are drawn on top, and buffers are swapped on the panel's vertical sync. Its timing code is the result of the jitter work and is not changed without measuring again against `docs/jitter/REPORT.md`.
 
-- **p3a_core** manages global state transitions (animation playback, provisioning, OTA, PICO-8)
-- **play_scheduler** executes the active playset to select artwork across channels
-- **event_bus** delivers events between decoupled components (playback, connectivity, UI)
-- **animation_player** task renders decoded frames to the LCD via the display renderer
-- **p3a_touch_router** routes touch gestures based on current state (navigation, Makapix reactions, info screen, screen rotation)
-- **connectivity_service** manages Wi-Fi connection and triggers OTA checks
-- **HTTP server** handles REST API requests, WebSocket connections, and static file serving
-- **makapix** MQTT client handles cloud commands and artwork receiving
-- **USB tasks** handle CDC-ACM console and Mass Storage access
+What is on the screen at any moment is decided by the UI's model (`ui_model.c`): screens and notices are put up and taken down, and the one seen follows by precedence. Nothing switches screens directly.
 
-## Service Layer
+## Pure logic and thin hardware
 
-The service layer provides thin, high-level wrappers over internal components, decoupling `p3a_main.c` from implementation details:
+Whatever decides behaviour is written as plain C with no IDF includes, beside a thin file that does the device's part:
 
-| Service | File | Purpose |
-|---------|------|---------|
-| `connectivity_service` | `main/connectivity_service.c` | Wraps Wi-Fi init, OTA check, OTA install |
-| `content_service` | `main/content_service.c` | Initializes channel cache subsystem |
-| `playback_service` | `main/playback_service.c` | Play scheduler wrapper: channel switching, navigation, pause/resume, rotation |
-| `render_engine` | `main/render_engine.c` | Display rotation and background color configuration |
+| Decision | Pure file |
+|---|---|
+| Which channel and which artwork next; when to move on; what a failure leads to | `sched_core.c`, `sched_pick.c`, `sched_turn.c`, `sched_history.c` |
+| When a channel is listed again and how long a refusal waits | `sched_refresh.c` |
+| Which blobs go when the card fills | `p3a_evict.c` |
+| What a service's answer means | `giphy_parse.c`, `klipy_parse.c`, `makapix_parse.c`, `museum_<id>.c` |
+| What a gesture does on each screen; what is seen | `ui_route()`, `ui_model.c` |
+| Which release to install; when to look; whether a new firmware has proved itself | `update_release.c`, `update_policy.c` |
 
-### playback_service API
+These are compiled and run on a workstation (`tests/host`, Unity, also under the sanitizers on Linux in CI), on answers recorded from the real services and on damaged copies of them. The device tests (`tests/device`, pytest) then flash the dev unit and drive it over its serial console and its API.
 
-The playback service is the richest service, exposing:
-- `playback_service_play_channel()` / `play_user_channel()` / `play_hashtag_channel()` — channel switching
-- `playback_service_next()` / `prev()` — artwork navigation
-- `playback_service_pause()` / `resume()` / `is_paused()` — pause with brightness save/restore
-- `playback_service_set_rotation()` — screen rotation (0/90/180/270)
+## Tasks, jobs, memory
+
+- **Tasks** are few, long-lived, and created only through `p3a_task_create()` with a class (render, touch, app, network, background) that sets priority, core and where the stack lives. The display pipeline has core 1 to itself.
+- **Jobs** (`p3a_job_submit()`) are for work that runs once or is slow: an install, a pin, a card format. An HTTP handler that needs more than a few milliseconds starts a job and answers 202 with its number.
+- **Memory** defaults to PSRAM. Internal RAM is scarce (the Wi-Fi link and the SD card need it) and is asked for explicitly. Optional work checks `p3a_mem_level()` before it starts.
+- **Flash mapping**: every task but the display pipeline has its stack in PSRAM, and the IDF does not allow flash to be memory-mapped from such a stack. The few calls that do it run on `app_main`'s task at boot or through `p3a_internal_call()`.
+
+## Storage
+
+Flash, fixed for the life of 2.x (`partitions.csv`):
+
+| Partition | Size | What |
+|---|---|---|
+| `nvs` | 64 KB | Settings, Wi-Fi credentials, the Makapix registration |
+| `otadata` | 8 KB | Which app slot boots, and whether it is on trial |
+| `slave_fw` | 2 MB | The ESP32-C6's firmware, flashed onto it at boot when it is stale |
+| `coredump` | 256 KB | The last crash |
+| `ota_0`, `ota_1` | 10 MB each | The running firmware and the one before |
+| `spare` | 9.6 MB | Reserved, unformatted |
+
+The SD card (FAT) holds all artwork, under one root folder the user may move (`sd_path`): `animations/` (the user's own files), `blobs/` (everything downloaded), `channels/` (indices), `playsets/`, `pins/`, `temporary/`. Writes are atomic (`fs_atomic`), binary files are framed with a schema number and a checksum (`p3a_frame`), and a file that fails to load is never deleted. The card is formatted only from the on-device flow a person confirms.
+
+Settings are one JSON schema (`components/p3a_settings/settings.json`): the build generates the C table and struct from it, the store validates against it, the API serves it, and the settings page draws itself from it.
+
+## The network side
+
+- `p3a_net_start()` returns at once; code that needs the network subscribes to events or asks `p3a_net_is_up()` and copes with "no". With no stored network the device opens the `p3a-setup` access point and serves the setup page.
+- The HTTP server (`p3a_http.h`) is one route table per area and one envelope. Everything is under `/api/v2/` ([the API](api.md)). The pages are plain files under `components/p3a_net/static/`, gzipped into the firmware at build time; each page is a script, a model tested with node, and three shared scripts.
+- Every request the device makes goes through `http_fetch`, which maps failures to a few errors callers act on (missing, rate limited, refused) and logs only a URL's host.
+- Makapix Club: listings and reactions over HTTPS, commands and presence over MQTT with a per-device certificate.
+- Firmware updates (`p3a_update`): the device looks at the repository's releases, installs `p3a-v2.bin` into the other app slot when its owner asks, and keeps a new firmware only once it is reachable again.

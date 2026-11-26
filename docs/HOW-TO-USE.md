@@ -2,9 +2,9 @@
 
 This guide covers everything you need to know to use your p3a pixel art player, from initial setup to advanced features.
 
-> **First time setting up?** Start with the [Quick Start Guide](QUICK-START.md) — it walks through the bare minimum to see art on the screen in about 15 minutes. Come back here for the deeper details.
+> **First time setting up?** Start with the [Quick Start Guide](QUICK-START.md), it walks through the bare minimum to see art on the screen in about 15 minutes. Come back here for the deeper details.
 
-p3a is built for continuous 24/7 operation. Once it's set up, you can leave it running on a shelf or wall indefinitely — no scheduled reboots, no babysitting required.
+p3a is built for continuous 24/7 operation. Once it's set up, you can leave it running on a shelf or wall indefinitely, no scheduled reboots, no babysitting required.
 
 ## Table of Contents
 
@@ -17,14 +17,13 @@ p3a is built for continuous 24/7 operation. Once it's set up, you can leave it r
 7. [USB SD Card Access](#usb-sd-card-access)
 8. [Giphy Integration](#giphy-integration)
 9. [Klipy Integration](#klipy-integration)
-10. [Museum Channels (IIIF)](#museum-channels-iiif)
+10. [Museum Channels](#museum-channels)
 11. [Device Registration](#device-registration)
 12. [Makapix Club Features](#makapix-club-features)
-13. [PICO-8 Monitor](#pico-8-monitor)
-14. [Firmware Updates](#firmware-updates)
-15. [SD Card Sizing and Automatic Cleanup](#sd-card-sizing-and-automatic-cleanup)
-16. [REST API](#rest-api)
-17. [Troubleshooting](#troubleshooting)
+13. [Firmware Updates](#firmware-updates)
+14. [SD Card Sizing and Automatic Cleanup](#sd-card-sizing-and-automatic-cleanup)
+15. [REST API](#rest-api)
+16. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -34,11 +33,11 @@ p3a is built for continuous 24/7 operation. Once it's set up, you can leave it r
 
 - Waveshare ESP32-P4-WIFI6-Touch-LCD-4B board
 - USB-C data cable (not a charging-only cable)
-- microSD card (4 GB minimum, **FAT32** — p3a can format it for you on-device)
+- microSD card (4 GB minimum, **FAT32**: p3a can format it for you on-device)
 - any USB power source
   - p3a draws very little power, so any 5V 1A (or more) phone charger or a computer USB port is plenty
 - a small screwdriver
-- a computer (Windows, Mac, or Linux) — needed once, for the initial firmware install. Everything after that is wireless.
+- a computer (Windows, Mac, or Linux), needed once, for the initial firmware install. Everything after that is wireless.
 
 ### First-time setup
 
@@ -46,11 +45,11 @@ p3a is built for continuous 24/7 operation. Once it's set up, you can leave it r
 2. **Flash the firmware**. See [flash-p3a.md](flash-p3a.md) for instructions.
 3. **Configure Wi-Fi** by following the [Wi-Fi Setup](#wi-fi-setup) instructions below.
 
-> **SD card format:** the card must be FAT32 (or FAT16) — p3a does not read exFAT or NTFS, and cards larger than 32 GB usually ship formatted as exFAT. p3a **never erases or reformats a card unasked**: a card it can't read shows a **"No Usable SD Card"** screen with a **"Format card for p3a"** button — tap it, read the erase warning, and confirm to have p3a format the card as FAT32 and restart. (If a card starts failing later during operation, the same option appears as **"Format SD card"** on the long-press info screen; you can rescue files first over USB — see [USB SD Card Access](#usb-sd-card-access).) To format the card on a computer instead, note that Windows' built-in Format dialog caps FAT32 at 32 GB — use a tool such as [guiformat](http://ridgecrop.co.uk/guiformat.htm) or [Rufus](https://rufus.ie) for larger cards.
+> **SD card format:** the card must be FAT32 (or FAT16), p3a does not read exFAT or NTFS, and cards larger than 32 GB usually ship formatted as exFAT. p3a **never erases or reformats a card unasked**: a card it can't read shows a **"No Usable SD Card"** screen with a **"Format card for p3a"** button, tap it, read the erase warning, and confirm to have p3a format the card as FAT32 and restart. (If a card starts failing later during operation, the same option appears as **"Format SD card"** on the long-press info screen; you can rescue files first over USB, see [USB SD Card Access](#usb-sd-card-access).) To format the card on a computer instead, note that Windows' built-in Format dialog caps FAT32 at 32 GB, use a tool such as [guiformat](http://ridgecrop.co.uk/guiformat.htm) or [Rufus](https://rufus.ie) for larger cards.
 
-Any card from 4 GB up works. Bigger cards hold a bigger artwork cache (fewer re-downloads) — details in [SD Card Sizing and Automatic Cleanup](#sd-card-sizing-and-automatic-cleanup).
+Any card from 4 GB up works. Bigger cards hold a bigger artwork cache (fewer re-downloads), details in [SD Card Sizing and Automatic Cleanup](#sd-card-sizing-and-automatic-cleanup).
 
-> **Card corruption and self-repair:** some microSD cards, usually no-name ones and usually after a power cut, quietly write blocks of data to the wrong place. When that lands on one of p3a's folders or on the card's file allocation table, files in that folder become unreachable and saving there fails. p3a detects both cases and repairs them on its own: a damaged folder is moved to `lost/` in the SD card root and recreated empty (caches simply download again), and a damaged allocation table is restored from the card's mirror copy at boot. The device shows a short **"SD card repaired"** notice on screen once per boot after the first repair, the web UI shows an **"SD Card Corruption Repaired"** banner with the repair count, and `/status` reports the details under `sd_repair`. Treat any repair as a warning: a card that needs repairing is losing data, so copy anything you care about off it and replace it. You can delete `lost/` over USB (or format the card) once you have looked at it.
+> **Card corruption and self-repair:** some microSD cards, usually no-name ones and usually after a power cut, quietly write blocks of data to the wrong place. When that lands on one of p3a's folders or on the card's file allocation table, files in that folder become unreachable and saving there fails. p3a detects both cases and repairs them on its own: a damaged folder is moved to `lost/` in the SD card root and recreated empty (caches simply download again), and a damaged allocation table is restored from the card's mirror copy at boot. The device shows a short **"SD card repaired"** notice on screen once per boot after the first repair, the web UI shows an **"SD Card Corruption Repaired"** banner with the repair count, and `GET /api/v2/status` reports the count under `storage.repairs`. Treat any repair as a warning: a card that needs repairing is losing data, so copy anything you care about off it and replace it. You can delete `lost/` over USB (or format the card) once you have looked at it.
 
 ---
 
@@ -87,11 +86,11 @@ The 720×720 touchscreen recognizes these gestures:
 | **Two-finger rotate** | Rotate screen (clockwise or counter-clockwise) |
 | **Long press** | Show device info / dismiss overlay |
 
-Pin lists are managed in the Playset Editor (`http://p3a.local/playset-editor`). Swiping on a local SD-card file shows an error indicator — local files can't be pinned or reacted to.
+Pin lists are managed from the home page (`http://p3a.local/`, **Manage pins**), and a playset can play a pin list as one of its channels. Swiping on a local SD-card file shows an error indicator, local files can't be pinned or reacted to.
 
 ### Screen Rotation
 
-Place two fingers on the screen and rotate them like turning a dial — at roughly 45° of finger rotation, the screen rotates 90° in the same direction. All four orientations (0°, 90°, 180°, 270°) are supported. The rotation applies to both artwork playback and the UI, is saved automatically, and persists across reboots. You can also set rotation via the web interface or [REST API](#rest-api).
+Place two fingers on the screen and rotate them like turning a dial, at roughly 45° of finger rotation, the screen rotates 90° in the same direction. All four orientations (0°, 90°, 180°, 270°) are supported. The rotation applies to both artwork playback and the UI, is saved automatically, and persists across reboots. You can also set rotation via the web interface or [REST API](#rest-api).
 
 ### Auto-advance
 
@@ -109,14 +108,14 @@ Besides the touchscreen, the board has two small push-buttons next to the USB-C 
 
 | Button | Position | Action |
 |--------|----------|--------|
-| **BOOT** | Top — farther from the USB-C ports | Pause / unpause playback |
-| **RESET** (RST) | Bottom — closer to the USB-C ports | Hardware reset — reboots the device immediately |
+| **BOOT** | Top, farther from the USB-C ports | Pause / unpause playback |
+| **RESET** (RST) | Bottom, closer to the USB-C ports | Hardware reset: reboots the device immediately |
 
-**BOOT** toggles pause: press it and the screen goes black; press it again and the same animation that was playing resumes. It controls the same pause state as the web dashboard's Pause/Resume controls and the `POST /action/pause` / `POST /action/resume` [REST API](#rest-api) endpoints, so you can freely pause with one and resume with another.
+**BOOT** toggles pause: press it and the screen goes black; press it again and the same animation that was playing resumes. It controls the same pause state as the web dashboard's Pause/Resume controls and the `POST /api/v2/player/pause` / `POST /api/v2/player/resume` [REST API](#rest-api) endpoints, so you can freely pause with one and resume with another.
 
-**RESET** is wired straight to the chip's reset line — the firmware can't see it or change what it does. Pressing it is equivalent to unplugging and replugging power: safe at any time, and the device boots right back into playback.
+**RESET** is wired straight to the chip's reset line, the firmware can't see it or change what it does. Pressing it is equivalent to unplugging and replugging power: safe at any time, and the device boots right back into playback.
 
-> **Tip:** Holding BOOT while pressing RESET puts the board into serial download mode (used for USB flashing). If you ever land there by accident — screen stays dark — just press RESET alone to boot normally.
+> **Tip:** Holding BOOT while pressing RESET puts the board into serial download mode (used for USB flashing). If you ever land there by accident, screen stays dark, just press RESET alone to boot normally.
 
 ---
 
@@ -125,11 +124,12 @@ Besides the touchscreen, the board has two small push-buttons next to the USB-C 
 Open `http://p3a.local/` in any browser on the same Wi-Fi network to access the web dashboard.
 
 The web interface provides:
-- **Device status** — current artwork (Wi-Fi info is on the Settings → Network tab; uptime on Settings → System)
-- **Playback controls** — next, previous, pause, resume
-- **Configuration** — brightness, screen rotation, settings
-- **Boot animation** — the device plays one of 22 intro animations, picked at random on each boot; under Settings → Display → "Boot Logo Animation" you can pick a specific one instead and set how long it plays (1–7.5 s, default 3 s)
-- **PICO-8 button** (if the feature is enabled in firmware)
+- **Device status**: current artwork (Wi-Fi info is on the Settings > Network tab; uptime on Settings > System)
+- **Playback controls**: next, previous, pause, resume
+- **Configuration**: brightness, screen rotation, settings
+- **Boot animation**: the device plays one of 22 intro animations, picked at random on each boot; under Settings > Display > "Boot Logo Animation" you can pick a specific one instead and set how long it plays (1–7.5 s, default 3 s)
+- **Playsets**: build mixes of channels from every source at `http://p3a.local/playsets`
+- **Updates**: see what is installed, what is available, and go back to the previous firmware at `http://p3a.local/update`
 
 > **Note:** The web interface is only accessible on your local network, not over the internet. For remote control, register your device at [makapix.club](https://makapix.club/).
 
@@ -139,11 +139,11 @@ The web interface provides:
 
 ### Supported formats
 
-- **WebP** (animated and static) — recommended for best quality and compression; supports transparency
-- **GIF** (animated and static) — supports transparency
-- **PNG / APNG** (animated and static) — supports transparency with full alpha channel; `.apng` files are accepted too
+- **WebP** (animated and static), recommended for best quality and compression; supports transparency
+- **GIF** (animated and static), supports transparency
+- **PNG / APNG** (animated and static), supports transparency with full alpha channel; `.apng` files are accepted too
 - **JPEG** (static)
-- **BMP** (static) — all common variants (1/4/8/16/24/32-bit, RLE compression); transparency supported for files with an explicit alpha mask
+- **BMP** (static), all common variants (1/4/8/16/24/32-bit, RLE compression); transparency supported for files with an explicit alpha mask
 
 Images with transparency are composited over a background color configurable via the web interface or REST API.
 
@@ -155,20 +155,20 @@ Your own files live inside a single folder on the microSD card. By default:
 /p3a/animations/
 ```
 
-The firmware looks **only** in this folder for local artwork — it does not scan the rest of the card. If the folder is missing or empty, the local channel simply shows zero artworks.
+The firmware looks **only** in this folder for local artwork, it does not scan the rest of the card. If the folder is missing or empty, the local channel simply shows zero artworks.
 
-The `p3a` root folder is configurable at `http://p3a.local/settings` → **Storage** tab → *SD Card Storage*. Whatever you set there (e.g. `/myart`) becomes the folder p3a uses for **all** of its data — local files, Makapix vault, Giphy/Klipy/museum caches, playlists — and your artwork then belongs in `<your-root>/animations/` instead. Changes require a reboot. Before manually placing files on the card, check that tab to confirm the current root.
+The `p3a` root folder is configurable at `http://p3a.local/settings` > **Storage** tab > *SD Card Storage*. Whatever you set there (e.g. `/myart`) becomes the folder p3a uses for **all** of its data, your own files, downloaded artwork, channel listings, playsets and pin lists, and your artwork then belongs in `<your-root>/animations/` instead. Changes require a reboot. Before manually placing files on the card, check that tab to confirm the current root.
 
 Two ways to copy files onto the card:
-- **USB** — connect a USB-C cable from the **HS port** to your computer and the SD card appears as a removable drive (see [USB SD Card Access](#usb-sd-card-access))
-- **Web upload** — drag and drop files onto the dashboard at `http://p3a.local/`; uploads are saved into `<root>/animations/` automatically
+- **USB**: connect a USB-C cable from the **HS port** to your computer and the SD card appears as a removable drive (see [USB SD Card Access](#usb-sd-card-access))
+- **Web upload**: drag and drop files onto the dashboard at `http://p3a.local/`; uploads are saved into `<root>/animations/` automatically
 
 ### Image guidelines
 
-- **Any aspect ratio works** — non-square images are scaled to fit while preserving the original aspect ratio
-- **Small pixel art is upscaled** — a 128×128 image will be scaled up to fill the display
-- **Smart upscaling** — Giphy, Klipy, and museum content uses hardware-accelerated bilinear interpolation for smooth results; everything else (Makapix, local files, pinned artwork) uses nearest-neighbor scaling to preserve crisp pixel edges
-- **Centered display** — artwork is centered on the 720×720 display over the configurable background color
+- **Any aspect ratio works**: non-square images are scaled to fit while preserving the original aspect ratio
+- **Small pixel art is upscaled**: a 128×128 image will be scaled up to fill the display
+- **Smart upscaling**: Giphy, Klipy, and museum content uses hardware-accelerated bilinear interpolation for smooth results; everything else (Makapix, local files, pinned artwork) uses nearest-neighbor scaling to preserve crisp pixel edges
+- **Centered display**: artwork is centered on the 720×720 display over the configurable background color
 
 ---
 
@@ -177,7 +177,7 @@ Two ways to copy files onto the card:
 p3a has two USB-C ports, but only one (the High-Speed port) works as a USB storage device (see the [Physical Buttons](#physical-buttons) diagram).
 
 1. **Connect a USB-C cable** from the HS port to your computer
-2. **The microSD card appears as a removable drive** — copy, delete, or organize files as needed
+2. **The microSD card appears as a removable drive**: copy, delete, or organize files as needed
 3. **Eject the drive** before disconnecting
 
 While connected, the SD card is locked for the device: the screen shows a USB-mode indicator and you can't change artwork until you disconnect. Normal operation resumes automatically after disconnecting. Works with computers, smartphones (with USB OTG), and tablets.
@@ -195,7 +195,7 @@ To use Giphy, you need a free API key:
 1. Go to [developers.giphy.com](https://developers.giphy.com/) and sign up
 2. Create an app and copy the API key
 3. Open the p3a settings page at `http://p3a.local/settings#giphy`
-4. Paste your API key and click **Save All Giphy Settings**
+4. Paste your API key and click **Save** next to it. The page then shows "Key set"; the key itself is never shown again
 
 ### Configuring Giphy
 
@@ -207,18 +207,18 @@ The Giphy tab at `http://p3a.local/settings#giphy` lets you customize:
 | **Refresh Interval** | 1, 2, 4, or 8 hours | How often p3a fetches fresh trending content from Giphy |
 | **Cache Size** | 32–500 items | Maximum number of GIFs kept per Giphy channel |
 
-> Rendition (resolution) and format (WebP/GIF) are build-time defaults set via Kconfig (`CONFIG_GIPHY_RENDITION_DEFAULT`, `CONFIG_GIPHY_FORMAT_DEFAULT`); they are not adjustable from the web UI.
+> Rendition (resolution) and format (WebP/GIF) are settings too (`giphy_rendition`, `giphy_format`, `giphy_prefer_downsized`), changed through the [REST API](#rest-api) rather than the page.
 
 ### How it works
 
-- p3a periodically fetches trending GIFs from the Giphy API and caches them in the `giphy/` subfolder of your configured SD card root
-- GIFs are downloaded on demand as they come up in the rotation, so the first few plays may take a moment — once cached, playback is instant
+- p3a periodically fetches each Giphy channel's listing and keeps the GIFs it downloads in `blobs/` under your SD card root, with everything else it downloads
+- GIFs are downloaded on demand as they come up in the rotation, so the first few plays may take a moment, once cached, playback is instant
 
 ---
 
 ## Klipy Integration
 
-p3a can play GIFs and stickers from [Klipy](https://klipy.com/). Klipy offers three channel kinds — trending, search, and category — each available for both GIFs and stickers, and Klipy channels mix into playsets like any other source.
+p3a can play GIFs and stickers from [Klipy](https://klipy.com/). Klipy offers three channel kinds, trending, search, and category, each available for both GIFs and stickers, and Klipy channels mix into playsets like any other source.
 
 ### Getting a Klipy API key
 
@@ -227,7 +227,7 @@ To use Klipy, you need a free API key:
 1. Go to [partner.klipy.com](https://partner.klipy.com/) and sign up
 2. Copy your app's API key
 3. Open the p3a settings page at `http://p3a.local/settings#klipy`
-4. Paste your API key and click **Save All Klipy Settings**
+4. Paste your API key and click **Save** next to it
 
 > Test keys are limited to 100 requests per hour. Each request returns up to 50 items, so a 500-item channel takes 10 requests to refresh. Production keys are unlimited.
 
@@ -238,20 +238,20 @@ The Klipy tab at `http://p3a.local/settings#klipy` lets you customize:
 | Setting | Options | Description |
 |---------|---------|-------------|
 | **Content Rating** | G, PG, PG-13, R | Filters content by age-appropriateness |
-| **Format** | GIF or WebP | Downloaded file format — GIF by default; WebP has a smaller download footprint |
+| **Format** | GIF or WebP | Downloaded file format. GIF by default; WebP has a smaller download footprint |
 | **Refresh Interval** | 1, 2, 4, or 8 hours | How often p3a fetches fresh content from Klipy |
 | **Cache Size** | 32–2500 items | Maximum number of artworks kept per Klipy channel |
 
 ### How it works
 
-- p3a periodically fetches each channel's listing from the Klipy API and caches artworks in the `klipy/` subfolder of your configured SD card root, split into `gif/` and `sticker/` subtrees
-- Artworks are downloaded on demand as they come up in the rotation — once cached, playback is instant
+- p3a periodically fetches each channel's listing from the Klipy API and keeps what it downloads in `blobs/` under your SD card root
+- Artworks are downloaded on demand as they come up in the rotation, once cached, playback is instant
 
 ---
 
 ## Museum Channels
 
-p3a can play artwork from major museums that publish their collections online — most through the [IIIF Image API](https://iiif.io/api/image/3.0/), the Cleveland Museum of Art and the Minneapolis Institute of Art through their own open-access image CDNs. Channels are organized by the museum's own facets (collections, departments, sets, ...) and refreshed on a schedule. Eight museums are available today:
+p3a can play artwork from major museums that publish their collections online, most through the [IIIF Image API](https://iiif.io/api/image/3.0/), the Cleveland Museum of Art and the Minneapolis Institute of Art through their own open-access image CDNs. Channels are organized by the museum's own facets (collections, departments, sets, ...) and refreshed on a schedule. Eight museums are available today:
 
 | Museum | Facets you can pick |
 |---|---|
@@ -261,38 +261,36 @@ p3a can play artwork from major museums that publish their collections online �
 | **Statens Museum for Kunst (SMK)** | Collections |
 | **Harvard Art Museums** | Classifications, Centuries, Cultures, Periods, Places, Media, Techniques, Work types, Groups, Galleries |
 | **Smithsonian** | Museums (Cooper Hewitt, SAAM, NPG, NMAAHC, Hirshhorn, African Art) |
-| **Cleveland Museum of Art** | Departments, Types — CC0 works only |
-| **Minneapolis Institute of Art** | Classifications, Departments, Countries, Styles — public-domain works only |
+| **Cleveland Museum of Art** | Departments, Types. CC0 works only |
+| **Minneapolis Institute of Art** | Classifications, Departments, Countries, Styles, public-domain works only |
 
 The Art Institute of Chicago is temporarily unavailable: since 2026-08 its image server blocks direct access from devices, so AIC channels can't fetch new artwork. AIC art already on the card keeps playing.
 
 Six of the eight museums need no account or API key. Two do:
 
-- **Harvard Art Museums** — request a free key at [harvardartmuseums.org/collections/api](https://harvardartmuseums.org/collections/api) (delivered by email within a day) and paste it into **Settings → Museums → Harvard Art Museums (API key)**.
-- **Smithsonian** — register at [api.data.gov/signup/](https://api.data.gov/signup/) (instant, email-based) and paste the key into **Settings → Museums → Smithsonian (API key)**. One api.data.gov key covers Smithsonian and every other api.data.gov service (NASA, NOAA, etc.). Don't use `DEMO_KEY` — its ~30 req/hour-per-IP cap will throttle the first refresh mid-flight.
+- **Harvard Art Museums**: request a free key at [harvardartmuseums.org/collections/api](https://harvardartmuseums.org/collections/api) (delivered by email within a day) and paste it into **Settings > Museum > Harvard Art Museums API key**.
+- **Smithsonian**: register at [api.data.gov/signup/](https://api.data.gov/signup/) (instant, email-based) and paste the key into **Settings > Museum > Smithsonian API key**. One api.data.gov key covers Smithsonian and every other api.data.gov service (NASA, NOAA, etc.). Don't use `DEMO_KEY`, its ~30 req/hour-per-IP cap will throttle the first refresh mid-flight.
 
-Until a key is saved, the corresponding museum entry in the browse modal will prompt you to add one, and any channel you've already created sits dormant — it reactivates the moment a valid key is saved, no need to re-create it.
+Until a key is saved, the corresponding museum entry in the browse modal will prompt you to add one, and any channel you've already created sits dormant, it reactivates the moment a valid key is saved, no need to re-create it.
 
 ### Adding a museum channel
 
-1. **Open the Playset Editor** at `http://p3a.local/playset-editor`
+1. **Open Playsets** at `http://p3a.local/playsets`
 2. Open or create a playset and click **Add Channel**
-3. Set **Channel Type** to **Museum**
+3. Set **Channel Type** to **Museum** and click **Browse museums**
 4. A browse modal opens. Pick the museum, then the facet/axis (skipped for Rijks, which is axis-less), then the term you want
-5. The modal previews one artwork at a time at 400 px, with **Previous** / **Next** navigation and a title/artist/date caption. The **Add channel** button commits the channel — not the visible artwork. (Rijks previews resolve lazily, so the first thumbnail takes a moment)
-6. Save the playset normally
+5. The modal previews one artwork at a time at 400 px, with **Previous** / **Next** navigation and a title/artist/date caption. The **Add channel** button commits the channel, not the visible artwork. (Rijks previews resolve lazily, so the first thumbnail takes a moment)
+6. Save the playset (**Save**, or **Save & Play** to switch to it at once)
 
-The channel saves under a name like `V&A · Photographs` or `CMA · Japanese Art`, truncated with an ellipsis past 64 characters. The wire encoding is `{museum_id}:{axis}` for the channel name and the facet term id for the identifier — see [finalized-design.md §4.1](art-institutions/finalized-design.md).
+The channel saves under a name like `V&A · Photographs` or `CMA · Japanese Art`, shortened with an ellipsis past 63 characters; you can rename it in the editor. In the API such a channel has the kind `{museum_id}:{axis}` and the facet's term as its identifier.
 
 ### Refresh and download behavior
 
-- **Refresh interval and cache size** are configured in **Settings → Museum** (`http://p3a.local/settings#museum`). Defaults: refresh every 4 days, keep up to 1024 artworks per channel.
-- **First refresh** fetches the listing from the museum's API. Image downloads happen lazily as the device rotates through the playset — the first artworks appear within seconds, the rest fill in over the next minutes.
-- **Cached files** live under `museum/{museum_id}/` in your SD card root, hash-sharded and shared across all channels of the same museum — two channels referencing the same artwork only pay for it once. Cleanup is automatic (see [SD Card Sizing and Automatic Cleanup](#sd-card-sizing-and-automatic-cleanup)).
-- **Rijks artworks** require a "Linked Art walk" (three follow-up HTTP requests per artwork) to discover the actual IIIF identifier. The device does this lazily in the background, so a fresh Rijks channel takes ~50 minutes to fully populate — but the first few artworks appear within seconds.
-- **Rate limits** are honored per-museum. Harvard and the Smithsonian cap requests per API key (see **Settings → Museums**); the others don't publish a limit, but a 429 still engages a cooldown. The cooldown is shared between the device and the browser-side browse modal: if you trigger throttling from the modal, the device also waits.
-
-> A small number of Wellcome terms with very long labels are hidden from the browse modal — see [`docs/deferred/wellcome-long-labels.md`](deferred/wellcome-long-labels.md) for the rationale.
+- **Refresh interval and cache size** are configured in **Settings > Museum** (`http://p3a.local/settings#museum`). Defaults: refresh every 4 days, keep up to 1024 artworks per channel.
+- **First refresh** fetches the listing from the museum's API. Image downloads happen lazily as the device rotates through the playset, the first artworks appear within seconds, the rest fill in over the next minutes.
+- **Downloaded artworks** are stored once in `blobs/` under your SD card root, whatever plays them: two channels with the same artwork, or a channel and a pin list, only pay for it once. Cleanup is automatic (see [SD Card Sizing and Automatic Cleanup](#sd-card-sizing-and-automatic-cleanup)).
+- **Rijks artworks** require a "Linked Art walk" (three follow-up HTTP requests per artwork) to discover the actual IIIF identifier. The device does this lazily in the background, so a fresh Rijks channel takes ~50 minutes to fully populate, but the first few artworks appear within seconds.
+- **Rate limits** are honored per-museum. Harvard and the Smithsonian cap requests per API key (see **Settings > Museum**); the others don't publish a limit, but when a museum answers "too many requests" p3a waits before asking again. The device and the browse modal in your browser each keep their own wait.
 
 ---
 
@@ -300,20 +298,20 @@ The channel saves under a name like `V&A · Photographs` or `CMA · Japanese Art
 
 Register your p3a at [makapix.club](https://makapix.club/) to enable cloud features:
 
-- **Send artworks directly** — browse artworks on the website and send them straight to your p3a
-- **Remote control** — change artwork, adjust brightness from anywhere
-- **Status monitoring** — see your device's online status
-- **Send reactions** — swipe up on a Makapix artwork to give it a thumbs-up; swipe down to revoke
+- **Send artworks directly**: browse artworks on the website and send them straight to your p3a
+- **Remote control**: change artwork, adjust brightness from anywhere
+- **Status monitoring**: see your device's online status
+- **Send reactions**: swipe up on a Makapix artwork to give it a thumbs-up; swipe down to revoke
 
 ### How to register
 
-1. **Open the settings page** at `http://p3a.local/settings`, go to the Makapix tab, and click **Enter Provisioning Mode**
-2. **A registration code appears** on the display (6 characters)
+1. **Open the settings page** at `http://p3a.local/settings`, go to the Makapix tab, and click **Register this device**
+2. **A registration code appears** on the display and on the page (6 characters)
 3. **Go to [makapix.club](https://makapix.club/)** on your phone or computer
 4. **Enter the registration code** and link it to your account
-5. **The device connects automatically** via secure TLS MQTT
+5. **The device connects automatically** over a secure connection
 
-The registration code expires after 15 minutes. If it expires, click **Enter Provisioning Mode** again to get a new code.
+The registration code expires after 15 minutes. If it expires, click **Register this device** again to get a new code.
 
 ### Security
 
@@ -346,112 +344,93 @@ From the Makapix Club website, you can:
 
 ---
 
-## PICO-8 Monitor
-
-p3a can act as a dedicated PICO-8 game display:
-
-1. Open `http://p3a.local/` in your browser and click the **PICO-8** link
-2. Load any `.p8` or `.p8.png` cart file
-3. The browser runs a WebAssembly PICO-8 emulator (fake-08) and streams frames to the device over WebSocket at up to 30 FPS (adaptive — throttles down under network congestion), upscaled to 720×720
-
-The device automatically exits PICO-8 mode after 30 seconds of inactivity (no frames received) and returns to normal artwork playback.
-
-<p align="center">
-  <img src="../images/pico-8/pico-8-gameplay.webp" alt="PICO-8 gameplay video">
-</p>
-
----
-
 ## Firmware Updates
 
-p3a supports Over-the-Air (OTA) firmware updates. After the initial firmware flash via USB-C cable (see [flash-p3a.md](flash-p3a.md)), all subsequent updates install wirelessly:
+After the first flash over USB (see [flash-p3a.md](flash-p3a.md)), p3a updates over Wi-Fi. The web interface is part of the firmware, so there is one update, not two.
 
-- The device checks for updates every 12 hours while connected to Wi-Fi
-- Updates are **never installed automatically** — you always approve them
-- When an update is available, a green banner appears on the main web page — click it (or go to `http://p3a.local/ota`), review the release notes, click **Install Update**, and confirm
-- Progress is shown on both the device screen and the web interface; the device reboots automatically when done
-- The ESP32-C6 co-processor's firmware is updated automatically when needed
+- The device looks for a new release two minutes after it joins your network and every 12 hours after that. You can turn this off under **Settings > System**
+- Updates are **never installed automatically**: you always approve them
+- When one is available, a dot appears on the **Update** tab and a banner on the home page. Open `http://p3a.local/update`, read the release notes, click **Install**, and confirm
+- Progress is shown on the device's screen and on the page. The device restarts when it is done, and the page follows it across the restart
 
-> The update takes 1-2 minutes. Losing power midway is harmless: the new firmware is written to a spare partition and only activated at the very end, so the device simply boots the previous firmware and you can start the update again.
+> The update takes 1-2 minutes. Losing power midway is harmless: the new firmware is written to the second of two slots and only chosen at the very end, so the device boots the firmware it had and you can start again.
 
-### Rollback to previous version
+### A new firmware is on trial
 
-If a previous firmware version is available, a **"Rollback to \<previous version\>"** button appears at `http://p3a.local/ota`. Click it and confirm; the device reboots with the previous firmware.
+For the first minutes after an update, the new firmware is on trial. It is kept as soon as the device is back on your network with its web page up. If it cannot get there within ten minutes, the device restarts into the firmware it ran before, by itself, and the Update page says that the version was undone. An update cannot leave you with a device you can no longer reach.
 
-### REST API for updates
+### Going back
 
-```bash
-# Check current update status
-curl http://p3a.local/ota/status
+The device keeps the firmware it ran before the last update. `http://p3a.local/update` shows it as "Also on this device" with a **Go back** button. Click it and confirm; the device restarts into that firmware. You can switch forward again the same way.
 
-# Trigger manual update check
-curl -X POST http://p3a.local/ota/check
+### Pre-releases
 
-# Install available update (if one exists)
-curl -X POST http://p3a.local/ota/install
+**Settings > System > Offer pre-release firmware** also offers versions that are still being tested. They may have faults, and you can go back from them like from any other.
 
-# Rollback to previous version
-curl -X POST http://p3a.local/ota/rollback
-```
+### REST API
 
----
+Everything the web interface does goes through a JSON API under `/api/v2/`, and the same API is open to scripts on your network. Every answer has the same shape: `{"ok": true, "data": {...}}`, or `{"ok": false, "code": "...", "error": "..."}` with a code for programs and a sentence for people.
 
-## SD Card Sizing and Automatic Cleanup
-
-p3a downloads and caches artwork on the SD card, and runs an automatic eviction policy that keeps a slice of the card free at all times. The watermarks scale with card capacity, so any card from 4 GB up works. Under the default settings:
-
-- Eviction kicks in when free space drops below the *trigger* watermark: **10% of the card's capacity** (at least 256 MiB, at most 1 GiB).
-- It deletes the least-recently-played cached artwork until free space rises to the *stop* watermark: trigger + **25% of capacity** headroom (at least 512 MiB, at most 4 GiB). The overshoot prevents thrashing — without it, a few downloads would push free space back across the trigger line almost immediately.
-- Files newer than 4 hours are never deleted, and your own files in `<root>/animations/` are never touched.
-
-On a 4 GB card this leaves roughly 2.5–3 GiB for cached artwork; on 32 GB and larger cards the caps work out to the classic behavior of keeping ~1–5 GiB free. Bigger cards hold a bigger artwork cache, which means fewer re-downloads — hence the 16+ GB recommendation.
-
----
-
-## REST API
-
-The same endpoints that power the web interface are available as a JSON API for automation and scripting.
-
-### Get device status
+### Device status
 
 ```bash
-curl http://p3a.local/status
+curl http://p3a.local/api/v2/status
 ```
 
-Returns JSON with playback state, firmware version, network info, uptime, free heap, and storage. For current artwork details, see `GET /api/init` or `GET /playsets/active`.
+Returns the firmware version, network, time, storage, memory, and uptime. What is playing is under `GET /api/v2/player`: the current artwork, the active playset's channels and their state.
 
 ### Control playback
 
 ```bash
-# Advance to next artwork
-curl -X POST http://p3a.local/action/swap_next
+# Next and previous artwork
+curl -X POST http://p3a.local/api/v2/player/next
+curl -X POST http://p3a.local/api/v2/player/back
 
-# Go back to previous artwork
-curl -X POST http://p3a.local/action/swap_back
+# Pause and resume
+curl -X POST http://p3a.local/api/v2/player/pause
+curl -X POST http://p3a.local/api/v2/player/resume
 
-# Pause playback
-curl -X POST http://p3a.local/action/pause
+# Show a picture from an address
+curl -X POST http://p3a.local/api/v2/player/show \
+  -H "Content-Type: application/json" -d '{"url": "https://example.com/art.gif"}'
 
-# Resume playback
-curl -X POST http://p3a.local/action/resume
-
-# Reboot device
-curl -X POST http://p3a.local/action/reboot
+# Restart the device
+curl -X POST http://p3a.local/api/v2/system/reboot
 ```
 
-### Screen rotation
+### Settings
+
+Every setting is read and changed the same way. `GET /api/v2/settings/schema` lists them all with their types and limits.
 
 ```bash
-# Get current rotation
-curl http://p3a.local/rotation
+# Read every setting (API keys are shown masked)
+curl http://p3a.local/api/v2/settings
 
-# Set rotation (0, 90, 180, or 270 degrees)
-curl -X POST http://p3a.local/rotation -H "Content-Type: application/json" -d '{"rotation": 90}'
+# Change one or several: here, rotate the screen (0, 90, 180, or 270 degrees)
+curl -X PATCH http://p3a.local/api/v2/settings \
+  -H "Content-Type: application/json" -d '{"rotation": 90}'
+```
+
+A value outside its limits is refused with a message that says why, and nothing is changed.
+
+### Playsets and pin lists
+
+```bash
+# The saved playsets, and one of them
+curl http://p3a.local/api/v2/playsets
+curl http://p3a.local/api/v2/playsets/Evening%20mix
+
+# Play a saved playset
+curl -X PUT http://p3a.local/api/v2/player/playset \
+  -H "Content-Type: application/json" -d '{"saved": "Evening mix"}'
+
+# The pin lists
+curl http://p3a.local/api/v2/pins
 ```
 
 ### File management
 
-Files can be uploaded via `POST /upload` (the same multipart endpoint the web UI's drag-and-drop uses), but there are no endpoints for browsing, renaming, or deleting files — use [USB Mass Storage](#usb-sd-card-access) for that.
+Upload a file into your own folder with `POST /api/v2/files?name=<file name>`, the file as the request body; it plays at once. There are no endpoints for browsing, renaming, or deleting files: use [USB SD Card Access](#usb-sd-card-access) for that.
 
 ---
 
@@ -465,7 +444,7 @@ Files can be uploaded via `POST /upload` (the same multipart endpoint the web UI
 
 ### Touch not responding
 
-- Clean the screen — the capacitive touch can be affected by moisture or debris
+- Clean the screen, the capacitive touch can be affected by moisture or debris
 - Restart the device by unplugging and reconnecting power
 
 ### Can't connect to Wi-Fi

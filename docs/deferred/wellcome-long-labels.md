@@ -1,5 +1,7 @@
 # Wellcome long-label terms
 
+**Status:** Resolved in p3a 2.0: a channel's identifier holds 95 bytes, so no term is hidden for its length. What follows describes 1.x.
+
 **Status:** Deferred (M4 — 2026-05-12).
 **Scope:** Wellcome facet terms whose label is longer than 32 characters.
 

@@ -6,6 +6,42 @@ Ideas that were evaluated and parked on purpose live in `docs/deferred/`.
 
 Last reviewed 2026-10-01 against `main` (v1.2.3 plus unreleased work).
 
+## In p3a 2.0
+
+Everything below was written about 1.x and is kept as written: 1.x is
+still what runs on people's devices. 2.0 is a rebuild, and each finding
+was dealt with when the code it lived in was moved or rewritten. This
+table says where; the ledger entry of that milestone
+(`docs/2.0/PROGRESS.md`) says how and with which test. The table was
+compiled from the plan and the ledger on 2026-11-25. "Handled" means the
+milestone that owned the finding closed with it on its list; the findings
+were not audited again one by one, which is M6.2's job.
+
+| Finding | In 2.0 |
+|---|---|
+| SDIO RX internal-RAM exhaustion | Open until the soak (M6.1). 2.0 has a memory-pressure signal that optional work obeys, allocates from PSRAM by default, and recovers a dead co-processor link by a counted restart |
+| Slow software JPEG decodes | Open until the soak (M6.1) |
+| H1, H14, M10 | Handled when the decoders and the upscaler moved (M2.1). Decoders check every size before computing with it and are tested on a corpus of good and bad files |
+| H2, H3, M1, M2, M3 | Gone: the channel cache and the picker were rewritten (M2.2, M2.3) |
+| H4, H13, M26 | Gone with the Makapix rewrite (M4.5): requests go over HTTPS, everything Makapix does runs on one task, a command becomes a call through a pure map. To confirm on a registered device (M4.5 part 4) |
+| H5, M28 | Handled with the board component (M1.2) |
+| H6, H16 | Fixed with the network layer (M1.5): one API under `/api/v2/` with one envelope |
+| H8, M23 | Fixed with the update (M5.2): every failure takes the screen down; a new firmware is on trial until it is reachable, and the owner can go back |
+| H9, M15 | Gone: the web interface is part of the firmware (change A) |
+| H10 | Fixed: `app_main` reports a failed step and goes on (M0.1 onwards) |
+| H11, M6, M18, M19, M29 | Fixed with the web pages (M5.1): real toasts, static files served from an embedded table with no path to escape, one poller, bounded museum requests, shared scripts |
+| H12, M8 | Gone with PICO-8 |
+| H18, M11, M16 | Gone: pin lists and "show this" were rewritten (M4.4) |
+| H19 | Fixed: CI builds every push and runs the host tests (M0.3) |
+| M4 | Gone with `playlist_manager` |
+| M5, M12, M20, M22 | Gone: one settings store, generated from one schema (M1.4) |
+| M7, M21 | Handled with uploads and the playset store (M2.3): the upload's answer goes through the JSON builder; there is one playset format |
+| M9 | Handled with the event bus (M1.1) |
+| M13, M14 | Fixed with the museum source (M4.3): keys are percent-encoded, terms are checked |
+| M24 | Open: the watchdog's posture is to be measured in the soak (M6.1) |
+| M25, M27 | Gone with the UI rewrite (M3.1) |
+| The low-severity lists | Checked file by file as each file moved; not listed here |
+
 ## SDIO RX: internal-RAM exhaustion
 
 **Symptom.** Under heavy network churn the ESP32-P4 panics with

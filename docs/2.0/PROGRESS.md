@@ -9,8 +9,8 @@ times.
 | | |
 |---|---|
 | Phase | 4, remote sources (Phases 0 to 3 complete but for their manual checks) |
-| Current milestone | M5.4 Documentation. M5.1, M5.2 and M5.3 are done but for what waits on Fab (M4.5-a, M5.2-a, M5.3-a, M5.3-b) |
-| Next action | M5.4, the documentation, in one pass (`PLAN.md` M5.4): `README.md`, `docs/QUICK-START.md`, `docs/HOW-TO-USE.md`, `docs/flash-p3a.md`, `docs/infrastructure/`, `docs/known-issues.md` and `docs/deferred/` re-triaged, `AGENTS.md` final. `docs/migrating-to-2.0.md` is drafted. They describe 1.x today; `PARITY.md` is the list of what 2.0 does and how it differs, the ledger and `DECISIONS.md` say why. Outward text: no em dashes, plain and confident. Check each claim against the code or the device before writing it. M5.3 is done but for its two manual checks (M5.3-a, M5.3-b). Small things left open: the "Followed" pill on the home page (1.x: `{ id: 'followed_artists', label: 'Followed', needsRegistration: true }`, a Makapix channel kind 2.0's source does not have yet; M4.5 part 4); clicking what was not clicked (upload on the home page, the Makapix registration on the settings page, drag to reorder in the playset editor, Harvard and the Smithsonian in the museum browser); `test_the_setup_network_is_on_the_air` if it fails again in a whole suite. Chrome is connected to this session (`mcp__claude-in-chrome__*`); stub `window.confirm` before clicking a button that asks. If Fab has registered the unit (M4.5-a), M4.5 part 4 comes first |
+| Current milestone | Phase 6 next (M6.1 soaks). Phase 5 is done but for what waits on Fab (M4.5-a, M5.2-a, M5.3-a, M5.3-b) |
+| Next action | M6.1, the soaks (`PLAN.md` M6.1, `docs/jitter/README.md` for the pass bar and the lab tooling, `docs/2.0/TESTING.md` for the soak tier): the jitter pass bar on a trace build under the work mix (`host/jitter-lab`: the puller and the analyzer work against 2.0, the rest is adapted now), the memory-pressure soak under a full refresh cycle including the 64-channel playset that livelocked 1.x, then a multi-day run. Before starting a long soak, tell Fab what it will occupy the dev unit with and for how long. Small things left open: the "Followed" pill on the home page (1.x: `{ id: 'followed_artists', label: 'Followed', needsRegistration: true }`, a Makapix channel kind 2.0's source does not have yet; M4.5 part 4); a new screenshot of the web page for the README; clicking what was not clicked (upload on the home page, the Makapix registration on the settings page, drag to reorder in the playset editor, Harvard and the Smithsonian in the museum browser); `test_the_setup_network_is_on_the_air` if it fails again in a whole suite. Chrome is connected to this session (`mcp__claude-in-chrome__*`); stub `window.confirm` before clicking a button that asks. If Fab has registered the unit (M4.5-a), M4.5 part 4 comes first |
 | Blocked on | M4.5 part 4 only: M4.5-a (Fab registers the dev unit with Makapix Club). Nothing else waits on it |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -58,8 +58,8 @@ reopened (why).
 | M4.5 Makapix | in progress. Parts 1 to 3 (2026-11-25): the source, registration up to the owner's part, the link, commands, views, likes, renewal. Host and device tests for everything an unregistered unit can do. Waits on M4.5-a for the rest |
 | M5.1 Embedded web UI | done 2026-11-25 but for the "Followed" pill (M4.5 part 4). Four pages, the museum browser. Tiers: node (42 cases), device tests, every page clicked in Chrome on the dev unit. `legacy/webui` is gone |
 | M5.2 Firmware OTA for 2.x | done 2026-11-25 but for manual check M5.2-a (one update from GitHub itself). Tiers: host tests, device tests (the whole cycle from a mirror), and the cycle clicked through the update page in Chrome |
-| M5.3 Release engineering | not started |
-| M5.4 Documentation | not started |
+| M5.3 Release engineering | done 2026-11-25 but for manual checks M5.3-a (the web flasher) and M5.3-b (the flasher program). The release folder from `tools/make_release.py`, flashed onto the dev unit with its own command. Tiers: self-tests in CI, one flash by hand |
+| M5.4 Documentation | done 2026-11-25 but for a new screenshot. The user's documents and the developer pages describe 2.0; the API examples were run against the dev unit |
 | M6.1 Soaks | not started |
 | M6.2 Parity audit | not started |
 | M6.3 Field test | not started |
@@ -480,6 +480,43 @@ M4.3, 2026-11-25:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-25: M5.4 part 2, the rest of the documentation
+
+- **`docs/QUICK-START.md`**: the flasher's warning, registration and the
+  key fields as the 2.0 pages word them, playsets at `/playsets`, the
+  museum browser's steps as clicked earlier today.
+- **`docs/HOW-TO-USE.md`**: addresses that moved, where downloads are
+  kept (`blobs/`), the Giphy rendition settings (settings now, not
+  Kconfig), the museums' waits (the device and the browser each keep
+  their own), no PICO-8; the Firmware Updates section written new (one
+  update, the trial, going back, pre-releases) and the REST API section
+  written new for `/api/v2/`. Its examples were run against the dev unit:
+  status, player, next, back, settings and its schema, playsets, pins,
+  update, and an upload with `POST /api/v2/files`.
+- **`docs/flash-p3a.md`** written new: a USB flash starts the device
+  fresh; the three ways; the command as esptool 4 and 5 take it;
+  building from source with the lab and `make_release.py`.
+- **`tools/make_release.py` also writes `p3a-<version>-usb-flash.zip`**,
+  the files a flash by hand needs in one download. The guide told people
+  to download "the firmware zip", which no release had; the flasher
+  program's "local ZIP" takes the same file.
+- **`docs/infrastructure/`** is three pages now: an index, the
+  architecture in one page (layers, the path from a source to the panel,
+  pure logic and thin hardware, tasks and memory, storage, the network
+  side), and the HTTP API (every route, from the route tables' own
+  comments). The seven 1.x pages it replaces are deleted: they named
+  components and files that no longer exist.
+- **`docs/known-issues.md`** has a section at the top saying what became
+  of each 1.x finding in 2.0, by milestone. It says of itself that it was
+  compiled from the plan and the ledger and not audited again (M6.2).
+- **`docs/deferred/`**: the aspect-ratio filter and Wellcome's long terms
+  are marked done in 2.0 and kept as design records.
+- No em dashes are left in the user's documentation.
+- Not verified: the documents read by someone setting up a device with
+  them (M6.3); the screenshot in the README is still 1.x's page.
+- Left for the end of M5.4: nothing but that screenshot. `AGENTS.md` is
+  current as of this commit.
 
 ### 2026-11-25: M5.4 part 1, the README, and what a new device plays
 

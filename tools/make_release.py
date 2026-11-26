@@ -22,6 +22,10 @@ What it writes, all to be uploaded as the release's assets:
     flash_command.txt      the esptool command, for doing it by hand
     SHA256SUMS             for people; devices use the digest GitHub computes
     README.md              what the files are
+    p3a-<version>-usb-flash.zip
+                           the files a USB flash needs, in one download: for
+                           esptool by hand and for the flasher program's
+                           "local ZIP"
 
 What it refuses to package, because it must not ship:
 
@@ -42,6 +46,7 @@ import json
 import shutil
 import struct
 import sys
+import zipfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -177,6 +182,13 @@ def make(build: Path, out_root: Path, allow_dev: bool = False) -> Path:
           f"{command} \"@flash_args\"\n")
     write(out / "SHA256SUMS", "".join(f"{hashlib.sha256(data).hexdigest()}  {name}\n" for _, name, data in ordered))
     write(out / "README.md", readme(version, ordered, len(app), slot))
+    # One download for a flash by hand. Fixed dates, so that the same build gives the same zip.
+    bundle = out / f"p3a-{version}-usb-flash.zip"
+    with zipfile.ZipFile(bundle, "w", zipfile.ZIP_DEFLATED) as z:
+        for name in [name for _, name, _ in ordered] + ["flash_args", "flash_command.txt", "README.md"]:
+            info = zipfile.ZipInfo(name, date_time=(2026, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            z.writestr(info, (out / name).read_bytes())
     print(f"release {version}: {out}")
     print(f"  {ASSET_NAME}: {len(app)} bytes, {len(app) / slot:.1%} of its slot, built with IDF {said['idf']}")
     print(f"  sha256 {hashlib.sha256(app).hexdigest()}")
@@ -209,7 +221,8 @@ Makapix Club registration (`{NVS_ERASED}` is written over them). Files on
 the SD card are kept. A 1.x device cannot update to 2.x over the air, and
 nothing of its settings carries over.
 
-By hand: `flash_command.txt` has the esptool command.
+By hand: download `p3a-{version}-usb-flash.zip`, extract it, and run the
+esptool command in its `flash_command.txt`.
 
 ## The files
 

@@ -16,6 +16,7 @@ import struct
 import sys
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -97,8 +98,15 @@ class MakeRelease(unittest.TestCase):
         self.assertEqual(out, self.root / "release" / "v2.0.3")
         self.assertEqual(sorted(p.name for p in out.iterdir()),
                          ["README.md", "SHA256SUMS", "bootloader.bin", "flash_args", "flash_command.txt",
-                          "network_adapter.bin", "nvs-erased.bin", "ota_data_initial.bin", "p3a-v2.bin",
-                          "partition-table.bin"])
+                          "network_adapter.bin", "nvs-erased.bin", "ota_data_initial.bin", "p3a-2.0.3-usb-flash.zip",
+                          "p3a-v2.bin", "partition-table.bin"])
+        # The zip is the same flash in one download: what flash_args lists, the list, and the command.
+        with zipfile.ZipFile(out / "p3a-2.0.3-usb-flash.zip") as z:
+            self.assertEqual(sorted(z.namelist()),
+                             ["README.md", "bootloader.bin", "flash_args", "flash_command.txt", "network_adapter.bin",
+                              "nvs-erased.bin", "ota_data_initial.bin", "p3a-v2.bin", "partition-table.bin"])
+            self.assertEqual(z.read("p3a-v2.bin"), app)
+            self.assertEqual(z.read("flash_args"), (out / "flash_args").read_bytes())
         # The settings partition is written blank, all of it: a USB flash leaves a fresh device.
         self.assertEqual((out / "nvs-erased.bin").read_bytes(), b"\xff" * 0x4000)
         self.assertEqual((out / "p3a-v2.bin").read_bytes(), app, "the firmware, byte for byte, under the 2.x name")

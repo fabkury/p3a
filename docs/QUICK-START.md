@@ -2,7 +2,7 @@
 
 Get your p3a from box to pixel art on the screen in about 15 minutes.
 
-This guide covers only the steps you need to see something on the display. For everything else — touch gestures, the web dashboard, screen rotation, the REST API, sending art from Makapix Club — see the full [User Guide](HOW-TO-USE.md).
+This guide covers only the steps you need to see something on the display. For everything else (touch gestures, the web dashboard, screen rotation, the REST API, sending art from Makapix Club), see the full [User Guide](HOW-TO-USE.md).
 
 ---
 
@@ -16,7 +16,7 @@ This guide covers only the steps you need to see something on the display. For e
   - p3a draws very little power, so any 5V 1A (or more) phone charger or a computer USB port is plenty
 - **Small screwdriver**
 - A computer
-  - Windows, Mac, or Linux — needed once, for the initial firmware install (a few Android flagships with WebSerial can do it too, but don't count on it). Everything after that is wireless.
+  - Windows, Mac, or Linux. It is needed once, for the initial firmware install (a few Android flagships with WebSerial can do it too, but don't count on it). Everything after that is wireless.
 
 ---
 
@@ -44,8 +44,9 @@ The card is where your p3a stores the artwork it downloads and any files you cop
    </p>
 
 2. Open the **[p3a Web Flasher](https://fabkury.github.io/p3a/web-flasher/)** in Chrome or Edge.
-3. Pick the latest version from the dropdown and click **Connect**. A browser pop-up asks which device to connect to — pick the one that appears.
-4. Click **Flash Device** and wait about two minutes. The board reboots when it's done.
+3. Pick the latest version from the dropdown and click **Connect**. A browser pop-up asks which device to connect to: pick the one that appears.
+4. The page warns that flashing erases the device's settings. On a new board there is nothing to lose: tick the box.
+5. Click **Flash Device** and wait about two minutes. The board reboots when it's done.
 
 Don't have Chrome or Edge, or want an offline Windows app? See the alternatives in [flash-p3a.md](flash-p3a.md).
 
@@ -60,15 +61,15 @@ The first time the board boots, it doesn't know your Wi-Fi yet, so it broadcasts
 3. Enter your home Wi-Fi name and password, then click **Save & connect**.
 4. The board reboots and joins your Wi-Fi.
 
-> **Heads up about the optional "Device name" field.** If you leave it blank, your p3a's address will be `http://p3a.local/` — that's what every URL in this guide assumes. If you fill it in (say, with `bedroom`), the address changes to `http://p3a-bedroom.local/` and you'll need to use that everywhere instead. The setup page shows the resulting address live as you type, so you can always check there. Skip this field unless you have more than one p3a on the same network.
+> **Heads up about the optional "Device name" field.** If you leave it blank, your p3a's address will be `http://p3a.local/`, which is what every URL in this guide assumes. If you fill it in (say, with `bedroom`), the address changes to `http://p3a-bedroom.local/` and you'll need to use that everywhere instead. The setup page shows the resulting address live as you type, so you can always check there. Skip this field unless you have more than one p3a on the same network.
 
 That's the technical setup done. Your p3a is now online.
 
 ---
 
-## 4. Watch art appear — no account needed
+## 4. Watch art appear, no account needed
 
-As soon as the board is online, it starts cycling through **Promoted Artworks from Makapix Club** — a curated stream of animated pixel art from real artists. It's free and works without registering for anything.
+As soon as the board is online, it starts cycling through **Promoted Artworks from Makapix Club**, a curated stream of animated pixel art from real artists. It's free and works without registering for anything.
 
 A new artwork appears roughly every 30 seconds. Try a few touch gestures:
 
@@ -76,9 +77,9 @@ A new artwork appears roughly every 30 seconds. Try a few touch gestures:
 - **Tap the left side** to go back to the previous one.
 - **Press and hold** anywhere to see the device's IP address and Wi-Fi info.
 
-The two physical buttons work too: **BOOT** (the top one, farther from the USB-C ports) pauses playback — the screen goes black — and unpauses it on a second press; **RESET** (the bottom one) reboots the device.
+The two physical buttons work too: **BOOT** (the top one, farther from the USB-C ports) pauses playback (the screen goes black) and unpauses it on a second press; **RESET** (the bottom one) reboots the device.
 
-If you're happy with this, you're done. Set it on a shelf and enjoy — both the hardware and the firmware are designed to run 24/7, so there's no need to power-cycle it between viewings.
+If you're happy with this, you're done. Set it on a shelf and enjoy. Both the hardware and the firmware are designed to run 24/7, so there's no need to power-cycle it between viewings.
 
 ---
 
@@ -89,9 +90,9 @@ If you're happy with this, you're done. Set it on a shelf and enjoy — both the
 Free, and gives you the entire Makapix Club library plus the ability to send any artwork directly to your device from your phone or laptop:
 
 1. Open `http://p3a.local/settings` in any browser on the same Wi-Fi.
-2. Go to the **Makapix** tab and click **Enter Provisioning Mode**.
-3. A 6-character code appears on the device's screen.
-4. Visit **[makapix.club](https://makapix.club/)**, create an account, and paste the code to link your device.
+2. Go to the **Makapix** tab and click **Register this device**.
+3. A 6-character code appears on the device's screen and on the page.
+4. Visit **[makapix.club](https://makapix.club/)**, create an account, and enter the code to link your device.
 
 That's it. Now any artwork you tap *Send to p3a* on shows up instantly on the screen.
 
@@ -101,26 +102,27 @@ Pulls fresh trending GIFs every few hours. This one takes a few extra minutes be
 
 1. Go to **[developers.giphy.com](https://developers.giphy.com/)**, sign up, and click **Create an API Key**. Give it any name.
 2. Copy the **API Key** that gets generated.
-3. Open `http://p3a.local/settings#giphy` in your browser, paste the key, and click **Save All Giphy Settings**.
+3. Open `http://p3a.local/settings#giphy` in your browser, paste the key, and click **Save** next to it.
+4. On the home page (`http://p3a.local/`), tap the **Giphy** pill.
 
-Trending GIFs start appearing in the rotation within a few minutes.
+Trending GIFs start playing within a few minutes. To mix them with other art, add a Giphy channel to a playset instead.
 
 ### C. Add GIFs and stickers from Klipy
 
 Klipy is another GIF platform, and it also offers stickers. Like Giphy, it needs a free API key:
 
 1. Go to **[partner.klipy.com](https://partner.klipy.com/)**, sign up, and copy your app's **API Key**.
-2. Open `http://p3a.local/settings#klipy` in your browser, paste the key, and click **Save All Klipy Settings**.
-3. Open `http://p3a.local/playset-editor`, click **Add Channel**, set **Channel Type** to **Klipy**, and pick trending, a search term, or a category — as GIFs or stickers.
+2. Open `http://p3a.local/settings#klipy` in your browser, paste the key, and click **Save** next to it.
+3. Open `http://p3a.local/playsets`, create a playset, click **Add Channel**, set **Channel Type** to **Klipy**, and pick trending, a search term, or a category, as GIFs or stickers. Then **Save & Play**.
 
 ### D. Add a museum channel
 
-Browse the open collections of major museums. Eight institutions are available today: the Rijksmuseum, the Victoria and Albert Museum, the Wellcome Collection, the Statens Museum for Kunst (SMK), Harvard Art Museums, the Smithsonian, the Cleveland Museum of Art, and the Minneapolis Institute of Art. All but two need no account or key. Harvard requires a free API key — request one at [harvardartmuseums.org/collections/api](https://harvardartmuseums.org/collections/api). Smithsonian requires a free api.data.gov key — register at [api.data.gov/signup/](https://api.data.gov/signup/) (instant). Paste either key into **Settings → Museums**. The Art Institute of Chicago is temporarily unavailable: since 2026-08 its image server blocks direct access from devices, so AIC channels can't fetch new artwork. AIC art already on the card keeps playing.
+Browse the open collections of major museums. Eight institutions are available today: the Rijksmuseum, the Victoria and Albert Museum, the Wellcome Collection, the Statens Museum for Kunst (SMK), Harvard Art Museums, the Smithsonian, the Cleveland Museum of Art, and the Minneapolis Institute of Art. All but two need no account or key. Harvard requires a free API key: request one at [harvardartmuseums.org/collections/api](https://harvardartmuseums.org/collections/api). The Smithsonian requires a free api.data.gov key: register at [api.data.gov/signup/](https://api.data.gov/signup/) (instant). Paste either key into **Settings > Museum**. The Art Institute of Chicago is temporarily unavailable: since 2026-08 its image server blocks direct access from devices, so AIC channels can't fetch new artwork. AIC art already on the card keeps playing.
 
-1. Open `http://p3a.local/playset-editor` in any browser on the same Wi-Fi.
+1. Open `http://p3a.local/playsets` in any browser on the same Wi-Fi.
 2. Open or create a playset and click **Add Channel**.
-3. Set **Channel Type** to **Museum**, then pick a museum, a facet (e.g. *Departments* for the Cleveland Museum of Art), and a term (e.g. *Japanese Art*).
-4. Preview a few artworks with **Previous** / **Next**, then click **Add** to commit the channel and save the playset.
+3. Set **Channel Type** to **Museum** and click **Browse museums**. Pick a museum, a section (e.g. *Departments* for the Cleveland Museum of Art), and a term (e.g. *Japanese Art*).
+4. Preview a few artworks with **Previous** / **Next**, click **Add channel**, then **Save & Play**.
 
 The device queries the museum's listing API and starts downloading artwork at IIIF resolution. The first images appear within seconds; the rest fill in over the next minutes. See the [User Guide](HOW-TO-USE.md#museum-channels-iiif) for the full list of facets, refresh-interval settings, and storage behavior.
 
@@ -131,12 +133,12 @@ Got a favorite GIF? Drop it onto the dashboard:
 1. Open `http://p3a.local/` in any browser on the same Wi-Fi.
 2. Drag a `.webp`, `.gif`, `.png`, or `.jpeg` file onto the page.
 
-The file is saved to the SD card and joins the rotation. You can also copy lots of files at once over USB — see the [User Guide](HOW-TO-USE.md#preparing-artwork) for that.
+The file is saved to the SD card and joins the rotation. You can also copy lots of files at once over USB: see the [User Guide](HOW-TO-USE.md#preparing-artwork).
 
 ---
 
 ## Where to next
 
-- **[User Guide](HOW-TO-USE.md)** — touch gestures, web dashboard, REST API, screen rotation, wireless updates, PICO-8 streaming, and the rest.
-- **[Flashing alternatives](flash-p3a.md)** — Windows desktop app, command line, building from source.
-- **[Makapix Club Discord](https://discord.gg/xk9umcujXV)** — questions, tips, and pixel art chat.
+- **[User Guide](HOW-TO-USE.md)**: touch gestures, web dashboard, REST API, screen rotation, wireless updates, and the rest.
+- **[Flashing alternatives](flash-p3a.md)**: Windows desktop app, command line, building from source.
+- **[Makapix Club Discord](https://discord.gg/xk9umcujXV)**: questions, tips, and pixel art chat.

@@ -1,6 +1,6 @@
 # Aspect-ratio filter for museum channels
 
-**Status:** Deferred. Design closed, no code written.
+**Status:** Built in p3a 2.0 as designed here. In 1.x: deferred, design closed, no code written.
 **Scope:** Hide museum artworks too elongated to display well on the
 square 720x720 panel.
 

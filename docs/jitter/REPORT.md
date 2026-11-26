@@ -34,9 +34,21 @@ in-scope stalls per hour as reported by `host/jitter-lab/analyze.py`
 | fixes 1–7b + Phase 6 | + networking on core 0, re-baseline | RUN-20260830-03 | 3.75 | 1 | 0.27 | 1 | 41 ms |
 | fixes 1–8 + Phase 6 | + yielding SD idle wait | RUN-20260830-05 | 2.70 | **0** | **0** | **0** | 37.6 ms |
 | Phase 7: release config + trace | same code, no diag scheduler | RUN-20260830-06 | 3.06 | **0** | **0** | **0** | 36.7 ms |
+| **p3a 2.0** (`v2`, release config + trace) | the same fixes, carried into the rebuilt firmware | RUN-20261125-02 | 3.03 | **0** | **0** | **0** | 47.5 ms |
 
 \* p99 in the unfixed run is dominated by the overrun sawtooth that Phase 6
 later removed; the stall column is the comparable number.
+
+The 2.0 row (2026-11-26) is not the same playset: 1.x's "Work mix" was a
+playset on the dev unit whose contents were never written down. 2.0's is
+defined in `host/jitter-lab/soak.py` (the card, Makapix promoted, two Giphy
+and two Klipy channels, two museums, all downloading). Its p99 is higher
+because that mix contained a few animations whose frames take about 100 ms
+to decode against a 30 ms frame time: 801 overrun frames of 50 to 158 ms,
+out of scope by this report's definition, and still counted in the
+percentile. Sixty other frames were stills drawn again mid-dwell, which
+2.0's renderer does not present while unchanged; the analyzer now names
+them and does not judge them (nothing was moving).
 
 Run IDs refer to raw captures kept on the lab laptop
 (`host/jitter-lab/runs/`, not committed).

@@ -5,6 +5,11 @@
 
 Classification per frame (flags from frame_trace.h):
     excluded   BASELINED or MAX_SPEED (lateness undefined by design)
+    still      a still image drawn again (2.0): decode_us and upscale_us are 0
+               and the consumer RESYNCED. A still is drawn once and nothing is
+               presented while it stays unchanged; when something makes it draw
+               again, the "lateness" is only the time since it was last drawn.
+               Nothing was moving, so nothing was late. Counted, not judged.
     overrun    ready_margin_us < 0, the producer lateness explains the frame
                lateness (|margin| >= lateness - 1 vsync), AND produce_us is in
                line with the artwork's (generation's) median producer time
@@ -135,7 +140,11 @@ def main():
     intervals = pair_marks(marks)
     stall_us, warn_us, window_us = a.stall_ms * 1000, a.warn_ms * 1000, int(a.window_s * 1e6)
 
-    valid = [f for f in frames if not (f["flags"] & (FLAG_BASELINED | FLAG_MAX_SPEED))]
+    stills = [f for f in frames if (f["flags"] & FLAG_RESYNCED) and f["decode"] == 0 and f["upscale"] == 0
+              and not (f["flags"] & (FLAG_BASELINED | FLAG_MAX_SPEED))]
+    still_seqs = {(f["ep"], f["seq"]) for f in stills}
+    valid = [f for f in frames if not (f["flags"] & (FLAG_BASELINED | FLAG_MAX_SPEED))
+             and (f["ep"], f["seq"]) not in still_seqs]
     lat_sorted = sorted(f["late"] for f in valid)
     # Per-generation (artwork epoch) median producer time: a frame whose producer
     # time is in line with its artwork's norm and still misses its target is a
@@ -282,6 +291,10 @@ def main():
     else:
         w("_no in-scope stalls_\n")
 
+    if stills:
+        w("## Stills drawn again (not judged)\n")
+        w(f"- count {len(stills)}, longest time since the still was last drawn {max(f['late'] for f in stills)/1000:.0f} ms\n")
+
     if overrun:
         w("## Overrun frames (producer late; out of scope, for the record)\n")
         w(f"- count {len(overrun)}, worst lateness {max(f['late'] for f in overrun)/1000:.0f} ms, worst produce {max(f['produce'] for f in overrun)/1000:.0f} ms")
@@ -343,7 +356,8 @@ def main():
     (run_dir / "report.md").write_text("\n".join(out), encoding="utf-8")
     summary = {
         "run": a.run, "frames": len(frames), "valid": len(valid), "span_s": span_s, "epochs": len(epochs),
-        "stalls": len(stalls), "warns": len(warns), "overrun": len(overrun), "pass": pass_bar,
+        "stalls": len(stalls), "warns": len(warns), "overrun": len(overrun), "stills_redrawn": len(stills),
+        "pass": pass_bar,
         "lateness_p99_us": pct(lat_sorted, 0.99) if lat_sorted else 0,
         "lateness_max_us": lat_sorted[-1] if lat_sorted else 0,
         "attribution": dict(kind_hits.most_common()),

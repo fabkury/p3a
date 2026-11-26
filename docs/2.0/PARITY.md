@@ -56,7 +56,7 @@ describe what a client can do, not the 1.x URL.
 | [x] | Fit to screen with aspect ratio kept, centred, borders in the background colour; the colour also prepaints boot | keep | M2.4 | Done in M2.1 |
 | [x] | Bilinear upscaling for Giphy, Klipy and museum art; nearest-neighbour for the rest | keep | M2.4 | The source's table says which (`smooth`); the user's files: O18 |
 | [x] | Pinned Giphy, Klipy and museum art plays nearest-neighbour, because the choice is made by channel type | decide | M4.4 | Q4, D78: it follows the art's own source |
-| [ ] | GIF and WebP loop counts ignored; APNG `num_plays` honored | keep | M2.1 | Three corpus files that declare a count; `test_player.py` (two new tests): to run on the device |
+| [x] | GIF and WebP loop counts ignored; APNG `num_plays` honored | keep | M2.1 | `test_player.py`: a GIF and a WebP that say "once" play for ever; an APNG that says "twice" holds its last frame |
 | [x] | Max-speed playback setting | keep | M2.4 | Done in M2.1 |
 | [x] | Auto-advance every 30 s by default; 0 turns it off; the timer resets on manual navigation and on request | keep | M2.4 | |
 | [x] | Auto-advance holds while the info screen, the setup screen or pause is up, and while the loader is busy | keep | M2.4, M3.3 | `test_ui.py`, `test_pipeline.py`, host `test_sched_turn` |
@@ -79,7 +79,7 @@ describe what a client can do, not the 1.x URL.
 
 | | Capability | 2.0 | M | Note |
 |---|---|---|---|---|
-| [ ] | Up to 64 channels, each with a weight and an offset; all-zero weights mean equal shares | keep | M2.3 | D91: every channel loads while the indices fit a memory budget (2.0 first stopped at sixteen). `test_scheduler.py::test_a_playset_of_many_channels_has_every_one_of_them_loaded`: to run on the device |
+| [x] | Up to 64 channels, each with a weight and an offset; all-zero weights mean equal shares | keep | M2.3 | D91: every channel loads while the indices fit a memory budget. `test_scheduler.py::test_a_playset_of_many_channels_has_every_one_of_them_loaded` |
 | [ ] | Offset honoured for museum, Giphy, local and pinned channels | change | M2.3 | D92: not for the SD card. Giphy's is host-tested; the others' effect on a listing is not tested |
 | [x] | Built-in playsets: all Makapix, Promoted, SD card, Giphy trending | keep | M2.3 to M4.5 | The home page's pills (node). "All Makapix" playing waits on M4.5-a |
 | [x] | A library of up to 32 saved playsets: list, read, create, update, rename, delete | keep | M2.3 | Rename is save under the new name, then delete the old |
@@ -99,7 +99,7 @@ describe what a client can do, not the 1.x URL.
 | [x] | Long press (2.25 s): info screen, or the setup screen in setup mode; dismisses any screen | keep | M3.4 | `test_touch.py`, host `test_ui_route`, `test_ui_gesture`. Real fingers: M3.4-a |
 | [x] | While paused, only long press works, and it resumes | keep | M3.4 | |
 | [x] | While a screen is up, taps reach only the SD-format controls | keep | M3.4 | Taps are ignored under a screen (M3.4); the format controls come with that screen (M3.3) |
-| [ ] | During registration, long press cancels and returns to playback | keep | M3.4 | D93. `test_makapix.py` (the long press during a registration): to run on the device |
+| [x] | During registration, long press cancels and returns to playback | keep | M3.4 | D93. `test_makapix.py::test_a_registration_shows_a_code_and_a_cancel_leaves_the_device_as_it_was` (the long press) |
 | [x] | During a firmware update, gestures are ignored | keep | M3.4 | |
 | [ ] | BOOT button toggles pause; ignored during the co-processor update | keep | M1.2, M2.4 | Wired in M2.4; manual check M2.4-a |
 | [ ] | Touch failure at boot: countdown and one reboot, then carry on without touch | keep | M3.4 | The bounded init is in M1.2; the reboot streak needs settings (M1.4) and the countdown needs the UI The countdown is on the screen since M3.3; not seen with a failing controller |

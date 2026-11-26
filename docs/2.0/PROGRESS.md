@@ -10,7 +10,7 @@ times.
 |---|---|
 | Phase | 4, remote sources (Phases 0 to 3 complete but for their manual checks) |
 | Current milestone | Phase 6: M6.1 (soaks) and M6.2 (parity audit) together. Phase 5 is done but for what waits on Fab (M4.5-a, M5.2-a, M5.3-a, M5.3-b) |
-| Next action | A three-hour jitter soak is running on the dev unit (`host/jitter-lab/soak.py`, run `RUN-20261125-02`, trace build, started 22:37 on 2026-11-25); its report lands in `host/jitter-lab/runs/RUN-20261125-02/report.md`. When it ends: (1) read the report and record the result against the pass bar in the ledger and in `docs/jitter/REPORT.md` (early in the run the device counted many overrun frames and a 15 s lateness, both of the out-of-scope kind by the device's own count: look at what artwork caused them, likely a large museum JPEG decoded in software, known issue "Slow software JPEG decodes"); (2) flash the test build (`lab.py up`, `lab.py provision`) and run the device tests written during the soak and not yet run: `test_scheduler.py` (many channels), `test_makapix.py` (long press), `test_touch.py`, `test_player.py` (loop counts), `test_player_api.py` (like), with smoke; (3) the memory soak: `soak.py --mix stress64` on the trace build, watching for an assert or an SD livelock; before it, measure free PSRAM with 64 channels loaded to confirm D91's budget; (4) the rest of M6.2: what is left in `legacy/` (channel_manager, config_store, debug_http_log, http_api, mem_stats, p3a_core, play_scheduler, ugfx, main, makapix, plus `legacy/sdkconfig`, which `tools/compare_sdkconfig.py` reads and must move before the folder can go): each is either rewritten in 2.0 and deleted with a line in the deletion log, or holds something not yet carried over. Small things left open: the "Followed" pill (M4.5 part 4); clicking what was not clicked (upload on the home page, the Makapix registration on the settings page, drag to reorder, Harvard and the Smithsonian in the museum browser); `test_the_setup_network_is_on_the_air` if it fails again; a multi-day run before release (tell Fab first). Chrome is connected to this session; stub `window.confirm` before clicking a button that asks. If Fab has registered the unit (M4.5-a), M4.5 part 4 comes first |
+| Next action | The memory soak is running or next: `python host/p3a-lab/lab.py flash trace`, then `python host/jitter-lab/soak.py --mix stress64 --hours 3` (64 channels across every source; the playset shape that livelocked 1.x's card). Read its report and `uart.log` in `host/jitter-lab/runs/<RUN>/` for an assert, a reset, a channel that failed for want of memory, or downloads that stopped. Then put the test build back (`lab.py up`, `lab.py provision`). After that: a multi-day run before release (tell Fab first: it occupies the dev unit); M6.3, the field test, is Fab's. Open and small: the "Followed" pill and the server's playsets by name (M4.5 part 4, needs M4.5-a); clicking what was not clicked (upload on the home page, the Makapix registration on the settings page, drag to reorder, Harvard and the Smithsonian in the museum browser); `test_the_setup_network_is_on_the_air` if it fails again in a whole suite; the whole device suite after this session's changes (last whole run: 350 passed, before the audit's fixes); `legacy/` still holds the Makapix client for M4.5 part 4 and the 1.x `sdkconfig` for `tools/compare_sdkconfig.py`. Chrome is connected to this session; stub `window.confirm` before clicking a button that asks. If Fab has registered the unit (M4.5-a), M4.5 part 4 comes first |
 | Blocked on | M4.5 part 4 only: M4.5-a (Fab registers the dev unit with Makapix Club). Nothing else waits on it |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -526,6 +526,45 @@ M4.3, 2026-11-25:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-26: M6.1 part 1, the jitter pass bar on 2.0
+
+- **`host/jitter-lab/soak.py`** runs a soak against 2.0: it refuses any
+  device but the dev unit and any build that does not trace, sets the
+  workload (keys from the secrets file, never printed or saved), runs
+  the UART logger and the frame puller for the hours given, analyses,
+  and puts the unit back. 1.x's `soak.ps1` spoke 1.x's API.
+- **The work mix is written down** (in `soak.py`): the card, Makapix
+  promoted, Giphy trending and a search, Klipy GIFs and stickers, two
+  museums. 1.x's runs used a playset of Fab's whose contents were not
+  recorded; this is its stated intent, "the normal workload".
+- **Result, RUN-20261125-02: PASS.** The trace build (release plus the
+  frame trace, no test hooks), 3.03 hours, 98,090 frames, all eight
+  channels listing and downloading: no in-scope stall of 100 ms or
+  more, no warning (50 to 100 ms), no reset, no gap in coverage. p99
+  lateness 47.5 ms, worst 158 ms.
+- **What the late frames were**, read in the raw trace before accepting
+  the verdict: 801 decode overruns of 50 to 158 ms from a few animations
+  whose frames take about 100 ms to decode against a 30 ms frame time
+  (out of scope by the pass bar's definition); and 60 stills drawn again
+  mid-dwell, up to 23.9 s after they were first drawn. The analyzer had
+  classed those as overruns too. A still is drawn once and nothing is
+  presented while it stays unchanged, so that "lateness" is only the
+  time since it was last drawn. `analyze.py` now names them ("stills
+  drawn again") and leaves them out of the percentiles.
+- `docs/jitter/REPORT.md` has the 2.0 row and what differs from 1.x's
+  runs.
+- **The device tests written during the soak have run**: smoke,
+  scheduler, touch, player API, player and Makapix, 66 passed. That
+  covers D91 (forty channels all loaded; 64 of the largest kind load 16
+  and the other 48 say so), D93 (the long press ends the registration),
+  the information screen's new row, the loop counts, the like call.
+  One of them had to change: forty channels do not fit a line of the
+  test console, so that test sets its playsets over HTTP.
+- Not verified: free PSRAM with a large playset loaded (the memory soak
+  is next and will show an index that could not be allocated); the
+  recovery countdown and the setup screen's text (not testable here).
+- Three PARITY rows ticked on these tests: 115 ticked, 39 open.
 
 ### 2026-11-25: M6.2 part 1, the parity audit and what it found
 

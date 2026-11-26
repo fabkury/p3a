@@ -169,19 +169,21 @@ def test_the_active_playset_is_resumed_after_a_restart(rig):
 
 def test_a_playset_of_many_channels_has_every_one_of_them_loaded(rig):
     """2.0 first held 16 channels in memory and left the 17th on unplayed, in silence."""
-    many = {"name": "Many", "channels": [{"source": "local"}] + [
+    def activate(playset):  # over HTTP: the console's lines are too short for forty channels
+        assert rig.api.call("PUT", "/api/v2/player/playset", playset).status == 200
+        return rig.api.get("/api/v2/player").data["channels"]
+
+    many = {"name": "", "channels": [{"source": "local"}] + [
         {"source": "giphy", "kind": "search", "identifier": f"word {i}"} for i in range(39)]}
     try:
-        rig.uart.command("sched activate", many)
-        channels = rig.status()["channels"]
+        channels = activate(many)
         assert len(channels) == 40
         assert [c["state"] for c in channels if c["state"] == "not_loaded"] == [], "forty ordinary channels fit"
         # Only memory limits it: 64 channels of the largest kind do not all fit, and the ones left out say so.
-        huge = {"name": "Huge", "channels": [
-            {"source": "makapix", "kind": "hashtag", "identifier": f"tag{i}"} for i in range(64)]}
         rig.uart.command("settings set", {"makapix_cache_size": 4096})
-        rig.uart.command("sched activate", huge)
-        states = [c["state"] for c in rig.status()["channels"]]
+        huge = {"name": "", "channels": [
+            {"source": "makapix", "kind": "hashtag", "identifier": f"tag{i}"} for i in range(64)]}
+        states = [c["state"] for c in activate(huge)]
         assert states.count("not_loaded") == 48 and states[:16].count("not_loaded") == 0, states
     finally:
         rig.uart.command("settings set", {"makapix_cache_size": 2048})

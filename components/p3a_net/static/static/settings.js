@@ -204,7 +204,8 @@ const widgets = {
             + '<button type="button" class="btn danger-btn" id="factory-reset">Factory reset</button>';
     },
     about() {
-        return row('Author', 'Fabrício Kury')
+        // The font's licence (CC BY 4.0) asks that its author be named where the software is presented.
+        return row('Author', 'Fabrício Kury') + row('On-screen font', 'Everyday Ample by VEXED (CC BY 4.0)')
             + '<div class="info-row"><span class="info-label">Homepage</span><span class="info-value"><a href="https://github.com/fabkury/p3a" target="_blank" rel="noopener">github.com/fabkury/p3a</a></span></div>';
     },
     device() {

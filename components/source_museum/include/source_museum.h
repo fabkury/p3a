@@ -39,6 +39,10 @@ typedef struct {
 // The museum at `index` (from 0); false past the last.
 bool source_museum_info(size_t index, source_museum_info_t *out);
 
+// The id ("vam") of the museum a record names by number
+// (identity.museum.museum_id), or NULL if this firmware has no such museum.
+const char *source_museum_id(uint16_t number);
+
 #ifdef __cplusplus
 }
 #endif

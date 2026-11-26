@@ -10,7 +10,7 @@ times.
 |---|---|
 | Phase | 4, remote sources (Phases 0 to 3 complete but for their manual checks) |
 | Current milestone | M5.1 Embedded web UI (M4.5 part 4 waits on M4.5-a) |
-| Next action | M5.1 part 4, which closes M5.1 together with M5.2: the update page (`components/p3a_net/static/update.html`; 1.x's is `legacy/webui/ota.html`; it needs the firmware update itself, M5.2, so read `PLAN.md` M5.2 first and build the two together), which also carries the Wi-Fi co-processor's version and the board's facts that the settings page's System tab lacks; museum titles in the home page's info panel (the adapters' `fetchInfo`/metadata calls in `static/museum/`, loaded on demand as the playset editor does); the Followed pill (needs M4.5 part 4); then `legacy/webui` deleted with its deletion-log entry (what is left there: `index.html`, `settings.html`, `playset-editor.html`, `giphy.html`, `network.html`, `ota.html`, `static/`), PARITY's web rows, the whole device suite, release and trace builds. Chrome is connected to this session now (`mcp__claude-in-chrome__*`): click through each page rather than only taking headless screenshots. Still to click: the home page's controls, pin and upload; the settings page's Makapix registration; drag-reorder in the playset editor; Harvard and Smithsonian in the museum browser (they need keys the dev unit does not have). If Fab has registered the unit (M4.5-a), M4.5 part 4 comes first |
+| Next action | M5.1 part 4, which closes M5.1 together with M5.2: the update page (`components/p3a_net/static/update.html`; 1.x's is `legacy/webui/ota.html`; it needs the firmware update itself, M5.2, so read `PLAN.md` M5.2 first and build the two together), which also carries the Wi-Fi co-processor's version and the board's facts that the settings page's System tab lacks; the Followed pill (needs M4.5 part 4); then `legacy/webui` deleted with its deletion-log entry (what is left there: `index.html`, `settings.html`, `playset-editor.html`, `giphy.html`, `network.html`, `ota.html`, `static/`), PARITY's web rows, the whole device suite, release and trace builds. Chrome is connected to this session now (`mcp__claude-in-chrome__*`): click through each page rather than only taking headless screenshots. Still to click: the home page's controls, pin and upload; the settings page's Makapix registration; drag-reorder in the playset editor; Harvard and Smithsonian in the museum browser (they need keys the dev unit does not have). If Fab has registered the unit (M4.5-a), M4.5 part 4 comes first |
 | Blocked on | M4.5 part 4 only: M4.5-a (Fab registers the dev unit with Makapix Club). Nothing else waits on it |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -443,6 +443,20 @@ M4.3, 2026-11-25:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-25: M5.1 part 4a, museum titles on the home page
+
+- An artwork's record says which museum it is from (`"museum": "vam"`,
+  from `source_museum_id()`), and the home page's info panel asks that
+  museum for the title, artist and date through the adapter the museum
+  browser uses, loaded on demand. The source line names the museum.
+- Verified, device test: `test_museum.py` asserts the field for each
+  museum (run for V&A and SMK; smoke passed). Clicked in Chrome: a V&A
+  drawing playing, the panel showing its artist and date from the museum.
+- Clicked in Chrome as well (part 1's page, not clicked before): next,
+  the info panel for a Makapix artwork, pin and unpin (the count
+  following), pause and resume, each read back from the device.
+- Not verified: the panel for the other eight museums.
 
 ### 2026-11-25: M5.1 part 3, the playset editor and the museum browser
 

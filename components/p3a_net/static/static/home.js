@@ -390,8 +390,30 @@ $('info-btn').addEventListener('click', async () => {
     set('artwork-info-date', '');
     set('artwork-info-source', `${SOURCE_NAMES[current.source] || current.source}${current.format ? ` (${current.format}${size})` : ''}`);
     panel.hidden = false;
-    if (current.source !== 'makapix' || !current.storage_key) return;
     const spinner = $('artwork-info-spinner');
+    if (current.source === 'museum' && current.museum && current.id) {
+        // The museum is asked what this is, by the browser, through the
+        // same adapter the museum browser uses (loaded only now).
+        spinner.classList.add('loading');
+        try {
+            const { getAdapter } = await import('./museum/index.js');
+            const adapter = getAdapter(current.museum);
+            if (adapter && state.infoFor === key) {
+                set('artwork-info-source', `${adapter.displayName}${current.format ? ` (${current.format}${size})` : ''}`);
+            }
+            const about = adapter?.fetchMetadataByIiifKey ? await adapter.fetchMetadataByIiifKey(current.id) : null;
+            if (about && state.infoFor === key) {
+                set('artwork-info-title', about.title);
+                set('artwork-info-artist', about.artist);
+                set('artwork-info-date', about.date);
+            }
+        } catch (e) {
+            // The museum could not be asked: what the device knows stays.
+        }
+        spinner.classList.remove('loading');
+        return;
+    }
+    if (current.source !== 'makapix' || !current.storage_key) return;
     spinner.classList.add('loading');
     try {
         const response = await fetch(`https://makapix.club/api/player/post/${encodeURIComponent(current.storage_key)}`,

@@ -211,6 +211,16 @@ bool source_museum_info(size_t index, source_museum_info_t *out)
     return true;
 }
 
+const char *source_museum_id(uint16_t number)
+{
+    for (size_t i = 0; museum_at(i) != NULL; i++) {
+        if (museum_at(i)->number == number) {
+            return museum_at(i)->id;
+        }
+    }
+    return NULL;
+}
+
 static uint32_t museum_refresh_interval_s(void)
 {
     p3a_settings_t *settings = settings_now();

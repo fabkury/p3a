@@ -48,6 +48,7 @@
 #include "psram_alloc.h"
 #include "sd_path.h"
 #include "source_local.h"
+#include "source_museum.h"
 
 static const char *const s_channel_states[] = {"waiting", "listing", "ready", "failed", "no_source", "not_loaded"};
 
@@ -68,9 +69,15 @@ cJSON *net_record_json(const p3a_record_t *r)
             snprintf(text, sizeof(text), "%llu", (unsigned long long)r->identity.klipy.id);
             cJSON_AddStringToObject(o, "id", text);
             break;
-        case P3A_SOURCE_MUSEUM:
+        case P3A_SOURCE_MUSEUM: {
             cJSON_AddStringToObject(o, "id", r->identity.museum.iiif_key);
+            // Which museum: the page asks that museum what the artwork is.
+            const char *museum = source_museum_id(r->identity.museum.museum_id);
+            if (museum != NULL) {
+                cJSON_AddStringToObject(o, "museum", museum);
+            }
             break;
+        }
         case P3A_SOURCE_MAKAPIX: {
             cJSON_AddNumberToObject(o, "post_id", r->id32);
             // The storage key, as the site spells it: what its public pages know the artwork by.

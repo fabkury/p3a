@@ -93,6 +93,7 @@ def test_a_museums_channel_is_listed_fetched_and_played(rig, museum, kind, term,
     assert max(width, height) >= 300, "and not a thumbnail"
     shown = rig.api.get("/api/v2/player").data["current"]
     assert shown["source"] == "museum" and shown["format"] == "jpg" and shown["id"] == status["current"]
+    assert shown["museum"] == museum, "which museum, so that the page can ask it what this is"
     if museum in KEYS:
         lines = rig.api.get("/api/v2/test/log").body
         assert lab.load_secrets()["api_keys"][KEYS[museum][1]].encode() not in lines, "the key is in no log line"

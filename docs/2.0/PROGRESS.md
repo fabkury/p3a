@@ -55,13 +55,13 @@ reopened (why).
 | M4.2 Giphy and Klipy | done 2026-11-25. Tiers: host tests (35 programs), device tests (the whole suite: 309 passed, 6 skipped), CI, test, release and trace builds. Manual: M4.2-a. Not verified: listed in the log entries of 2026-11-25. O6 (the services' own marks) stays open and holds nothing |
 | M4.3 Museums | done 2026-11-25. Tiers: host tests (36 programs, also under the sanitizers), device tests (the whole suite on the last build: 322 passed, 6 skipped), CI, test, release and trace builds. Manual: none. Not verified: listed in the log entries of 2026-11-25. O20 (what p3a tells the museums it is) stays open and holds nothing |
 | M4.4 Pinned lists and "show this" | done 2026-11-25. Tiers: host tests (38 programs, also under the sanitizers), device tests (the whole suite: 330 passed, 6 skipped; the pin tests again on the last build), test, release and trace builds. Manual: M4.4-a. Not verified: listed in the log entry |
-| M4.5 Makapix | in progress. Parts 1 to 3 (2026-11-25): the source, registration up to the owner's part, the link, commands, views, likes, renewal. Host and device tests for everything an unregistered unit can do. Waits on M4.5-a for the rest |
-| M5.1 Embedded web UI | done 2026-11-25 but for the "Followed" pill (M4.5 part 4). Four pages, the museum browser. Tiers: node (42 cases), device tests, every page clicked in Chrome on the dev unit. `legacy/webui` is gone |
+| M4.5 Makapix | done 2026-11-26 but for manual check M4.5-b (a like, the site's buttons). The source, registration, the link, commands, views, likes, renewal, the server's playsets. Tiers: host tests, device tests unregistered and, live, on the registered dev unit |
+| M5.1 Embedded web UI | done 2026-11-26. Four pages, the museum browser, the "Followed" pill. Tiers: node (42 cases), device tests, every page clicked in Chrome on the dev unit. `legacy/webui` is gone |
 | M5.2 Firmware OTA for 2.x | done 2026-11-25 but for manual check M5.2-a (one update from GitHub itself). Tiers: host tests, device tests (the whole cycle from a mirror), and the cycle clicked through the update page in Chrome |
 | M5.3 Release engineering | done 2026-11-25 but for manual checks M5.3-a (the web flasher) and M5.3-b (the flasher program). The release folder from `tools/make_release.py`, flashed onto the dev unit with its own command. Tiers: self-tests in CI, one flash by hand |
 | M5.4 Documentation | done 2026-11-25. The user's documents and the developer pages describe 2.0; the API examples were run against the dev unit |
-| M6.1 Soaks | not started |
-| M6.2 Parity audit | not started |
+| M6.1 Soaks | in progress. Done 2026-11-26: the jitter pass bar (RUN-20261125-02, 3 h) and the 63-channel memory soak (RUN-20261126-01, 3 h), both without a stall or a reset. Left: a multi-day run |
+| M6.2 Parity audit | in progress. The audit is in `PARITY.md` (116 rows ticked, 38 open, most waiting on a manual check); `legacy/` holds only the 1.x Makapix client and the 1.x `sdkconfig`. Left: the open rows, and deleting the Makapix client now that M4.5 has what it needed from it |
 | M6.3 Field test | not started |
 | M6.4 Release | not started |
 

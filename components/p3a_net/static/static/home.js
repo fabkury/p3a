@@ -385,7 +385,7 @@ $('info-btn').addEventListener('click', async () => {
     }
     const key = identity(current);
     state.infoFor = key;
-    const set = (id, text) => { $(id).textContent = text || '—'; };
+    const set = (id, text) => { $(id).textContent = text || '-'; };
     const size = current.width ? `, ${current.width}×${current.height}` : '';
     set('artwork-info-title', current.name || '');
     set('artwork-info-artist', '');
@@ -684,7 +684,7 @@ function openBrowsePins(slug) {
                     card.dataset.key = pin.key;
                     const what = pin.id ?? pin.post_id ?? pin.name ?? '';
                     card.innerHTML = (pin.file ? `<img loading="lazy" alt="" class="${isSmooth(pin.source) ? '' : 'pixelated'}" src="${esc(pin.file)}">` : '')
-                        + `<div class="meta">${esc(SOURCE_NAMES[pin.source] || pin.source)} — ${esc(what)}</div>`
+                        + `<div class="meta">${esc(SOURCE_NAMES[pin.source] || pin.source)}: ${esc(what)}</div>`
                         + '<div class="actions"><button type="button" class="danger">Unpin</button></div>';
                     strip.appendChild(card);
                 }

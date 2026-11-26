@@ -103,6 +103,10 @@ static SemaphoreHandle_t tls_gate(void)
         ESP_LOGE(TAG, "TLS gate alloc failed; proceeding ungated");
         return NULL;
     }
+    // The bundle says "Certificate validated" at INFO for every TLS session:
+    // in a three-hour soak that was nine lines in ten of the whole log. Its
+    // warnings and errors (a certificate that did not validate) stay.
+    esp_log_level_set("esp-x509-crt-bundle", ESP_LOG_WARN);
 
     portENTER_CRITICAL(&s_tls_gate_lock);
     if (s_tls_gate == NULL) {

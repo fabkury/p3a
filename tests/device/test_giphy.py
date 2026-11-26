@@ -134,7 +134,14 @@ def test_a_swipe_up_on_a_gif_is_told_to_giphy(rig):
         time.sleep(0.3)
     assert shown in pinned()
     down = [[1, 360, 260 + 30 * i, 0, 0, 30] for i in range(9)] + [[0, 0, 0, 0, 0, 60]]
+    before = rig.uart.command("ui touched")
     assert rig.uart.command("ui touch", down) == {"result": "ok"}
+    deadline = time.monotonic() + 5
+    touched = rig.uart.command("ui touched")
+    while touched["scripted"] and time.monotonic() < deadline:
+        time.sleep(0.1)
+        touched = rig.uart.command("ui touched")
+    assert touched["gestures"] == before["gestures"] + 1 and touched["last_action"] == "unlike", (before, touched)
     deadline = time.monotonic() + 10
     while shown in pinned() and time.monotonic() < deadline:
         time.sleep(0.3)
@@ -228,6 +235,21 @@ def test_giphy_is_named_in_the_band_under_its_gifs(rig):
     time.sleep(1.0)
     rows, below, above = band_pixels()
     assert below > 200 and above == 0, "the words are in the band below the picture, and only there"
+    # Under the first GIF after another source's artwork too: the text and the picture change
+    # together then, and the credit once went missing until the next change.
+    import pathlib
+    picture = (pathlib.Path(__file__).parents[1] / "assets" / "decoders" / "good" / "png" / "gray.png").read_bytes()
+    try:
+        assert rig.api.call("POST", "/api/v2/files?name=zz-giphy-between.png", picture, timeout=30).status == 200
+        rig.wait("the card's picture is up", lambda s: s["current_source"] == "local" and not s["loading"])
+        time.sleep(1.0)
+        assert band_pixels()[1] == 0, "a picture from the card has no credit"
+        rig.step("back")
+        assert rig.status()["current_source"] == "giphy"
+        time.sleep(1.0)
+        assert band_pixels()[1] > 200, "the GIF that comes back has its credit"
+    finally:
+        rig.remove("zz-giphy-between.png")
     rig.uart.command("settings set", {"source_credit": False})
     try:
         time.sleep(1.0)

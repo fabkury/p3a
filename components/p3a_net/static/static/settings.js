@@ -76,7 +76,7 @@ function settingHtml(key) {
         case 'secret': {
             const set = value === SECRET_MASK;
             return `<div class="info-row"><span class="info-label">Status</span><span class="status-badge ${set ? 'status-connected' : 'status-warn'}" id="${id}-badge">`
-                + `${set ? 'Key set' : 'No key — channels won’t refresh'}</span></div>`
+                + `${set ? 'Key set' : 'No key: channels won’t refresh'}</span></div>`
                 + `<div class="setting-row">${label}<input type="password" class="setting-input" id="${id}" maxlength="${c.maxLength}" autocomplete="off"`
                 + ` placeholder="${set ? 'A key is stored. Type a new one to replace it' : 'Paste the key'}" style="flex:1;min-width:0;">${saveButton}`
                 + (set ? `<button type="button" class="btn btn-danger" data-clear="${esc(key)}">Remove</button>` : '') + hint + '</div>';
@@ -173,7 +173,7 @@ const widgets = {
                 const ends = new Date(m.certificate_ends * 1000);
                 const days = Math.round((ends - Date.now()) / 86400000);
                 detail += `<div class="setting-hint">Certificate valid until ${ends.toISOString().slice(0, 10)} (${days} days)`
-                    + `${m.certificate_renewal === 'renewed' ? ' — renewed' : ''}. The device renews it by itself.</div>`;
+                    + `${m.certificate_renewal === 'renewed' ? ', renewed' : ''}. The device renews it by itself.</div>`;
             }
             buttons = `<button type="button" class="btn btn-full" data-makapix="register" style="margin-bottom:8px;">${m.link === 'invalid' ? 'Register again' : 'Register again (another account)'}</button>`
                 + '<button type="button" class="btn danger-btn" data-makapix="unregister">Remove Makapix Club registration</button>'

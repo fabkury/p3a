@@ -212,7 +212,12 @@ bool p3a_ui_button_rect(int index, int32_t *x, int32_t *y, int32_t *w, int32_t *
 
 void ui_display_set_credit(const char *text, uint32_t token, uint32_t width, uint32_t height)
 {
-    const bool changed = atomic_exchange(&s_credit_text, text) != text || atomic_exchange(&s_credit_token, token) != token;
+    // Both are stored, whichever changed: with `||` a new text left the old
+    // token in place, and the first GIF after another source's artwork went
+    // without its credit until something else asked again.
+    const bool new_text = atomic_exchange(&s_credit_text, text) != text;
+    const bool new_token = atomic_exchange(&s_credit_token, token) != token;
+    const bool changed = new_text || new_token;
     atomic_store(&s_credit_w, width);
     atomic_store(&s_credit_h, height);
     if (changed) {

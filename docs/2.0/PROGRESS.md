@@ -528,6 +528,56 @@ M4.3, 2026-11-25:
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
 
+### 2026-11-26: clicking through what was never clicked, and what it found
+
+- **Clicked in Chrome against the dev unit, and working**: an upload
+  from the home page (the picture played at once and showed on the
+  page); Harvard through the museum browser (sections, classifications,
+  the preview, "Add channel"); the Smithsonian the same way; the
+  playset saved and played, and both channels listed 1,024 records on
+  the device with the test rig's keys.
+- **Drag to reorder**: the editor's handlers reorder correctly when
+  given drag events (dispatched from the page's console). A drag with a
+  real mouse could not be made through the browser tool, so that stays
+  a manual check; the arrows beside it do the same job and were
+  clicked.
+- **Found and fixed: the source's credit could be missing.** When the
+  credit's text and the artwork changed together (the first GIF after
+  another source's artwork), `ui_display_set_credit()` stored the text
+  and, through a short-circuited `||`, not the picture it belonged to,
+  so "Powered by GIPHY" stayed off until something else asked again.
+  It showed as an intermittent failure of
+  `test_giphy_is_named_in_the_band_under_its_gifs`. Both are stored
+  now, and the test goes from a GIF to a picture from the card and
+  back and looks for the credit (it caught the old firmware one run in
+  three; six of six after the fix).
+- **Found and fixed on the pages**: em dashes in nine on-page strings
+  (the rule for outward text); a broken-image icon beside "couldn't
+  load this artwork" in the museum preview; no gap under "Browse
+  museums".
+- **Found, upstream, not ours**: some of the Smithsonian's images are
+  gone from its own image server (404 for the first National Portrait
+  Gallery items and about half of the Cooper Hewitt's first pages; the
+  other four units load). The page says so per artwork and the device
+  retires such a record; a channel of that unit starts with a run of
+  failed downloads.
+- **Quieter log**: the certificate bundle's "Certificate validated" at
+  INFO for every TLS session was nine lines in ten of a soak's log. Its
+  level is WARN now; a certificate that fails still speaks.
+- **Not solved: the swipe down that does not unpin**
+  (`test_a_swipe_up_on_a_gif_is_told_to_giphy`, about one run in six).
+  The device's log shows no gesture at all for the scripted swipe down,
+  where the swipe up just before it is recognised. `ui_gesture_feed()`
+  read through: distance only, no timing, nothing found. The test now
+  asserts on `ui touched` after the swipe, which will say whether the
+  script ran and what the gesture was taken for. Chasing it used up the
+  Giphy key's hourly allowance (RATE_LIMITED), so it waits.
+- `test_api.py`'s two tests that read job 1 fail on a unit that has run
+  more than a few jobs since boot (they pass after a restart): order
+  dependence in the tests, not a fault.
+- Tested: tree checks; host tests (43); node (42); on the device,
+  smoke, web, API, and the Giphy file six times.
+
 ### 2026-11-26: M6.1 part 2, the memory soak with 63 channels
 
 - **RUN-20261126-01**: the trace build, 63 channels across every source

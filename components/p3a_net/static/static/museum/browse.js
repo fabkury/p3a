@@ -49,6 +49,7 @@ const CSS = `
 .mb-preview-img { width: 100%; height: 100%; object-fit: contain; display: block;
     transition: opacity 120ms linear; }
 .mb-preview-img.loading { opacity: 0.4; }
+.mb-preview-img:not([src]) { display: none; }
 .mb-preview-spin { position: absolute; bottom: 8px; right: 8px; width: 18px; height: 18px;
     border-radius: 50%; border: 2px solid var(--c-card-border); border-top-color: var(--c-primary);
     animation: mb-spin 0.9s linear infinite; }
@@ -149,7 +150,7 @@ function defaultHint(adapter) {
                'First jump beyond position 1000 in a term takes a moment while ' +
                'we probe the artwork-ID layout; subsequent jumps are instant.';
     }
-    return 'Jumping fetches from the museum API — large jumps may take a moment ' +
+    return 'Jumping fetches from the museum API: large jumps may take a moment ' +
            'and consume that museum\'s per-IP rate limit.';
 }
 
@@ -292,7 +293,7 @@ export function openMuseumBrowse({ onAdd, onCancel } = {}) {
         body.appendChild(remaining);
         let secs = initialSec;
         function paint() {
-            remaining.textContent = `Rate-limited — try again in ${secs}s. AIC caps usage at 60 requests/minute per IP.`;
+            remaining.textContent = `Rate-limited: try again in ${secs}s. AIC caps usage at 60 requests/minute per IP.`;
         }
         paint();
         if (state.cooldownTick) clearInterval(state.cooldownTick);
@@ -718,7 +719,7 @@ export function openMuseumBrowse({ onAdd, onCancel } = {}) {
                 renderCooldown(remain || 60);
                 return;
             }
-            shell.hint.textContent = 'Jump failed — try a smaller position or wait a moment.';
+            shell.hint.textContent = 'Jump failed: try a smaller position or wait a moment.';
             shell.hint.classList.add('warn');
             updateNavState(shell);
             return;

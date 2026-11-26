@@ -262,7 +262,7 @@ $('createNewBtn').addEventListener('click', () => openEditor(null, []));
 let checkBlockedUntil = 0;
 async function checkMakapix(kind, identifier, box, nameInput) {
     if (Date.now() < checkBlockedUntil) {
-        box.textContent = `Rate limited — wait ${Math.ceil((checkBlockedUntil - Date.now()) / 1000)}s.`;
+        box.textContent = `Rate limited: wait ${Math.ceil((checkBlockedUntil - Date.now()) / 1000)}s.`;
         return;
     }
     const what = kind === 'hashtag' ? 'verify-hashtag' : kind === 'reactions' ? 'verify-reactions' : 'verify-user';
@@ -281,7 +281,7 @@ async function checkMakapix(kind, identifier, box, nameInput) {
     }
     if (response.status === 429) {
         checkBlockedUntil = Date.now() + 5000;
-        box.textContent = 'Rate limited — wait 5s.';
+        box.textContent = 'Rate limited: wait 5s.';
         return;
     }
     if (!response.ok) {
@@ -340,7 +340,7 @@ async function openAddChannel() {
             let html = '';
             if (c.browse) {
                 html = '<div class="mode-description">Pick a museum, a section of its collection and look through it; the channel is added from there.</div>'
-                    + '<button type="button" class="btn btn-primary" data-do="museum" style="width:100%;margin-top:8px;">Browse museums…</button>';
+                    + '<button type="button" class="btn btn-primary" data-do="museum" style="width:100%;margin:8px 0 14px;">Browse museums…</button>';
             } else {
                 // The kind chosen before this redraw, if it is one of this source's.
                 const was = body.querySelector('#add-kind')?.value;

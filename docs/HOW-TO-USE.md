@@ -133,6 +133,21 @@ The web interface provides:
 
 > **Note:** The web interface is only accessible on your local network, not over the internet. For remote control, register your device at [makapix.club](https://makapix.club/).
 
+### Playsets
+
+A playset is a named mix of channels. At `http://p3a.local/playsets`, click **Create New**, give it a name, and click **Add channel** for each channel you want. Each channel is one line in the list, with its share of the turns on the right and the same colors in the bar above the list. Click a line to open it:
+
+- **Name**: what the channel is called on the home page. Leave it empty to keep the name it came with.
+- **Weight**: how often this channel plays against the others. A channel with twice the weight plays twice as often. A weight of 0 mutes the channel without removing it.
+- **Offset** (Giphy, Klipy, museums and pin lists): skips that many artworks from the start of the channel.
+- **Keep** (Makapix, Giphy, Klipy and museums): how many artworks this channel holds in this playset. Leave it empty to use the number from Settings.
+- **Refresh** (the same four): how often this channel looks for new artworks in this playset. **Default** uses the interval from Settings.
+- **Up** and **Down** move the channel in the list; on a computer you can also drag a line by its handle. **Remove** takes it out of the playset.
+
+**Keep** and **Refresh** belong to the channel in that one playset, so the same channel can be small and fresh in one playset and large in another. The limits are those of the same settings in Settings, and they differ by source: a museum channel can wait up to 8 days between refreshes, a Giphy channel up to 8 hours. Making a channel smaller does not delete anything from the SD card; artworks already downloaded stay until the card needs the room.
+
+**Save** stores the playset; **Save & Play** also switches the device to it.
+
 ---
 
 ## Preparing Artwork
@@ -276,8 +291,8 @@ Until a key is saved, the corresponding museum entry in the browse modal will pr
 ### Adding a museum channel
 
 1. **Open Playsets** at `http://p3a.local/playsets`
-2. Open or create a playset and click **Add Channel**
-3. Set **Channel Type** to **Museum** and click **Browse museums**
+2. Open or create a playset and click **Add channel**
+3. Set **From** to **Museum** and click **Browse museums**
 4. A browse modal opens. Pick the museum, then the facet/axis (skipped for Rijks, which is axis-less), then the term you want
 5. The modal previews one artwork at a time at 400 px, with **Previous** / **Next** navigation and a title/artist/date caption. The **Add channel** button commits the channel, not the visible artwork. (Rijks previews resolve lazily, so the first thumbnail takes a moment)
 6. Save the playset (**Save**, or **Save & Play** to switch to it at once)
@@ -286,7 +301,7 @@ The channel saves under a name like `V&A · Photographs` or `CMA · Japanese Art
 
 ### Refresh and download behavior
 
-- **Refresh interval and cache size** are configured in **Settings > Museum** (`http://p3a.local/settings#museum`). Defaults: refresh every 4 days, keep up to 1024 artworks per channel.
+- **Refresh interval and cache size** are configured in **Settings > Museum** (`http://p3a.local/settings#museum`). Defaults: refresh every 4 days, keep up to 1024 artworks per channel. A channel can have its own in a playset, see [Playsets](#playsets).
 - **First refresh** fetches the listing from the museum's API. Image downloads happen lazily as the device rotates through the playset, the first artworks appear within seconds, the rest fill in over the next minutes.
 - **Downloaded artworks** are stored once in `blobs/` under your SD card root, whatever plays them: two channels with the same artwork, or a channel and a pin list, only pay for it once. Cleanup is automatic (see [SD Card Sizing and Automatic Cleanup](#sd-card-sizing-and-automatic-cleanup)).
 - **Rijks artworks** require a "Linked Art walk" (three follow-up HTTP requests per artwork) to discover the actual IIIF identifier. The device does this lazily in the background, so a fresh Rijks channel takes ~50 minutes to fully populate, but the first few artworks appear within seconds.

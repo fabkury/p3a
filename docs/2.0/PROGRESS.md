@@ -19,7 +19,7 @@ times.
 
 | | |
 |---|---|
-| Running | `2.0.0-dev`, test configuration (`build-test`), flashed 2026-11-18 by the device tests. On the Wi-Fi as `p3a-fab.local` |
+| Running | `2.0.0-dev`, test configuration (`build-test`), flashed 2026-11-26 with D100 and the redrawn playset editor. On the Wi-Fi as `p3a-fab.local` |
 | Flash state | Bootloader, 2.x partition table, app in `ota_0`, the 2.9.3 co-processor image in `slave_fw`. NVS holds the test rig's Wi-Fi credentials and the device name `fab`, put there by the lab (`lab.py provision`). The C6 itself runs esp_hosted 2.7.0 and cannot be updated (see M1.2-e) |
 | SD card | 32 GB, healthy (D8). Still holds 1.x folders; see the M1.3 entry in the session log |
 | 1.x flash backup | `%USERPROFILE%\.p3a-lab\backups\p3a-fab_v1.2.4_full-flash_2026-11-17.bin` (see the session log for size and hash) |
@@ -528,6 +528,83 @@ M4.3, 2026-11-25:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-26: a channel's own size and refresh in a playset (D100); the playset editor redrawn
+
+Fab asked for both. Neither is a 1.x capability: 1.x and 2.0 until now
+had one cache size and one refresh interval per source.
+
+- **The playset**: `cache_size` and `refresh_s` per channel, from six of
+  the record's reserved bytes; zero is "the source's setting", and the
+  layout's version stays 1. `playset_value()` (pure) says what a channel
+  gets. A channel's id does not depend on either.
+- **The ranges** are those of each source's own two settings: a source
+  gives them in `channel_range` (new in `p3a_source_ops_t`), read from
+  the settings table. `play_scheduler_check_playset()` refuses a value
+  outside them for a playset saved or activated over HTTP; a playset
+  that came another way plays with the value held within range.
+- **One index file for a channel, whatever size each playset wants**
+  (`p3a_index_shared.c`, pure). The file keeps the deepest listing it
+  was given. A playset that wants less loads the start of it; a save
+  from that playset keeps the rest of the head, or, after a listing of
+  its own, the artworks beyond it that are on the card. A playset that
+  finds a head shorter than it wants, cut by the size it was listed at,
+  lists again at once. A listing made while the file knows more than
+  the playset holds brings the blob references over from the whole
+  file, so nothing is fetched twice. The file never grows beyond its
+  deepest listing, and a channel that only ever has one size is written
+  as before plus one flag on its last record.
+- **The scheduler**: `sched_channel_capacity()` and
+  `sched_channel_interval()` replace the calls into the source's table.
+  The memory budget is now counted per channel, so a playset of many
+  small channels fits where it did not. The player's state reports each
+  channel's `capacity` and `refresh_s`.
+- **The editor** (`playsets.js`, `playset-model.js`, `playsets.css`):
+  channels are one-line rows (colour, name, what it is, share) that open
+  in place, one at a time, for name, weight, offset, Keep and Refresh,
+  with Up, Down and Remove. Offset is shown only where a source has one.
+  Keep is empty for the default and shows it as the placeholder; Refresh
+  is a list with "Default (2 hours)" first, then the intervals the
+  settings page offers. Shares update while a weight is typed. The
+  balance bar gives every playing channel a piece (it used to drop those
+  under 5%) and each of 64 channels its own colour (six went round); a
+  piece opens its row. A channel just added opens. The Add channel
+  dialog kept its two lists, with plainer labels, and hides the button
+  that could only refuse (museum, a second SD card channel).
+- **Tests**: host `test_index_shared.c` (9 cases: the mark, prefix
+  views, two playsets taking turns, the file's size bound),
+  `test_playset.c` (layout, JSON, `playset_value`); node
+  `test_playset_model.mjs` (ranges read from `settings.json`, what is
+  sent is what `playset.c` reads); device
+  `test_content.py::test_two_playsets_hold_the_same_channel_at_different_sizes`
+  (the test source, sizes 2 and 5: the larger lists deeper at once, four
+  switches with no listing and no download, and after the smaller one
+  lists the larger has all five without fetching) and
+  `test_player_api.py::test_a_channels_own_size_and_interval_are_kept_and_held_to_its_sources_range`.
+- Tested: host tests (44, also under the sanitizers in WSL), node (43),
+  tree checks, test and release builds; on the device smoke, content
+  (13 of 14, see below), player API, playsets, web. The editor was
+  clicked in Chrome on the dev unit: open a row, an out-of-range Keep
+  (marked, Save off), a weight typed (shares follow), add a channel, Up,
+  Down, Remove, Save, and the saved playset read back from the device.
+- **Not verified**: dragging a row with a real mouse (the handlers were
+  driven with synthetic drag events; the automation cannot drag); the
+  layout under 480 px (seen at 492 px); the overrides on a real Giphy,
+  Klipy, Makapix or museum channel (only the test source listed at its
+  own size; the real sources stop at the index's capacity as before);
+  the whole device suite and the trace build were not run.
+- **Found on the way, not changed**:
+  `test_content.py::test_when_room_is_needed_...` failed on the unit as
+  it stands: 29 blobs are dated after now, so "evict everything" leaves
+  them and the test's count is off. The unit's time zone is
+  `EST5EDT...`; FAT keeps local time, so blobs written while the zone
+  was UTC read as five hours in the future, and eviction rightly leaves
+  what is dated after now. It passes by itself once those hours are
+  over. Worth a decision: a time zone change makes every file on the
+  card look younger or older by the difference.
+- The dev unit's saved playsets were deleted by `test_playsets.py` (it
+  wipes them, as before), and its blob store was emptied by the test
+  above.
 
 ### 2026-11-26: time to first artwork (D99)
 

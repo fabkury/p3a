@@ -102,13 +102,6 @@
             border-radius: var(--r-sm);
         }
 
-        .add-channel-btn {
-            display: block;
-            margin: var(--sp-3) auto 0;
-            padding: var(--sp-4) var(--sp-8);
-            font-size: 16px;
-        }
-
         .btn-icon {
             padding: var(--sp-2);
             border-radius: var(--r-sm);
@@ -283,42 +276,6 @@
             margin-top: var(--sp-1);
         }
 
-        .radio-group {
-            display: flex;
-            gap: var(--sp-3);
-            flex-wrap: wrap;
-        }
-
-        .radio-option {
-            flex: 1;
-            min-width: 120px;
-        }
-
-        .radio-option input[type="radio"] {
-            display: none;
-        }
-
-        .radio-label {
-            display: block;
-            padding: var(--sp-3);
-            border: 2px solid var(--c-border);
-            border-radius: var(--r-sm);
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.2s;
-            font-size: 14px;
-        }
-
-        .radio-option input[type="radio"]:checked + .radio-label {
-            border-color: var(--c-primary);
-            background: color-mix(in srgb, var(--c-primary) 10%, transparent);
-            font-weight: 500;
-        }
-
-        .radio-label:hover {
-            border-color: var(--c-primary);
-        }
-
         .mode-description {
             margin-top: var(--sp-2);
             padding: var(--sp-3);
@@ -326,89 +283,6 @@
             border-radius: var(--r-sm);
             font-size: 13px;
             color: var(--c-text-light);
-        }
-
-        .channel-list {
-            display: flex;
-            flex-direction: column;
-            gap: var(--sp-3);
-            margin-bottom: var(--sp-4);
-        }
-
-        .channel-card {
-            border: 1px solid var(--c-border);
-            border-radius: var(--r-md);
-            padding: var(--sp-4);
-            background: var(--c-surface-sunk);
-            transition: all 0.2s;
-        }
-
-        .channel-card.dragging {
-            opacity: 0.5;
-        }
-
-        .channel-card.drag-over {
-            border-color: var(--c-primary);
-            background: color-mix(in srgb, var(--c-primary) 5%, transparent);
-        }
-
-        .channel-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: var(--sp-3);
-        }
-
-        .channel-type-badge {
-            display: inline-block;
-            padding: var(--sp-1) var(--sp-3);
-            border-radius: var(--r-md);
-            font-size: 12px;
-            font-weight: 500;
-            background: var(--c-primary);
-            color: var(--c-on-primary);
-        }
-
-        .channel-controls {
-            display: flex;
-            gap: var(--sp-2);
-        }
-
-        .channel-color-swatch {
-            display: inline-block;
-            width: 14px;
-            height: 14px;
-            border-radius: 50%;
-            margin-right: var(--sp-2);
-            vertical-align: middle;
-            flex-shrink: 0;
-            border: 1px solid rgba(0, 0, 0, 0.1);
-        }
-
-        .channel-header-left {
-            display: flex;
-            align-items: center;
-            min-width: 0;
-        }
-
-        .channel-fields {
-            display: flex;
-            flex-direction: column;
-            gap: var(--sp-3);
-        }
-
-        .field-row {
-            display: flex;
-            gap: var(--sp-3);
-            align-items: flex-start;
-        }
-
-        .field-row > * {
-            flex: 1;
-        }
-
-        .field-row .form-input {
-            margin-bottom: 0;
         }
 
         .weight-viz-container {
@@ -432,10 +306,6 @@
             font-weight: 500;
             transition: all 0.3s;
             position: relative;
-        }
-
-        .weight-bar:hover {
-            filter: brightness(1.1);
         }
 
         .modal-overlay {
@@ -527,14 +397,6 @@
                 padding: var(--sp-4);
             }
 
-            .radio-group {
-                flex-direction: column;
-            }
-
-            .radio-option {
-                min-width: 100%;
-            }
-
             .playset-item {
                 flex-direction: column;
                 align-items: stretch;
@@ -552,9 +414,292 @@
                 flex-direction: column;
             }
 
-            .field-row {
-                flex-direction: column;
-            }
         }
     
 .mode-description a { color: var(--c-primary); }
+
+/* --- the editor's channel rows ---------------------------------------------------
+   One line per channel; a row opens in place for its fields. */
+
+.channels-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--sp-3);
+    margin-bottom: var(--sp-3);
+}
+
+.channels-head .form-label {
+    margin-bottom: 0;
+}
+
+.channels-count {
+    font-weight: 400;
+    color: var(--c-text-light);
+    margin-left: var(--sp-1);
+}
+
+.channel-rows {
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-md);
+    overflow: hidden;
+    margin-bottom: var(--sp-4);
+}
+
+.channel-rows:empty {
+    display: none;
+}
+
+.channel-row + .channel-row {
+    border-top: 1px solid var(--c-border);
+}
+
+.channel-row.open {
+    background: var(--c-surface-sunk);
+}
+
+.channel-row.dragging {
+    opacity: 0.45;
+}
+
+.channel-row.drag-over {
+    box-shadow: inset 0 2px 0 var(--c-primary);
+}
+
+.channel-row-head {
+    display: flex;
+    align-items: stretch;
+}
+
+.drag-handle {
+    display: flex;
+    align-items: center;
+    padding: 0 var(--sp-1) 0 var(--sp-3);
+    color: var(--c-text-lighter);
+    cursor: grab;
+    user-select: none;
+    font-size: 16px;
+}
+
+.channel-toggle {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    padding: var(--sp-3) var(--sp-3) var(--sp-3) var(--sp-2);
+    background: none;
+    border: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.channel-toggle:hover {
+    background: color-mix(in srgb, var(--c-primary) 8%, transparent);
+}
+
+.channel-toggle:focus-visible {
+    outline: none;
+    box-shadow: inset var(--focus-ring);
+}
+
+.channel-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.channel-row.muted .channel-dot {
+    background: transparent !important;
+    box-shadow: inset 0 0 0 2px var(--c-text-lighter);
+}
+
+.channel-names {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.channel-name,
+.channel-sub {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.channel-name {
+    font-size: 15px;
+    font-weight: 500;
+}
+
+.channel-sub {
+    font-size: 12px;
+    color: var(--c-text-light);
+}
+
+.channel-row.muted .channel-name {
+    color: var(--c-text-light);
+}
+
+.channel-share {
+    flex-shrink: 0;
+    min-width: 44px;
+    text-align: right;
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+    color: var(--c-text);
+}
+
+.channel-row.muted .channel-share {
+    font-size: 12px;
+    color: var(--c-text-lighter);
+}
+
+.channel-chevron {
+    flex-shrink: 0;
+    width: 8px;
+    height: 8px;
+    border-right: 2px solid var(--c-text-light);
+    border-bottom: 2px solid var(--c-text-light);
+    transform: rotate(-45deg);
+    transition: transform 0.15s;
+    margin-right: var(--sp-1);
+}
+
+.channel-row.open .channel-chevron {
+    transform: rotate(45deg);
+}
+
+.channel-panel {
+    padding: var(--sp-2) var(--sp-4) var(--sp-4);
+}
+
+.channel-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--sp-3) var(--sp-4);
+}
+
+.channel-field.wide {
+    grid-column: 1 / -1;
+}
+
+.channel-field .form-label {
+    font-size: 12px;
+    margin-bottom: var(--sp-1);
+    color: var(--c-text-light);
+}
+
+.field-hint {
+    font-size: 12px;
+    line-height: 1.35;
+    color: var(--c-text-lighter);
+    margin-top: var(--sp-1);
+}
+
+.channel-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    margin-top: var(--sp-4);
+}
+
+.channel-actions-gap {
+    flex: 1;
+}
+
+.channel-actions .btn-secondary {
+    background: var(--c-card-bg);
+    border: 1px solid var(--c-border);
+}
+
+/* The balance bar: every playing channel has its piece. */
+.weight-viz {
+    height: 28px;
+    gap: 2px;
+    margin-top: 0;
+}
+
+.weight-viz-container {
+    margin-bottom: var(--sp-3);
+}
+
+.weight-bar {
+    min-width: 3px;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    overflow: hidden;
+    white-space: nowrap;
+    color: rgba(0, 0, 0, 0.78);
+    font-weight: 600;
+}
+
+/* The Add channel dialog. */
+.optional {
+    font-weight: 400;
+    font-size: 12px;
+    color: var(--c-text-lighter);
+    margin-left: var(--sp-1);
+}
+
+.add-browse {
+    width: 100%;
+    margin-top: var(--sp-3);
+}
+
+.add-note {
+    margin-bottom: var(--sp-5);
+    padding: var(--sp-3);
+    background: var(--c-surface-sunk);
+    border-radius: var(--r-sm);
+    font-size: 13px;
+    color: var(--c-text-light);
+}
+
+.add-note.warn {
+    background: var(--c-warn-soft-bg);
+    color: var(--c-warn-soft-fg);
+}
+
+.add-note a {
+    color: inherit;
+    font-weight: 500;
+}
+
+.modal .button-group {
+    margin-top: var(--sp-2);
+}
+
+@media (max-width: 480px) {
+    .channel-panel {
+        padding: var(--sp-2) var(--sp-3) var(--sp-3);
+    }
+
+    .channel-fields {
+        gap: var(--sp-3);
+    }
+
+    .drag-handle {
+        padding-left: var(--sp-2);
+    }
+
+    /* The Save buttons stay side by side: three stacked buttons pushed the list off a phone's screen. */
+    #editorView .button-group {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+
+    #editorView .button-group .btn {
+        padding: var(--sp-3) var(--sp-2);
+    }
+
+    .modal .button-group {
+        flex-direction: row;
+    }
+}

@@ -113,15 +113,15 @@ Klipy is another GIF platform, and it also offers stickers. Like Giphy, it needs
 
 1. Go to **[partner.klipy.com](https://partner.klipy.com/)**, sign up, and copy your app's **API Key**.
 2. Open `http://p3a.local/settings#klipy` in your browser, paste the key, and click **Save** next to it.
-3. Open `http://p3a.local/playsets`, create a playset, click **Add Channel**, set **Channel Type** to **Klipy**, and pick trending, a search term, or a category, as GIFs or stickers. Then **Save & Play**.
+3. Open `http://p3a.local/playsets`, create a playset, click **Add channel**, set **From** to **Klipy**, and pick trending, a search term, or a category, as GIFs or stickers. Then **Save & Play**.
 
 ### D. Add a museum channel
 
 Browse the open collections of major museums. Eight institutions are available today: the Rijksmuseum, the Victoria and Albert Museum, the Wellcome Collection, the Statens Museum for Kunst (SMK), Harvard Art Museums, the Smithsonian, the Cleveland Museum of Art, and the Minneapolis Institute of Art. All but two need no account or key. Harvard requires a free API key: request one at [harvardartmuseums.org/collections/api](https://harvardartmuseums.org/collections/api). The Smithsonian requires a free api.data.gov key: register at [api.data.gov/signup/](https://api.data.gov/signup/) (instant). Paste either key into **Settings > Museum**. The Art Institute of Chicago is temporarily unavailable: since 2026-08 its image server blocks direct access from devices, so AIC channels can't fetch new artwork. AIC art already on the card keeps playing.
 
 1. Open `http://p3a.local/playsets` in any browser on the same Wi-Fi.
-2. Open or create a playset and click **Add Channel**.
-3. Set **Channel Type** to **Museum** and click **Browse museums**. Pick a museum, a section (e.g. *Departments* for the Cleveland Museum of Art), and a term (e.g. *Japanese Art*).
+2. Open or create a playset and click **Add channel**.
+3. Set **From** to **Museum** and click **Browse museums**. Pick a museum, a section (e.g. *Departments* for the Cleveland Museum of Art), and a term (e.g. *Japanese Art*).
 4. Preview a few artworks with **Previous** / **Next**, click **Add channel**, then **Save & Play**.
 
 The device queries the museum's listing API and starts downloading artwork at IIIF resolution. The first images appear within seconds; the rest fill in over the next minutes. See the [User Guide](HOW-TO-USE.md#museum-channels-iiif) for the full list of facets, refresh-interval settings, and storage behavior.

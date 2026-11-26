@@ -63,7 +63,8 @@ static const char *TAG = "http_fetch";
 #define HTTP_FETCH_SD_DMA_ALIGN         128
 #define HTTP_FETCH_DEFAULT_REDIRECTS    5
 #define HTTP_FETCH_DEFAULT_SDIO_WAIT_S  120
-#define HTTP_FETCH_URL_MAX              1024   // working URL + captured Location (manual redirect)
+#define HTTP_FETCH_URL_MAX              2048   // working URL + captured Location (manual redirect);
+                                               // GitHub's signed asset addresses are about 900 characters
 
 static const uint32_t s_default_backoff_ms[HTTP_FETCH_DEFAULT_ATTEMPTS] = {0, 1000, 3000};
 
@@ -202,7 +203,7 @@ static esp_err_t sdio_wait(const http_fetch_request_t *req)
 // Sink: where the body goes (caller buffer vs file)
 // ---------------------------------------------------------------------------
 
-typedef enum { SINK_BUFFER, SINK_FILE } sink_kind_t;
+typedef enum { SINK_BUFFER, SINK_FILE, SINK_STREAM } sink_kind_t;
 
 typedef struct {
     sink_kind_t kind;
@@ -214,6 +215,9 @@ typedef struct {
     uint8_t *chunk;
     size_t  chunk_size;
     mbedtls_sha256_context *sha;  // NULL unless the caller asked for the file's hash
+    // stream sink (it shares the file sink's chunk and hash)
+    const http_fetch_stream_t *stream;
+    esp_err_t stream_err;         // what a stream callback refused with
     // output
     size_t  bytes;   // bytes delivered in the current attempt
 } fetch_sink_t;
@@ -241,6 +245,12 @@ static bool sink_reset(fetch_sink_t *s)
         rewind(s->f);
         if (ftruncate(fileno(s->f), 0) != 0) {
             ESP_LOGE(TAG, "Failed to truncate temp file");
+            return false;
+        }
+    }
+    if (s->kind == SINK_STREAM && s->stream->restart) {
+        s->stream_err = s->stream->restart(s->stream->ctx);
+        if (s->stream_err != ESP_OK) {
             return false;
         }
     }
@@ -302,12 +312,19 @@ static body_status_t read_into_file(fetch_sink_t *s, esp_http_client_handle_t cl
 
         if (req->should_abort && req->should_abort(req->user_ctx)) return BODY_ABORTED;
 
-        size_t written = fwrite(s->chunk, 1, chunk_received, s->f);
-        if (written != chunk_received) {
-            ESP_LOGE(TAG, "Write error: wrote %zu/%zu bytes", written, chunk_received);
-            return BODY_WRITE_ERR;
+        if (s->kind == SINK_STREAM) {
+            s->stream_err = s->stream->write(s->chunk, chunk_received, s->stream->ctx);
+            if (s->stream_err != ESP_OK) {
+                return BODY_WRITE_ERR;
+            }
+        } else {
+            size_t written = fwrite(s->chunk, 1, chunk_received, s->f);
+            if (written != chunk_received) {
+                ESP_LOGE(TAG, "Write error: wrote %zu/%zu bytes", written, chunk_received);
+                return BODY_WRITE_ERR;
+            }
         }
-        s->bytes += written;
+        s->bytes += chunk_received;
         if (s->sha) {
             mbedtls_sha256_update(s->sha, s->chunk, chunk_received);
         }
@@ -730,4 +747,45 @@ esp_err_t http_fetch_to_file(const http_fetch_request_t *req,
     }
 
     return fs_atomic_rename(temp_path, out_path, NULL);
+}
+
+esp_err_t http_fetch_to_stream(const http_fetch_request_t *req,
+                               const http_fetch_stream_t *stream,
+                               http_fetch_result_t *result)
+{
+    if (result) memset(result, 0, sizeof(*result));
+    if (!req || !req->url || !stream || !stream->write) return ESP_ERR_INVALID_ARG;
+
+    const size_t chunk_size = req->chunk_size ? req->chunk_size : HTTP_FETCH_DEFAULT_CHUNK;
+    uint8_t *chunk = heap_caps_malloc(chunk_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!chunk) chunk = heap_caps_malloc(chunk_size, MALLOC_CAP_8BIT);
+    if (!chunk) {
+        ESP_LOGE(TAG, "Failed to allocate %zu-byte chunk buffer", chunk_size);
+        return ESP_ERR_NO_MEM;
+    }
+
+    mbedtls_sha256_context sha;
+    const bool hashing = req->hash_file && result != NULL;
+    if (hashing) {
+        mbedtls_sha256_init(&sha);
+        mbedtls_sha256_starts(&sha, 0);
+    }
+    fetch_sink_t sink = {
+        .kind = SINK_STREAM,
+        .chunk = chunk,
+        .chunk_size = chunk_size,
+        .sha = hashing ? &sha : NULL,
+        .stream = stream,
+    };
+    esp_err_t err = do_fetch(req, &sink, result);
+    if (hashing) {
+        if (err == ESP_OK) {
+            mbedtls_sha256_finish(&sha, result->sha256);
+            result->has_sha256 = true;
+        }
+        mbedtls_sha256_free(&sha);
+    }
+    free(chunk);
+    // What the consumer refused with says more than "the transfer failed".
+    return (err != ESP_OK && sink.stream_err != ESP_OK) ? sink.stream_err : err;
 }

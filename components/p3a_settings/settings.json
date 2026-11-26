@@ -27,6 +27,8 @@
     {"key": "intro_animation", "type": "string", "default": "", "max_len": 31, "group": "display", "label": "Boot animation (empty picks one at random)", "was": "intro_anim_force"},
     {"key": "intro_duration_ms", "type": "int", "default": 3000, "min": 1000, "max": 7500, "group": "display", "label": "Boot animation duration", "was": "intro_anim_ms"},
     {"key": "show_fps", "type": "bool", "default": false, "group": "display", "label": "Show frame rate"},
+    {"key": "update_auto_check", "type": "bool", "default": true, "group": "update", "label": "Look for firmware updates"},
+    {"key": "update_prereleases", "type": "bool", "default": false, "group": "update", "label": "Offer pre-release firmware"},
     {"key": "clock_enabled", "type": "bool", "default": false, "group": "clock", "label": "Show the time over the artwork"},
     {"key": "clock_24h", "type": "bool", "default": true, "group": "clock", "label": "24-hour time"},
     {"key": "clock_position", "type": "enum", "default": "top-right", "values": ["top-left", "top", "top-right", "left", "centre", "right", "bottom-left", "bottom", "bottom-right"], "group": "clock", "label": "Position"},

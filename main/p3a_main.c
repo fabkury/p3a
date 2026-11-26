@@ -34,7 +34,9 @@
 #include "p3a_job.h"
 #include "esp_system.h"
 #include "p3a_mem.h"
+#include "p3a_internal_call.h"
 #include "p3a_net.h"
+#include "p3a_update.h"
 #include "p3a_recovery.h"
 #include "p3a_settings.h"
 #include "p3a_storage.h"
@@ -212,6 +214,10 @@ void app_main(void)
     frame_trace_init();  // nothing unless the build traces (lab.py build trace)
     boot_step("event bus", p3a_event_bus_start());
     boot_step("job runners", p3a_jobs_start());
+    boot_step("internal-stack calls", p3a_internal_call_start());
+    // Which firmware this is and what the other slot holds. Here, on this
+    // task: it maps flash.
+    p3a_update_boot();
 
     // Settings first: the steps below read them. Also brings up NVS. If it
     // fails the device runs on defaults.
@@ -298,6 +304,7 @@ void app_main(void)
 
     // Starts joining Wi-Fi and returns; the rest is reported by events.
     boot_step("network", p3a_net_start());
+    boot_step("updates", p3a_update_start());
 
 #if CONFIG_P3A_TEST_HOOKS
     ESP_LOGW(TAG, "TEST BUILD: test hooks are compiled in. Not for release.");
@@ -305,4 +312,5 @@ void app_main(void)
 #endif
 
     ESP_LOGI(TAG, "boot complete");
+    p3a_update_boot_done();  // a firmware on trial has got this far
 }

@@ -34,4 +34,5 @@ animated_gif   player vendored
 libpng         player vendored
 libwebp_decoder player vendored
 p3a_net        net
+p3a_update     net
 p3a_test_hooks net

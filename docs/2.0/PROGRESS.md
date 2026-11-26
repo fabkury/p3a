@@ -9,8 +9,8 @@ times.
 | | |
 |---|---|
 | Phase | 4, remote sources (Phases 0 to 3 complete but for their manual checks) |
-| Current milestone | M5.1 Embedded web UI (M4.5 part 4 waits on M4.5-a) |
-| Next action | M5.1 part 4, which closes M5.1 together with M5.2: the update page (`components/p3a_net/static/update.html`; 1.x's is `legacy/webui/ota.html`; it needs the firmware update itself, M5.2, so read `PLAN.md` M5.2 first and build the two together), which also carries the Wi-Fi co-processor's version and the board's facts that the settings page's System tab lacks; the Followed pill (needs M4.5 part 4); then `legacy/webui` deleted with its deletion-log entry (what is left there: `index.html`, `settings.html`, `playset-editor.html`, `giphy.html`, `network.html`, `ota.html`, `static/`), PARITY's web rows, the whole device suite, release and trace builds. Chrome is connected to this session now (`mcp__claude-in-chrome__*`): click through each page rather than only taking headless screenshots. Still to click: the home page's controls, pin and upload; the settings page's Makapix registration; drag-reorder in the playset editor; Harvard and Smithsonian in the museum browser (they need keys the dev unit does not have). If Fab has registered the unit (M4.5-a), M4.5 part 4 comes first |
+| Current milestone | M5.2 Firmware update, with M5.1's last page (M4.5 part 4 waits on M4.5-a) |
+| Next action | M5.2 part 2 and M5.1's end: the update page (`components/p3a_net/static/update.html`, `static/update.js`, a model file tested with node; 1.x's is `legacy/webui/ota.html`) on `GET /api/v2/update` and its three POSTs: versions, the newest release with its notes, check, install with progress and the wait across the restart, the firmware on trial, going back, the one that was undone, why an install cannot start; the two `update_*` settings; the Wi-Fi co-processor's version and the board's facts. A banner on the home page when an update is available. Then the Followed pill (needs M4.5 part 4), `legacy/webui` deleted with its deletion-log entry (what is left there: `index.html`, `settings.html`, `playset-editor.html`, `giphy.html`, `network.html`, `ota.html`, `static/`), `legacy/components/ota_manager` deleted (rewritten as `p3a_update`), PARITY's web and update rows, the whole device suite, release and trace builds (`tools/compare_sdkconfig.py` may need the update's options listed). Chrome is connected to this session (`mcp__claude-in-chrome__*`): click through each page. Still to click: upload on the home page; the settings page's Makapix registration; drag-reorder in the playset editor; Harvard and Smithsonian in the museum browser (no keys on the dev unit). If Fab has registered the unit (M4.5-a), M4.5 part 4 comes first |
 | Blocked on | M4.5 part 4 only: M4.5-a (Fab registers the dev unit with Makapix Club). Nothing else waits on it |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -57,7 +57,7 @@ reopened (why).
 | M4.4 Pinned lists and "show this" | done 2026-11-25. Tiers: host tests (38 programs, also under the sanitizers), device tests (the whole suite: 330 passed, 6 skipped; the pin tests again on the last build), test, release and trace builds. Manual: M4.4-a. Not verified: listed in the log entry |
 | M4.5 Makapix | in progress. Parts 1 to 3 (2026-11-25): the source, registration up to the owner's part, the link, commands, views, likes, renewal. Host and device tests for everything an unregistered unit can do. Waits on M4.5-a for the rest |
 | M5.1 Embedded web UI | in progress. Part 1 (2026-11-25): shared scripts, the home page, the device serving artworks to the page. Part 2: the settings page from the schema. Part 3: the playset editor and the museum browser, clicked through in Chrome. Node, host and device tests |
-| M5.2 Firmware OTA for 2.x | not started |
+| M5.2 Firmware OTA for 2.x | in progress. Part 1 (2026-11-25): looking for releases, the install, the trial, going back, the API. Host and device tests, the whole cycle on the dev unit between two firmwares from a mirror. Left: the page, one real update from a GitHub pre-release (manual M5.2-a) |
 | M5.3 Release engineering | not started |
 | M5.4 Documentation | not started |
 | M6.1 Soaks | not started |
@@ -73,6 +73,11 @@ check reopens its milestone.
 
 Open:
 
+- **M5.2-a, one real update from GitHub.** Publish a pre-release with a
+  `p3a-v2.bin` built from `v2`, turn on "Offer pre-release firmware", look,
+  install, and see the device restart into it and be kept. The cycle is
+  device-tested against a mirror on the LAN; this adds GitHub's redirect
+  and its TLS.
 - **M4.5-a, registering the dev unit with Makapix Club** (D13). Needed
   before anything a registered player does can be tested (part 3 on).
   With the unit on and on the network: `curl -X POST
@@ -206,8 +211,8 @@ and proposals are in [DECISIONS.md](DECISIONS.md) under "Open decisions".
 | O19 | How does a person tell the device its time zone? The setting is a POSIX TZ string, which nobody types. The web page could offer a list of regions, or send the browser's own zone | M5.1 |
 | O6 | May p3a ship Giphy's and Klipy's own marks, and which? The source is credited in words meanwhile (D72) | when Fab has an answer; holds nothing |
 | O20 | What should 2.0 tell the museums it is? 1.x sent "p3a/{version}" with a contact e-mail address. 2.0 sends "p3a/{version}" alone for now. Museums like a way to reach whoever runs a client; the choices are an address, the project's public page, or nothing | M4.3 ends; holds nothing |
-| O1 | Exact name of the 2.x firmware asset | M5.2 |
-| O12 | OTA hardening choices | M5.2 |
+| O1 | Exact name of the 2.x firmware asset: working answer D85, to confirm | M5.2 |
+| O12 | OTA hardening choices: working answer D86, to confirm | M5.2 |
 | O14 | A second board for the field test | M6.3 |
 | O13 | How `v2` becomes `main` | M6.4 |
 
@@ -443,6 +448,70 @@ M4.3, 2026-11-25:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-25: M5.2 part 1, the firmware update
+
+- **`components/p3a_update`** (net layer), written new; 1.x's
+  `ota_manager` was read for what it did, not moved.
+  - `update_release.c` (pure): GitHub's release list read into the one
+    release this device could install. Only an asset named `p3a-v2.bin`
+    counts (D85); a draft, a tag that is not a version, an asset still
+    uploading, too small, larger than the slot, without a SHA-256
+    digest, or at an address outside the repository's releases is passed
+    over. Versions are ordered as semantic versioning orders them
+    (`2.0.0-dev` < `2.0.0-rc.1` < `2.0.0`); 1.x compared three numbers
+    and ignored the rest.
+  - `update_policy.c` (pure): when to look (D87) and the trial's verdict
+    (D86).
+  - `p3a_update.c`: what runs and what the other slot holds (read at
+    boot on `app_main`'s task), the look as a job, the clock, the trial,
+    going back.
+  - `update_install.c`: the image goes from the network into the other
+    slot (D88). The first bytes must be a p3a image for this chip of the
+    version the release named before the slot is opened; the whole
+    download must have GitHub's SHA-256; the IDF verifies the slot. Every
+    failure takes the screen down and leaves the device running (known
+    issue H8).
+  - `update_api.c`: `GET /api/v2/update`, `POST .../check`, `.../install`,
+    `.../rollback`, each POST a job.
+- **`p3a_internal_call()`** (`p3a_util`): one small long-lived task with
+  an internal-RAM stack that runs the few calls that map flash
+  (`esp_ota_begin`, `esp_ota_end`, choosing the boot slot, marking a
+  firmware kept or refused). The install's job has its stack in PSRAM.
+- **`http_fetch_to_stream()`** (`p3a_fetch`): a body handed to a function
+  as it arrives, with the same retries, redirects, size rules and hash as
+  a download to a file. The update no longer needs an HTTP client of its
+  own. The manual-redirect address buffer grew to 2048: GitHub's signed
+  asset addresses are about 900 characters.
+- Two settings, group `update`: `update_auto_check`, `update_prereleases`.
+- Test hook `!update source`: points the device at a mirror on the LAN.
+  `p3a_update_set_source()` is reachable from nothing else.
+- Verified, host tests (2 new programs, 13 cases, 43 programs in all,
+  also under the sanitizers in WSL): the list GitHub gave on 2026-11-25
+  (only 1.x: nothing for a 2.x device), the same list with 2.x releases
+  beside it (`tests/assets/update/make_releases.py`), each reason a
+  release is passed over, the order of versions on the specification's
+  own examples, notes cut at a character, 1500 mutated lists; when the
+  device looks; the trial's verdict.
+- Verified, device tests (`test_update.py`, 8 cases, all passed): one
+  look at GitHub's real list; a list that cannot be read; what is offered
+  by version and by the pre-release setting; four bad downloads refused
+  with their reason and the device carrying on (not an image, another
+  version inside, wrong checksum, cut short); and the whole cycle from a
+  mirror on the workstation: install with progress and the update
+  screen, restart into the new firmware, on trial, kept once reachable,
+  still kept after an ordinary restart, back to the first firmware. The
+  "new" firmware is the test build with another version written into it
+  and its checksum and hash put right.
+- Found on the device: a firmware gone back to is itself on trial for a
+  few seconds (the IDF marks any newly chosen slot so). It is kept the
+  same way; the test waits for it.
+- Not verified: a firmware that fails its trial (ten minutes without a
+  network; its verdict is host-tested, the going back is the same call
+  the roll back makes); an install from GitHub itself, with its redirect
+  (manual check M5.2-a, needs a pre-release with a `p3a-v2.bin`); an
+  install while the card is shared over USB being refused; the release
+  and trace builds with the new component (at the milestone's end).
 
 ### 2026-11-25: M5.1 part 4a, museum titles on the home page
 

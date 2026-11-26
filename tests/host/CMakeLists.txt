@@ -205,6 +205,14 @@ p3a_host_test(test_playset
     SOURCES player/test_playset.c ${SCHEDULER}/playset.c ${UTIL}/p3a_err.c
     INCLUDES ${SCHEDULER}/include ${P3A_STUBS} ${UTIL}/include
     LIBS cjson)
+p3a_host_test(test_update_release
+    SOURCES net/test_update_release.c ${P3A_COMPONENTS}/p3a_update/update_release.c ${UTIL}/p3a_err.c
+    INCLUDES ${P3A_COMPONENTS}/p3a_update ${UTIL}/include ${P3A_STUBS}
+    LIBS cjson)
+target_compile_definitions(test_update_release PRIVATE P3A_UPDATE_ASSETS="${P3A_ROOT}/tests/assets/update")
+p3a_host_test(test_update_policy
+    SOURCES net/test_update_policy.c ${P3A_COMPONENTS}/p3a_update/update_policy.c
+    INCLUDES ${P3A_COMPONENTS}/p3a_update)
 p3a_host_test(test_makapix_command_map
     SOURCES net/test_makapix_command_map.c ${NET}/makapix_command_map.c ${SCHEDULER}/playset.c
             ${SCHEDULER}/show_url_name.c ${P3A_COMPONENTS}/source_local/source_local_names.c

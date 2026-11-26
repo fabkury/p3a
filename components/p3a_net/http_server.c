@@ -394,6 +394,11 @@ esp_err_t p3a_http_add_routes(const p3a_http_route_t *routes, size_t count)
     return ESP_OK;
 }
 
+bool p3a_http_is_up(void)
+{
+    return s_server != NULL;
+}
+
 esp_err_t p3a_http_start(void)
 {
     if (s_server != NULL) {

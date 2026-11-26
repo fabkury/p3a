@@ -8,6 +8,7 @@ idf_component_register(
          "p3a_crc32.c"
          "p3a_err.c"
          "p3a_event.c" "p3a_event_table.c"
+         "p3a_internal_call.c"
          "p3a_job.c" "p3a_job_table.c"
          "p3a_mem.c" "p3a_mem_pressure.c"
          "p3a_task.c" "p3a_task_policy.c"

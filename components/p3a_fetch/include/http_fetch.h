@@ -80,7 +80,7 @@ typedef struct {
     bool     buffer_full;       ///< fetch_to_buffer hit buf_size-1 (response too big)
     bool     aborted;           ///< should_abort fired
     uint32_t retry_after_sec;   ///< parsed Retry-After on 429 (0 if absent/non-numeric)
-    bool     has_sha256;        ///< sha256 below is the delivered file's (hash_file, file sink, success)
+    bool     has_sha256;        ///< sha256 below is the delivered body's (hash_file, file or stream sink, success)
     uint8_t  sha256[32];
 } http_fetch_result_t;
 
@@ -140,7 +140,7 @@ typedef struct {
     // --- file sink only ---
     size_t                     chunk_size;      ///< 0 -> 32768
     bool                       leave_temp;      ///< write to out_path directly, fsync+close, NO rename
-    bool                       hash_file;       ///< compute the file's SHA-256 as it is written (needs a result);
+    bool                       hash_file;       ///< file and stream sinks: compute the body's SHA-256 as it is written (needs a result);
                                                ///< p3a_blob_adopt_hashed() then takes the file without reading it again
 
     // --- callbacks (all receive user_ctx) ---
@@ -193,6 +193,30 @@ esp_err_t http_fetch_to_buffer(const http_fetch_request_t *req,
 esp_err_t http_fetch_to_file(const http_fetch_request_t *req,
                              const char *out_path,
                              http_fetch_result_t *result);
+
+/**
+ * Where a streamed body goes. `restart` (may be NULL) is called before every
+ * attempt and every redirect hop, the first included: the body starts over.
+ * `write` gets the body in order, in pieces of at most req->chunk_size bytes.
+ * An error from either ends the transfer at once, without another attempt,
+ * and is what http_fetch_to_stream() returns.
+ */
+typedef struct {
+    esp_err_t (*restart)(void *ctx);
+    esp_err_t (*write)(const uint8_t *data, size_t len, void *ctx);
+    void *ctx;
+} http_fetch_stream_t;
+
+/**
+ * @brief Hand an HTTP response body to a function as it arrives.
+ *
+ * For a body that goes neither into memory nor onto the card: the firmware
+ * update writes it to flash. Everything else (retries, redirects, the size
+ * rules, the error codes, hash_file) is as for http_fetch_to_file().
+ */
+esp_err_t http_fetch_to_stream(const http_fetch_request_t *req,
+                               const http_fetch_stream_t *stream,
+                               http_fetch_result_t *result);
 
 #ifdef __cplusplus
 }

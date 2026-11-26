@@ -133,7 +133,7 @@ export const TABS = [
         { title: 'Makapix Club', widget: 'makapix' },
         { title: 'Advanced', keys: ['makapix_refresh_s', 'makapix_cache_size'] },
     ] },
-    { id: 'system', label: 'System', groups: [], sections: [
+    { id: 'system', label: 'System', groups: ['update'], sections: [
         { title: 'Firmware', widget: 'firmware' },
         { title: 'Actions', widget: 'actions' },
         { title: 'About p3a', widget: 'about' },

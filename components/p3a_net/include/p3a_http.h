@@ -49,6 +49,9 @@ typedef struct p3a_http_request p3a_http_request_t;
 // p3a_net_start(); the server stays up whatever the Wi-Fi state.
 esp_err_t p3a_http_start(void);
 
+// True once the server is listening.
+bool p3a_http_is_up(void);
+
 // Adds a table of routes. The table must stay valid for ever (make it static
 // const). Tables are searched in the order they were added, the built-in one
 // first. ESP_ERR_NO_MEM when the few slots are taken.

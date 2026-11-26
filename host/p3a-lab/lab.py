@@ -206,6 +206,61 @@ def erase(port: str | None = None) -> None:
     run_idf(["-p", port or find_port(), "erase-flash"], CONFIGS["release"])
 
 
+# --- the unit's own state ---------------------------------------------------
+#
+# Everything the unit remembers (settings, the Wi-Fi network, the Makapix
+# registration with its key and certificates) is in the NVS partition. A
+# registration is made by a person typing a code at makapix.club, and the
+# device suite erases NVS many times over (the factory-reset tests): so a
+# registered unit's partition is kept, whole, in the lab's private folder,
+# and written back after the tests (tests/device/conftest.py does, when it
+# finds the registration gone). The file holds secrets and never leaves
+# that folder. It also holds the Wi-Fi network of the day it was taken:
+# take it again (`lab.py nvs save`) after the unit moves to another network
+# or is registered anew.
+
+NVS_OFFSET, NVS_SIZE = 0x9000, 0x10000  # partitions.csv
+
+
+def run_esptool(args: list[str]) -> str:
+    """Runs esptool.py in an activated IDF PowerShell. Resets the unit before and after."""
+    quoted = " ".join("'" + a.replace("'", "''") + "'" for a in args)
+    script = ("$env:PYTHONUTF8='1'; " f". '{IDF_PROFILE}' | Out-Null; "
+              f"esptool.py --chip esp32p4 -p {find_port()} -b 460800 --before default_reset --after hard_reset {quoted}; "
+              "exit $LASTEXITCODE")
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("MSYSTEM", "MINGW", "MSYS"))}
+    proc = subprocess.run(["pwsh", "-NoProfile", "-NonInteractive", "-Command", script],
+                          capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
+    if proc.returncode != 0:
+        raise LabError("esptool failed:\n" + "\n".join((proc.stdout + proc.stderr).splitlines()[-12:]))
+    return proc.stdout
+
+
+def nvs_path(name: str) -> Path:
+    if not re.fullmatch(r"[a-z0-9-]{1,32}", name):
+        raise LabError("a snapshot's name is lower-case letters, digits and '-'")
+    return LAB_HOME / "backups" / f"nvs-{name}.bin"
+
+
+def nvs_save(name: str = "registered") -> Path:
+    """Copies the unit's NVS partition into the lab's private folder. The serial port must be free."""
+    path = nvs_path(name)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    run_esptool(["read_flash", hex(NVS_OFFSET), hex(NVS_SIZE), str(path)])
+    if path.stat().st_size != NVS_SIZE:
+        raise LabError(f"the snapshot is {path.stat().st_size} bytes, not {NVS_SIZE}")
+    return path
+
+
+def nvs_restore(name: str = "registered") -> Path:
+    """Writes a snapshot back: the unit is again what it was when the snapshot was taken."""
+    path = nvs_path(name)
+    if not path.exists() or path.stat().st_size != NVS_SIZE:
+        raise LabError(f"there is no snapshot named {name!r}")
+    run_esptool(["write_flash", hex(NVS_OFFSET), str(path)])
+    return path
+
+
 def project_version() -> str:
     text = (REPO / "CMakeLists.txt").read_text(encoding="utf-8")
     m = re.search(r'set\(PROJECT_VER\s+"([^"]+)"\)', text)
@@ -471,6 +526,9 @@ def main(argv: list[str]) -> int:
         elif verb == "erase":
             erase()
             print("erased")
+        elif verb == "nvs" and rest and rest[0] in ("save", "restore"):
+            done = (nvs_save if rest[0] == "save" else nvs_restore)(rest[1] if len(rest) > 1 else "registered")
+            print(f"{rest[0]}d: {done.name}")
         elif verb == "up":
             uart, ident = bring_up(rest[0] if rest else "test")
             uart.close()

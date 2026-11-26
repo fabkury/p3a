@@ -46,11 +46,25 @@ def bring_up(request):
                                do_flash=not request.config.getoption("--no-flash"))
     yield uart, ident
     # Leave the unit as the next session expects it: named and on the Wi-Fi.
+    registered = None
     try:
-        lab.provision(uart)
-    except lab.LabError as exc:
+        status = lab.provision(uart)
+        import json
+        import urllib.request
+        with urllib.request.urlopen(f"http://{status['ip']}/api/v2/makapix", timeout=10) as reply:
+            registered = json.load(reply)["data"]["registered"]
+    except (lab.LabError, OSError, KeyError, ValueError) as exc:
         print(f"the dev unit was not left online: {exc}")
     uart.close()
+    # And registered with Makapix Club, if it was: the factory-reset tests erase the registration
+    # with everything else, and only its owner can make another. `lab.py nvs save` keeps the
+    # unit's whole memory in the lab's private folder; this writes it back when it was lost.
+    if registered is False and lab.nvs_path("registered").exists():
+        try:
+            lab.nvs_restore("registered")
+            print("the dev unit's Makapix registration was put back from the lab's snapshot")
+        except lab.LabError as exc:
+            print(f"the dev unit's Makapix registration was NOT put back: {exc}")
 
 
 @pytest.fixture(scope="session")

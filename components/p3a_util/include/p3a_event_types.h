@@ -49,7 +49,12 @@ typedef enum {
     // payload: ask play_scheduler_get_status().
     P3A_EVENT_PLAYER_CHANGED = 0x0600,
 
-    // --- ui 0x0700: none yet ---
+    // --- ui (0x0700) ---
+    // A person closed a screen (a long press). payload.i32: the p3a_screen_t.
+    // For whoever put the screen up and has something to stop with it: the
+    // Makapix registration ends when its screen is closed.
+    P3A_EVENT_UI_SCREEN_CLOSED = 0x0700,
+
 
     // --- net (0x0800) ---
     // The device has joined Wi-Fi and has an address. No payload.

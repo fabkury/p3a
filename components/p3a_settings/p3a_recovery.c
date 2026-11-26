@@ -66,6 +66,23 @@ uint16_t p3a_recovery_streak(p3a_recovery_kind_t kind)
     return read_one(kind, false);
 }
 
+esp_err_t p3a_recovery_clear(void)
+{
+    nvs_handle_t nvs;
+    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &nvs);
+    if (err != ESP_OK) {
+        return err;
+    }
+    bool stored = true;
+    for (int kind = 0; kind < P3A_RECOVERY_KIND_COUNT_; kind++) {
+        stored = write_counter(nvs, (p3a_recovery_kind_t)kind, "str", 0) && stored;
+        stored = write_counter(nvs, (p3a_recovery_kind_t)kind, "tot", 0) && stored;
+    }
+    err = stored ? nvs_commit(nvs) : ESP_FAIL;
+    nvs_close(nvs);
+    return err;
+}
+
 p3a_recovery_action_t p3a_recovery_report(p3a_recovery_kind_t kind, bool ok, uint16_t max_reboots)
 {
     // Without working counters a restart loop could not be bounded.

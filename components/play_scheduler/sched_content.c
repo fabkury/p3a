@@ -99,6 +99,11 @@ static uint32_t capacity_of(const p3a_source_ops_t *ops)
     return ops->index_capacity ? ops->index_capacity() : SCHED_DEFAULT_CAPACITY;
 }
 
+uint32_t sched_content_capacity(const p3a_source_ops_t *ops)
+{
+    return capacity_of(ops);
+}
+
 static bool channel_is_live(const sched_slot_t *ch)
 {
     return ch->state == PLAY_CHANNEL_WAITING || ch->state == PLAY_CHANNEL_READY || ch->state == PLAY_CHANNEL_FAILED;

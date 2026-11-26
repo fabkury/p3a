@@ -24,6 +24,7 @@
 #include "p3a_internal_call.h"
 #include "p3a_mem.h"
 #include "p3a_net.h"
+#include "p3a_recovery.h"
 #include "p3a_settings.h"
 #include "p3a_storage.h"
 #include "p3a_ui_hooks.h"
@@ -322,6 +323,7 @@ static esp_err_t trial_job(void *arg)
         const esp_err_t err = p3a_internal_call(keep_trial, NULL);
         if (err == ESP_OK) {
             ESP_LOGI(TAG, "%s is reachable: kept", g_update.running);
+            p3a_recovery_clear();  // the restarts the firmware before this one needed are its own
             update_lock();
             g_update.on_trial = false;
             update_unlock();

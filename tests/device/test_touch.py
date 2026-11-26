@@ -131,6 +131,9 @@ def test_a_long_press_opens_the_information_screen_and_another_closes_it(rig):
     assert rows["Web page"] == "http://p3a-fab.local" and rows["Firmware"].startswith("2.0.0")
     assert rows["Address"] == rig.api.base.removeprefix("http://") and "GB free" in rows["SD card"] and "artworks" in rows["Playset"]
     assert ui["hint"] == "Long press to close"
+    # Whether the device is registered with Makapix Club; restarts are listed only if there ever were any.
+    assert rows["Makapix"] in ("Not registered", "Registered", "Connected", "Register again")
+    assert "Restarts" not in rows
     # Under the screen a tap does nothing.
     shown = rig.player()["counters"]["shown"]
     # A tap is for the screen's buttons; it has none now, so nothing happens.

@@ -89,6 +89,8 @@ void net_time_start(void);
 // net_setup.c: the setup access point.
 // Moves to the setup state and brings the access point up (as a job).
 void net_enter_setup(void);
+// The number of devices joined to the setup network changed (net_wifi.c's events).
+void net_setup_clients_changed(int clients);
 bool net_setup_active(void);
 
 // net_wifi.c: the name the device takes on the LAN, "p3a" or "p3a-<name>".

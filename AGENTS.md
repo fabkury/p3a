@@ -81,7 +81,7 @@ The firmware is public (Apache 2.0). 1.x runs on real users' devices from
 | `legacy/` | The 1.x sources, kept as the quarry 2.0 is built from. Never compiled, never included, never linked. See `legacy/README.md`. |
 | `docs/2.0/` | The work stream: protocol, plan, ledger, decisions, testing, parity. |
 | `docs/2.0-architecture-review/` | The design of 2.0. |
-| `host/` | Host tooling. `intro-anim-lab` builds the boot animations from `components/p3a_ui/intro/` and checks their contract (`--check`); run it after touching one. In `jitter-lab` the puller and the analyzer work against 2.0; the rest still targets 1.x and is adapted with the soak (M6.1). |
+| `host/` | Host tooling. `intro-anim-lab` builds the boot animations from `components/p3a_ui/intro/` and checks their contract (`--check`); run it after touching one. In `jitter-lab`, `soak.py` runs a soak against 2.0 (the workload, the UART log, the frame trace, the report) with `pull_frames.py`, `analyze.py`, `run_audit.py` and `serial_logger.py`; the other tools there still speak 1.x's API. |
 | `docs/` (the rest), `README.md` | The user's documentation, for 2.0: `README.md`, `docs/QUICK-START.md`, `docs/HOW-TO-USE.md`, `docs/flash-p3a.md`, `docs/migrating-to-2.0.md`. Outward text: no em dashes, and every instruction is one that was tried. |
 
 ### Layers

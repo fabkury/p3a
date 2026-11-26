@@ -44,6 +44,7 @@
 #include "esp_system.h"
 #include "net_internal.h"
 #include "p3a_recovery.h"
+#include "p3a_ui_hooks.h"
 #include "p3a_task.h"
 
 static const char *TAG = "net_link";
@@ -58,12 +59,15 @@ bool net_link_is_dead(void)
     return atomic_load(&s_dead);
 }
 
-// The screen says nothing yet: the message and its countdown return with the
-// UI (M3). Until then the log is the only notice.
+// Said on the screen, with the seconds counting down: a restart nobody
+// explains looks like a crash.
 void net_restart_after_countdown(const char *why)
 {
     for (int i = NET_RESTART_COUNTDOWN_S; i > 0; i--) {
         ESP_LOGW(TAG, "%s. Restarting in %d...", why, i);
+        p3a_ui_content_t words;
+        p3a_ui_content(&words, why, -1, "Restarting in %d to bring the network back", i);
+        p3a_ui_screen_show(P3A_SCREEN_UPDATE, &words);
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
     esp_restart();
@@ -92,6 +96,11 @@ static void go_degraded(void)
     // link), so the state change and its NET_DOWN come from here.
     net_set_state(P3A_NET_DEGRADED);
     ESP_LOGE(TAG, "restarting has not helped: playing on without a network until the next restart");
+    // Once, for twenty seconds: what is on the card keeps playing under it.
+    p3a_ui_content_t words;
+    p3a_ui_content(&words, "No network", -1, "The Wi-Fi chip is not answering. Playing what is on the card. "
+                   "Unplug the device and plug it in again to retry");
+    p3a_ui_notice_show(P3A_NOTICE_SOURCE_PROBLEM, &words, 20000, 1);
 }
 
 static void event_handler(void *arg, esp_event_base_t base, int32_t id, void *data)

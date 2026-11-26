@@ -357,6 +357,33 @@ def test_an_animation_keeps_its_pace_and_starts_over(panel, name):
     assert b["decode_failed"] is False
 
 
+@pytest.mark.parametrize("name", ["gif/plays_once.gif", "webp/plays_once.webp"])
+def test_a_gif_or_webp_that_says_play_once_plays_for_ever(panel, name):
+    """A loop count in a GIF or a WebP is ignored: on a picture frame an animation that stops looks broken."""
+    loop_ms = sum(shown_for(ms) for ms in DECLARED_MS[name])
+    assert panel.play(corpus(name))["outcome"] == "shown"
+    a = panel.state()
+    time.sleep(max(3.0, 5 * loop_ms / 1000))
+    b = panel.state()
+    assert b["loops"] - a["loops"] >= 3, "it started over, several times"
+    assert b["frames_shown"] - a["frames_shown"] >= 3 * len(DECLARED_MS[name]) and b["decode_failed"] is False
+
+
+def test_an_apng_that_says_play_twice_plays_twice_and_holds_its_last_frame(panel):
+    """APNG's own count is honoured: after it, the last frame stays."""
+    name = "png/apng_plays_twice.png"
+    loop_ms = sum(shown_for(ms) for ms in DECLARED_MS[name])
+    assert panel.play(corpus(name))["outcome"] == "shown"
+    time.sleep(2 * loop_ms / 1000 + 1.5)
+    last = reference_frames(name, (0, 0, 0))[-1]
+    width, height = Image.open(io.BytesIO(corpus(name))).size
+    frame = Image.frombytes("RGB", (width, height), last)
+    for _ in range(2):  # and it is still the last frame a while later
+        assert panel.differing(sampled(expected_frame(frame, 0, (0, 0, 0)), 3), 3) == 0
+        time.sleep(1.0)
+    assert panel.state()["decode_failed"] is False
+
+
 def test_a_transparent_still_is_composed_again_when_the_background_changes(panel):
     name = "png/rgba_soft_alpha.png"
     try:

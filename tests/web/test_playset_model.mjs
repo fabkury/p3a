@@ -35,7 +35,8 @@ test('what is offered', () => {
     assert.equal(KLIPY_CATEGORIES.length, 36);
     assert.equal(new Set(KLIPY_CATEGORIES).size, 36);
     assert.equal(hasOffset('makapix'), false);
-    for (const s of ['local', 'giphy', 'klipy', 'museum', 'pinned']) assert.equal(hasOffset(s), true, s);
+    assert.equal(hasOffset('local'), false, 'an offset would hide the newest files');
+    for (const s of ['giphy', 'klipy', 'museum', 'pinned']) assert.equal(hasOffset(s), true, s);
     assert.equal(typeLabel({ source: 'makapix', kind: 'by_user' }), 'Makapix Club · Artist');
     assert.equal(typeLabel({ source: 'klipy', kind: 'sticker:search' }), 'Klipy · Stickers: Search');
     assert.equal(typeLabel({ source: 'local', kind: '' }), 'Local SD Card');

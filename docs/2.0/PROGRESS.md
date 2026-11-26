@@ -9,8 +9,8 @@ times.
 | | |
 |---|---|
 | Phase | 4, remote sources (Phases 0 to 3 complete but for their manual checks) |
-| Current milestone | Phase 6 next (M6.1 soaks). Phase 5 is done but for what waits on Fab (M4.5-a, M5.2-a, M5.3-a, M5.3-b) |
-| Next action | M6.1, the soaks (`PLAN.md` M6.1, `docs/jitter/README.md` for the pass bar and the lab tooling, `docs/2.0/TESTING.md` for the soak tier): the jitter pass bar on a trace build under the work mix (`host/jitter-lab`: the puller and the analyzer work against 2.0, the rest is adapted now), the memory-pressure soak under a full refresh cycle including the 64-channel playset that livelocked 1.x, then a multi-day run. Before starting a long soak, tell Fab what it will occupy the dev unit with and for how long. Small things left open: the "Followed" pill on the home page (1.x: `{ id: 'followed_artists', label: 'Followed', needsRegistration: true }`, a Makapix channel kind 2.0's source does not have yet; M4.5 part 4); clicking what was not clicked (upload on the home page, the Makapix registration on the settings page, drag to reorder in the playset editor, Harvard and the Smithsonian in the museum browser); `test_the_setup_network_is_on_the_air` if it fails again in a whole suite. Chrome is connected to this session (`mcp__claude-in-chrome__*`); stub `window.confirm` before clicking a button that asks. If Fab has registered the unit (M4.5-a), M4.5 part 4 comes first |
+| Current milestone | Phase 6: M6.1 (soaks) and M6.2 (parity audit) together. Phase 5 is done but for what waits on Fab (M4.5-a, M5.2-a, M5.3-a, M5.3-b) |
+| Next action | A three-hour jitter soak is running on the dev unit (`host/jitter-lab/soak.py`, run `RUN-20261125-02`, trace build, started 22:37 on 2026-11-25); its report lands in `host/jitter-lab/runs/RUN-20261125-02/report.md`. When it ends: (1) read the report and record the result against the pass bar in the ledger and in `docs/jitter/REPORT.md` (early in the run the device counted many overrun frames and a 15 s lateness, both of the out-of-scope kind by the device's own count: look at what artwork caused them, likely a large museum JPEG decoded in software, known issue "Slow software JPEG decodes"); (2) flash the test build (`lab.py up`, `lab.py provision`) and run the device tests written during the soak and not yet run: `test_scheduler.py` (many channels), `test_makapix.py` (long press), `test_touch.py`, `test_player.py` (loop counts), `test_player_api.py` (like), with smoke; (3) the memory soak: `soak.py --mix stress64` on the trace build, watching for an assert or an SD livelock; before it, measure free PSRAM with 64 channels loaded to confirm D91's budget; (4) the rest of M6.2: what is left in `legacy/` (channel_manager, config_store, debug_http_log, http_api, mem_stats, p3a_core, play_scheduler, ugfx, main, makapix, plus `legacy/sdkconfig`, which `tools/compare_sdkconfig.py` reads and must move before the folder can go): each is either rewritten in 2.0 and deleted with a line in the deletion log, or holds something not yet carried over. Small things left open: the "Followed" pill (M4.5 part 4); clicking what was not clicked (upload on the home page, the Makapix registration on the settings page, drag to reorder, Harvard and the Smithsonian in the museum browser); `test_the_setup_network_is_on_the_air` if it fails again; a multi-day run before release (tell Fab first). Chrome is connected to this session; stub `window.confirm` before clicking a button that asks. If Fab has registered the unit (M4.5-a), M4.5 part 4 comes first |
 | Blocked on | M4.5 part 4 only: M4.5-a (Fab registers the dev unit with Makapix Club). Nothing else waits on it |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -480,6 +480,54 @@ M4.3, 2026-11-25:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-25: M6.2 part 1, the parity audit and what it found
+
+- **The audit.** A read-only agent went through the 89 unticked rows of
+  `PARITY.md` and brought back, for each, the test or the ledger line
+  that covers it, or what is missing. I checked a sample of the tests it
+  named (14, all exist) and the claims I acted on, in the code. 46 rows
+  were ticked on that evidence (seven of them dropped things confirmed
+  absent, four re-marked as changed); 43 stay open, each now saying what
+  it lacks. Most of the open ones wait on the registered Makapix player
+  (M4.5-a) or on a manual check.
+- **Found: a playset's 17th channel never played.** The design was
+  "sixteen indices in memory, the rest on demand"; only the first half
+  was built, and the channels left out said nothing. Now every channel
+  loads while the indices fit a memory budget, and one that does not fit
+  is reported on the home page (D91).
+- **Found: the recovery restarts were silent.** When the Wi-Fi chip or
+  its link dies the device counts down and restarts; the countdown went
+  to the log only. It is on the screen now, and so is a notice when the
+  device gives up and plays on without a network.
+- **Found: a long press hid the registration screen and left the
+  registration running** (D93).
+- **Found: small things 1.x had.** The information screen says whether
+  the device is registered and lists its recovery restarts if there were
+  any; the setup screen gives both addresses and says when something has
+  joined; a picture fetched from an address shows a progress bar on the
+  screen; the recovery counters are cleared when an updated firmware is
+  kept.
+- **Found: the editor offered an offset for the SD card that the source
+  ignored.** It no longer offers it (D92).
+- **Tests added for what had none**: files that declare a loop count
+  (GIF and WebP ignore it, APNG honours it), a like over HTTP.
+- Verified: the test build compiles; host tests (43 programs); node
+  (44 cases); the tree checks.
+- **Not verified, because the dev unit is in a three-hour soak**: every
+  device test written today for the above (`test_scheduler.py` many
+  channels, `test_makapix.py` long press, `test_touch.py` rows,
+  `test_player.py` loop counts, `test_player_api.py` like). To run when
+  the soak ends, before anything else.
+- Not testable here: the recovery countdowns and the give-up notice
+  (the link cannot be made to fail on demand); the setup screen's text
+  (the API is not reachable from the LAN in setup).
+- Left open by the audit, not code: `followed_artists` and the server's
+  playsets by name, `get_post` (M4.5 part 4); "reset the advance timer"
+  as an action (1.x had it; nothing in 2.0 needs it: to ask Fab); Q8 (raw
+  SD debug endpoints) and Q9 (`set_mirror`), still without an answer;
+  the failure paths carried over on trust (SD self-repair, the stale
+  index sweep, the Wi-Fi and link ladders).
 
 ### 2026-11-25: M5.4 part 2, the rest of the documentation
 

@@ -122,7 +122,13 @@ def test_a_registration_shows_a_code_and_a_cancel_leaves_the_device_as_it_was(ri
         assert ui["screen"] == "registration" and ui["title"] == code, "the code is what the screen says, large"
         assert state["registered"] == was["registered"], "nothing is saved while the code waits"
 
-        # Starting again ends this one and asks for a new code.
+        # A long press on the screen means "not now": the screen goes and the code with it.
+        rig.uart.command("ui touch", [[1, 360, 200, 0, 0, 2400], [0, 0, 0, 0, 0, 100]])
+        state = wait_registration(rig, "given up by a long press", lambda r: r["phase"] == "idle")
+        assert state["registration"]["last_result"] == "cancelled"
+        assert rig.api.get("/api/v2/ui").data["screen"] != "registration"
+
+        # Starting again asks for a new code.
         assert rig.api.call("POST", "/api/v2/makapix/registration").status == 200
         state = wait_registration(rig, "another code", lambda r: r["phase"] == "showing_code" and r["code"] != code
                                   or r.get("last_result", "").startswith("no code"))

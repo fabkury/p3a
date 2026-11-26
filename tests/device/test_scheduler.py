@@ -165,3 +165,24 @@ def test_the_active_playset_is_resumed_after_a_restart(rig):
                        lambda s: s["playing"] and not s["loading"], timeout=20)
     assert resumed["playset"] == "Restart mix" and len(resumed["channels"]) == 2
     assert resumed["current"] in FILES and resumed["shown"] == 1, "one artwork, chosen by itself at boot"
+
+
+def test_a_playset_of_many_channels_has_every_one_of_them_loaded(rig):
+    """2.0 first held 16 channels in memory and left the 17th on unplayed, in silence."""
+    many = {"name": "Many", "channels": [{"source": "local"}] + [
+        {"source": "giphy", "kind": "search", "identifier": f"word {i}"} for i in range(39)]}
+    try:
+        rig.uart.command("sched activate", many)
+        channels = rig.status()["channels"]
+        assert len(channels) == 40
+        assert [c["state"] for c in channels if c["state"] == "not_loaded"] == [], "forty ordinary channels fit"
+        # Only memory limits it: 64 channels of the largest kind do not all fit, and the ones left out say so.
+        huge = {"name": "Huge", "channels": [
+            {"source": "makapix", "kind": "hashtag", "identifier": f"tag{i}"} for i in range(64)]}
+        rig.uart.command("settings set", {"makapix_cache_size": 4096})
+        rig.uart.command("sched activate", huge)
+        states = [c["state"] for c in rig.status()["channels"]]
+        assert states.count("not_loaded") == 48 and states[:16].count("not_loaded") == 0, states
+    finally:
+        rig.uart.command("settings set", {"makapix_cache_size": 2048})
+        rig.uart.command("sched activate", LOCAL_ONLY)

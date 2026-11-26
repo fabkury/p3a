@@ -17,6 +17,7 @@
 #include "p3a_err.h"
 #include "p3a_limits.h"
 #include "p3a_mem.h"
+#include "p3a_ui_hooks.h"
 #include "p3a_source.h"
 #include "p3a_storage.h"
 #include "play_scheduler.h"
@@ -27,12 +28,21 @@
 
 static const char *TAG = "show_url";
 
+// The job's progress, and the same on the screen: a bar over what is
+// playing, for a picture someone asked for and is waiting to see.
 static void on_progress(size_t total, size_t content_length, void *ctx)
 {
-    (void)ctx;
+    int *shown = ctx;  // the last percentage put on the screen, -1 before the first
     if (content_length > 0) {
         const size_t percent = total * 100 / content_length;
         p3a_job_set_progress((uint8_t)(percent > 99 ? 99 : percent));  // 100 is "done": the file is not in place yet
+        if (shown != NULL && (int)percent >= *shown + 5) {
+            *shown = (int)percent;
+            p3a_ui_content_t words;
+            p3a_ui_content(&words, "Fetching a picture", (int)(percent > 100 ? 100 : percent), "%s", "");
+            // Taken down when the fetch ends; the time limit is for a transfer that stalls.
+            p3a_ui_notice_show(P3A_NOTICE_DOWNLOADING, &words, 20000, 0);
+        }
     }
 }
 
@@ -52,6 +62,7 @@ static esp_err_t show_job(void *arg)
     char *url = arg;
     char dir[160], part[200], name[P3A_RECORD_FILENAME_LEN], path[P3A_FS_PATH_MAX];
     esp_err_t err = ESP_OK;
+    int shown = -1;  // the percentage last put on the screen
     if (sd_health_is_failed() || p3a_storage_is_handed_over()) {
         err = P3A_ERR_SD_FAILED;
     } else if (p3a_mem_level() != P3A_MEM_OK) {
@@ -72,8 +83,10 @@ static esp_err_t show_job(void *arg)
                                           .leave_temp = true,
                                           .treat_empty_as_not_found = true,
                                           .wait_on_sdio = true,
-                                          .progress = on_progress};
+                                          .progress = on_progress,
+                                          .user_ctx = &shown};
         err = http_fetch_to_file(&req, part, NULL);
+        p3a_ui_notice_hide(P3A_NOTICE_DOWNLOADING);
     }
     p3a_format_t format = P3A_FORMAT_UNKNOWN;
     if (err == ESP_OK) {
@@ -112,6 +125,7 @@ static esp_err_t artwork_job(void *arg)
 {
     p3a_record_t *record = arg;
     esp_err_t err = ESP_OK;
+    int shown = -1;  // the percentage last put on the screen
     // The device may have it already: it plays in one of the active
     // playset's channels and was fetched for it.
     if (!p3a_record_has_blob(record) && !play_scheduler_known(record, record)) {
@@ -149,8 +163,10 @@ static esp_err_t artwork_job(void *arg)
                                               .treat_empty_as_not_found = true,
                                               .wait_on_sdio = true,
                                               .hash_file = true,
-                                              .progress = on_progress};
+                                              .progress = on_progress,
+                                              .user_ctx = &shown};
             err = http_fetch_to_file(&req, part, &result);
+            p3a_ui_notice_hide(P3A_NOTICE_DOWNLOADING);
         }
         if (err == ESP_OK) {
             const p3a_format_t format = format_of(part);

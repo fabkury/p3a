@@ -105,11 +105,17 @@ def good() -> dict[str, bytes]:
                                                  duration=[0, 10, 20, 100], loop=0)
     files["png/apng_opaque.png"] = encoded(opaque[0], "PNG", save_all=True, append_images=opaque[1:],
                                            duration=[40, 40, 120, 40], loop=0)
+    # Files that say how many times to play. p3a honours it for APNG (the last
+    # frame is then held) and plays GIF and WebP for ever whatever they say.
+    files["png/apng_plays_twice.png"] = encoded(opaque[0], "PNG", save_all=True, append_images=opaque[1:],
+                                                duration=[40, 40, 120, 40], loop=2)
 
     # --- GIF
     files["gif/still.gif"] = encoded(scene(48, 32).convert("P", palette=Image.ADAPTIVE), "GIF")
     files["gif/opaque_anim.gif"] = encoded(opaque[0], "GIF", save_all=True, append_images=opaque[1:],
                                            duration=[40, 80, 120, 200], loop=0)
+    files["gif/plays_once.gif"] = encoded(opaque[0], "GIF", save_all=True, append_images=opaque[1:],
+                                          duration=[40, 80, 120, 200], loop=1)
     for disposal in (1, 2, 3):
         files[f"gif/sprite_disposal{disposal}.gif"] = encoded(
             frames[0], "GIF", save_all=True, append_images=frames[1:], duration=[100, 60, 60, 60, 150], loop=0,
@@ -128,6 +134,8 @@ def good() -> dict[str, bytes]:
                                                      exact=True)
     files["webp/anim_opaque.webp"] = encoded(opaque[0], "WEBP", save_all=True, append_images=opaque[1:],
                                              duration=[40, 40, 120, 40], loop=0, lossless=True)
+    files["webp/plays_once.webp"] = encoded(opaque[0], "WEBP", save_all=True, append_images=opaque[1:],
+                                            duration=[40, 40, 120, 40], loop=1, lossless=True)
     files["webp/anim_short_delays.webp"] = encoded(opaque[0], "WEBP", save_all=True, append_images=opaque[1:],
                                                    duration=[0, 10, 20, 100], loop=0, lossless=True)
     files["webp/anim_lossy.webp"] = encoded(opaque[0], "WEBP", save_all=True, append_images=opaque[1:],

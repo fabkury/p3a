@@ -92,8 +92,9 @@ export function channelBadges(ch) {
 
 // What stands in a channel's way, from its last listing's error. `null`
 // when nothing does.
-//   kind: 'needs-key' | 'registration' | 'cooldown' | 'auth' | 'unavailable' | 'failed'
+//   kind: 'needs-key' | 'registration' | 'cooldown' | 'auth' | 'unavailable' | 'not-loaded' | 'failed'
 export function channelProblem(ch) {
+    if (ch.state === 'not_loaded') return { kind: 'not-loaded' };
     if (!ch.error) return null;
     switch (ch.error) {
         case 'NO_KEY': return { kind: ch.source === 'makapix' ? 'registration' : 'needs-key' };
@@ -166,6 +167,16 @@ export function banners(player, status, update) {
                 id: key, tone: 'warn', title: `⏳ ${name} Rate Limited`,
                 text: `${name} asked the device to slow down. It waits before refreshing those channels.`,
             });
+        } else if (problem.kind === 'not-loaded') {
+            if (!seen.has('not-loaded')) {
+                seen.add('not-loaded');
+                const n = (player.channels || []).filter((c) => c.state === 'not_loaded').length;
+                out.push({
+                    id: 'not-loaded', tone: 'warn', title: '\u26A0 Playset Too Large', href: '/playsets',
+                    text: `This playset's channels do not all fit in the device's memory: the last ${n} ${n === 1 ? 'is' : 'are'} not playing. `
+                        + 'Remove channels, or lower the "kept per channel" sizes in Settings.',
+                });
+            }
         } else if (problem.kind === 'unavailable') {
             out.push({
                 id: key, tone: 'info', title: '⛔ Museum Temporarily Unavailable',

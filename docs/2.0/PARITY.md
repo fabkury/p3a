@@ -33,7 +33,7 @@ describe what a client can do, not the 1.x URL.
 | [ ] | `followed_artists` and other playsets fetched from the Makapix server by name | keep | M4.5 | |
 | [x] | Giphy: trending and search channels; rating; country code; refresh interval; cache size | keep | M4.2 | M4.2. Live device tests for trending, search, rating, cache size and interval; country code and offset are in the request (host-tested), not seen on the device |
 | [x] | Giphy: rejected-key latch with hourly re-probe, 429 cooldown, analytics id with reset, click registered on swipe up | keep | M4.2 | The waits are the content task's for every source (D66): an hour or a settings change after a refused key, at least 15 minutes after a 429. The id, its reset and the click are device-tested; a 429 was not provoked |
-| [ ] | Giphy: rendition, format and prefer-downsized, settable through the API only | decide | M4.2 | Q7 |
+| [x] | Giphy: rendition, format and prefer-downsized, settable through the API only | keep | M4.2 | D29: settings, kept off the page. `test_giphy_parse`, `test_settings_model` |
 | [x] | Klipy: GIF or sticker, each as trending, search or category; own key; rating; format; refresh interval; cache size | keep | M4.2 | M4.2. Live device tests for GIF trending and sticker search in both formats; categories are a search by name (host-tested) |
 | [x] | Klipy: 36 fixed categories offered in the editor | keep | M5.1 | Seen in the editor in Chrome |
 | [x] | Museums: Rijks, V&A, Wellcome, SMK, Harvard, Smithsonian, Cleveland, Minneapolis; AIC present but marked unavailable, cached AIC art still plays | keep | M4.3 | M4.3. Eight play on the device; AIC is in the table, unavailable, and a device test watches for its image server letting the device in again. AIC art already on the card is not a special case: it plays while its blobs last |
@@ -45,47 +45,47 @@ describe what a client can do, not the 1.x URL.
 | [x] | Pin lists: create, rename, set active, delete, pin, unpin, is-pinned, page through, entry detail, fetch the artwork file, play as a channel | keep | M4.4 | Done in M4.4 over `/api/v2/pins`. Fetching an entry's file for the browser comes with the page (M5.1) |
 | [x] | Pinning copies the artwork bytes into the list's folder | change | M4.4 | A pin becomes a reference in the blob store |
 | [x] | Pinnable: Makapix, Giphy, Klipy, museum. Not local files | keep | M4.4 | Any record whose bytes are in the store; Makapix is seen at M4.5 |
-| [ ] | Show a URL: http or https, 16 MiB, saved to `animations/`, with or without an on-screen progress bar; refused while the card is shared | keep | M4.4 | |
+| [ ] | Show a URL: http or https, 16 MiB, saved to `animations/`, with or without an on-screen progress bar; refused while the card is shared | keep | M4.4 | A bar on the screen while it is fetched (`P3A_NOTICE_DOWNLOADING`). The bar and the refusal while the card is shared are not tested |
 | [ ] | Swap to a named local file or a specific Makapix post | keep | M4.4 | Used by the Makapix site |
 
 ## Playback
 
 | | Capability | 2.0 | M | Note |
 |---|---|---|---|---|
-| [ ] | Animated WebP, GIF, APNG; static PNG, JPEG, BMP; transparency | keep | M2.1 | Decoders moved and pixel-tested against a corpus (part 1). Two 1.x bugs fixed on the way: JPEG colour range (D38), animated WebP blending. Short frame delays now play as in browsers (D37). On screen with part 2 |
+| [x] | Animated WebP, GIF, APNG; static PNG, JPEG, BMP; transparency | keep | M2.1 | `test_decoders.py`, `test_player.py::test_a_file_of_each_format_reaches_the_panel`; M2.1-a cleared |
 | [x] | Fit to screen with aspect ratio kept, centred, borders in the background colour; the colour also prepaints boot | keep | M2.4 | Done in M2.1 |
 | [x] | Bilinear upscaling for Giphy, Klipy and museum art; nearest-neighbour for the rest | keep | M2.4 | The source's table says which (`smooth`); the user's files: O18 |
 | [x] | Pinned Giphy, Klipy and museum art plays nearest-neighbour, because the choice is made by channel type | decide | M4.4 | Q4, D78: it follows the art's own source |
-| [ ] | GIF and WebP loop counts ignored; APNG `num_plays` honored | keep | M2.1 | |
+| [ ] | GIF and WebP loop counts ignored; APNG `num_plays` honored | keep | M2.1 | Three corpus files that declare a count; `test_player.py` (two new tests): to run on the device |
 | [x] | Max-speed playback setting | keep | M2.4 | Done in M2.1 |
 | [x] | Auto-advance every 30 s by default; 0 turns it off; the timer resets on manual navigation and on request | keep | M2.4 | |
-| [ ] | Auto-advance holds while the info screen, the setup screen or pause is up, and while the loader is busy | keep | M2.4, M3.3 | Pause and a busy loader: done (M2.4). Screens hold it through `play_scheduler_hold()` from M3.3 |
-| [ ] | Pick mode random or recency; channel selection SWRR or stochastic | keep | M2.3 | |
+| [x] | Auto-advance holds while the info screen, the setup screen or pause is up, and while the loader is busy | keep | M2.4, M3.3 | `test_ui.py`, `test_pipeline.py`, host `test_sched_turn` |
+| [x] | Pick mode random or recency; channel selection SWRR or stochastic | keep | M2.3 | Host `test_sched_core`. Weighted shares were not measured on the device |
 | [x] | Previous walks a history of 32 without disturbing the generator; history survives a playset switch | keep | M2.3 | |
 | [x] | History and last-played commit when a swap is requested | change | M2.4 | They commit when the artwork is shown (finding 7) |
 | [x] | Pause: black screen, backlight off, views and auto-advance stopped; resume restores brightness; not kept across reboot | keep | M2.4 | Views stop with the view tracker (M4.5) |
-| [ ] | Rotation 0, 90, 180, 270: persisted, applies to playback, screens and overlays | keep | M2.4, M3.3 | Playback: done (M2.1) |
+| [x] | Rotation 0, 90, 180, 270: persisted, applies to playback, screens and overlays | keep | M2.4, M3.3 | `test_player.py`, `test_ui_drawing.py`, `test_touch.py` |
 | [x] | User-requested swaps fail loudly; automatic ones retry silently (3 retries, a small blocklist, a skip budget) | keep | M2.4 | Changed (D55): "next" also tries other artworks and reports only if all fail; a named artwork reports at once. No blocklist: a failed artwork is set aside until its channel is listed again |
-| [ ] | A corrupt cached file is deleted, at most one per minute; local files are never deleted | keep | M2.4 | Through the blob store, on `CORRUPT` only Wired in M2.4; seen on the device when a source makes blobs (M4.1) |
+| [x] | A corrupt cached file is deleted, at most one per minute; local files are never deleted | keep | M2.4 | Host `test_sched_turn`; a local file is never deleted (`test_pipeline.py`). A damaged blob's deletion has no device test |
 | [x] | Artworks the server no longer has are remembered and skipped | keep | M4.1 | One implementation: the record's `gone` flag, set by the content task on a 404. Device-tested with the test source |
-| [ ] | A high miss rate triggers a verification sweep of what is on the card | change | M2.2 | Availability comes from the blob index; a miss is a repair event |
-| [ ] | Boot restores the active playset; with none, plays Promoted without saving that choice | keep | M2.3, M4.5 | Restoring is done (M2.3). With none, 2.0 plays the user's own files (D53) until Makapix exists; revisit at M4.5 |
+| [x] | A high miss rate triggers a verification sweep of what is on the card | change | M2.2 | `test_content.py`: an artwork whose blob went is fetched again |
+| [x] | Boot restores the active playset; with none, plays Promoted without saving that choice | keep | M2.3, M4.5 | With none: the card's files and Promoted, not written down (D90). `test_playsets.py`, `test_scheduler.py` |
 | [x] | First swap waits for the first available artwork, a finished refresh, or the timer | keep | M2.4 | |
 | [x] | One-time "refresh every channel now" switch | keep | M4.1 | `POST /api/v2/player/refresh`. Device-tested |
-| [ ] | Makapix channels other than Promoted do not refresh on an unregistered device, and the UI says so | keep | M4.5 | |
+| [x] | Makapix channels other than Promoted do not refresh on an unregistered device, and the UI says so | keep | M4.5 | `test_makapix.py::test_the_other_channels_need_a_registration`; the page's banner in node |
 | [x] | Per-channel refresh failures back off | keep | M4.1 | `sched_refresh.c` (D66). Host-tested; the rate-limit and no-key waits seen on the device |
 
 ## Playsets
 
 | | Capability | 2.0 | M | Note |
 |---|---|---|---|---|
-| [ ] | Up to 64 channels, each with a weight and an offset; all-zero weights mean equal shares | keep | M2.3 | At most 16 channel indices resident at once |
-| [ ] | Offset honoured for museum, Giphy, local and pinned channels | keep | M2.3 | Review asks for one meaning per source, stated |
-| [ ] | Built-in playsets: all Makapix, Promoted, SD card, Giphy trending | keep | M2.3 to M4.5 | |
+| [ ] | Up to 64 channels, each with a weight and an offset; all-zero weights mean equal shares | keep | M2.3 | D91: every channel loads while the indices fit a memory budget (2.0 first stopped at sixteen). `test_scheduler.py::test_a_playset_of_many_channels_has_every_one_of_them_loaded`: to run on the device |
+| [ ] | Offset honoured for museum, Giphy, local and pinned channels | change | M2.3 | D92: not for the SD card. Giphy's is host-tested; the others' effect on a listing is not tested |
+| [x] | Built-in playsets: all Makapix, Promoted, SD card, Giphy trending | keep | M2.3 to M4.5 | The home page's pills (node). "All Makapix" playing waits on M4.5-a |
 | [x] | A library of up to 32 saved playsets: list, read, create, update, rename, delete | keep | M2.3 | Rename is save under the new name, then delete the old |
 | [x] | Playset names of at most 32 characters; identifiers of at most 32 | change | M2.3 | Identifiers grow to 96 bytes |
-| [ ] | Switching is asynchronous, newest request wins, and the result is reported with a sequence number and error code | keep | M2.3 | The web UI depends on this |
-| [ ] | The active playset is readable cheaply (ETag, 304) with its banner flags | keep | M2.3 | Readable since M2.3 without the ETag; add it in M5.1 if the UI polls |
+| [x] | Switching is asynchronous, newest request wins, and the result is reported with a sequence number and error code | change | M2.3 | The call answers at once and the newest wins; the outcome is each channel's state and error in `GET /player`. No sequence number. `test_player_api.py`, `test_museum.py` |
+| [x] | The active playset is readable cheaply (ETag, 304) with its banner flags | keep | M2.3 | Every GET has an ETag (`test_api.py`); the flags are each channel's `error` in `GET /player` |
 | [x] | A playset file that fails to load is never deleted | keep | M2.3 | |
 
 ## Touch and buttons
@@ -96,10 +96,10 @@ describe what a client can do, not the 1.x URL.
 | [x] | A touch that drifts without becoming a swipe is discarded, not a tap | keep | M3.4 | |
 | [ ] | Swipe up: pin; also Like on Makapix art, click on Giphy art. Swipe down undoes it. Error indicator on local files | keep | M3.4, M4.4, M4.5 | Pin, unpin and Giphy's click done (M4.2, M4.4); Makapix's like at M4.5 |
 | [x] | Two-finger rotate past 45 degrees turns the screen 90 degrees, once per gesture | keep | M3.4 | |
-| [ ] | Long press (2.25 s): info screen, or the setup screen in setup mode; dismisses any screen | keep | M3.4 | Done in M3.4 for the information screen and for closing; in setup mode the setup screen is up by itself in 2.0 |
+| [x] | Long press (2.25 s): info screen, or the setup screen in setup mode; dismisses any screen | keep | M3.4 | `test_touch.py`, host `test_ui_route`, `test_ui_gesture`. Real fingers: M3.4-a |
 | [x] | While paused, only long press works, and it resumes | keep | M3.4 | |
 | [x] | While a screen is up, taps reach only the SD-format controls | keep | M3.4 | Taps are ignored under a screen (M3.4); the format controls come with that screen (M3.3) |
-| [ ] | During registration, long press cancels and returns to playback | keep | M3.4 | The long press closes the screen (M3.4); cancelling the registration is M4.5 |
+| [ ] | During registration, long press cancels and returns to playback | keep | M3.4 | D93. `test_makapix.py` (the long press during a registration): to run on the device |
 | [x] | During a firmware update, gestures are ignored | keep | M3.4 | |
 | [ ] | BOOT button toggles pause; ignored during the co-processor update | keep | M1.2, M2.4 | Wired in M2.4; manual check M2.4-a |
 | [ ] | Touch failure at boot: countdown and one reboot, then carry on without touch | keep | M3.4 | The bounded init is in M1.2; the reboot streak needs settings (M1.4) and the countdown needs the UI The countdown is on the screen since M3.3; not seen with a failing controller |
@@ -109,20 +109,20 @@ describe what a client can do, not the 1.x URL.
 | | Capability | 2.0 | M | Note |
 |---|---|---|---|---|
 | [x] | Boot: background painted before the backlight, then one of 22 intro animations (random or chosen, 1 to 7.5 s) | keep | M3.3 | |
-| [ ] | Info screen: name and version, uptime, Wi-Fi and signal, Makapix state, Giphy key state, card space, playset counts, web UI address, IP, reboot counters, format button when the card has failed | keep | M3.3 | Done in M3.3 except the Makapix and Giphy rows (with those sources) and the reboot counters |
-| [ ] | Setup screen: network name, both addresses, connected clients; appears when setup mode starts | keep | M3.3 | |
+| [ ] | Info screen: name and version, uptime, Wi-Fi and signal, Makapix state, Giphy key state, card space, playset counts, web UI address, IP, reboot counters, format button when the card has failed | keep | M3.3 | Rows for the Makapix registration and, if there ever were any, the recovery restarts. `test_touch.py`: to run. Uptime, Wi-Fi and signal rows are not asserted |
+| [ ] | Setup screen: network name, both addresses, connected clients; appears when setup mode starts | keep | M3.3 | Both addresses and whether anything has joined. Not asserted by a test: the API cannot be reached from the LAN in setup; M1.5-a sees it |
 | [ ] | Registration: status, the 6-character code with a colour-coded countdown, success notice for 10 s; expiry leaves the mode | keep | M3.3, M4.5 | |
 | [x] | Firmware update screen with versions and progress | keep | M3.3, M5.2 | |
 | [ ] | Co-processor update screen with reboot countdown | keep | M1.2, M3.3 | |
-| [ ] | Channel messages: fetching, downloading with progress, failed, empty, loading, waiting for network, empty pin list, no playable files, key needed, museum unavailable, starting | keep | M3.3 | One message surface (finding 11) |
+| [x] | Channel messages: fetching, downloading with progress, failed, empty, loading, waiting for network, empty pin list, no playable files, key needed, museum unavailable, starting | keep | M3.3 | One surface (`ui_player.c`): host `test_ui_player`, `test_ui.py`. No progress figure while downloading |
 | [x] | Refresh-error notices with a 20 s life and a cap of two per boot; the Giphy invalid-key notice stays | keep | M4.2 | D71. The refused-key notice is device-tested; the once-only ones are host-tested |
 | [x] | "SD card is not working" and "SD card repaired" notices, 20 s, once per boot | keep | M3.3 | |
 | [x] | "No Usable SD Card" screen and the two-step on-device format | keep | M3.3 | The device boots on behind the screen in 2.0 |
-| [ ] | USB screens: card exposed, disconnected and restarting | keep | M3.6 | |
-| [ ] | Recovery countdowns for the Wi-Fi chip and the SDIO link, and the offline notice | keep | M1.5 | |
-| [ ] | "No Internet Connection" screen | drop | | Never shown in 1.x |
+| [x] | USB screens: card exposed, disconnected and restarting | keep | M3.6 | `test_usb.py`, host `test_usb_session`. A real computer: M3.6-a |
+| [ ] | Recovery countdowns for the Wi-Fi chip and the SDIO link, and the offline notice | keep | M1.5 | On the screen now (`net_restart_after_countdown`), and a notice when the device gives up on the network. Neither ladder can be provoked in a test |
+| [x] | "No Internet Connection" screen | drop | | Never shown in 1.x |
 | [x] | Overlays: FPS, processing indicator (size setting), reaction icons, pin icons, all following rotation | keep | M3.5 | Done in M3.5; the icons' real triggers come with the sources |
-| [ ] | All text in DejaVu Sans through uGFX | change | M3.2 | VEXED pixel fonts (idea 3) |
+| [x] | All text in DejaVu Sans through uGFX | change | M3.2 | `test_ui_drawing.py`, host `test_ui_text`. By eye: M3.2-a |
 
 ## Web UI
 
@@ -140,34 +140,34 @@ Same pages and look, new internals (D11).
 | [x] | Settings, Giphy, Klipy, Museum, Storage, Makapix, System tabs with their 1.x controls | keep | M5.1 | Makapix registration on the page not clicked yet (M4.5-a) |
 | [x] | Playset editor: list, play, edit, delete, rename; channel cards with reorder, weight, offset, balance bar; add-channel dialog for every source; museum browse; Makapix user and hashtag check | keep | M5.1 | Rename is save, then delete. Pin lists can be channels |
 | [x] | Update page: versions, release notes, install, rollback, check, pre-release markers | keep | M5.1, M5.2 | Going back to the other firmware at any time; a firmware on trial and one that was undone are said |
-| [ ] | Update page: web UI section, repair, recovery page, "outdated" banner | drop | | Gone with change A |
-| [ ] | Setup pages: form with optional device name, success page with countdown, erase, error | keep | M1.5 | Served from the embedded table |
+| [x] | Update page: web UI section, repair, recovery page, "outdated" banner | drop | | Gone with change A |
+| [x] | Setup pages: form with optional device name, success page with countdown, erase, error | keep | M1.5 | `test_setup.py`. Seen from a phone: M1.5-a |
 | [x] | Installable as an app: manifest named after the device, icons, theme colour | keep | M5.1 | Icons shrunk |
-| [ ] | Old addresses `/config/network` and `/giphy` redirect into Settings | drop | | |
-| [ ] | PICO-8 page | drop | | C5 |
+| [x] | Old addresses `/config/network` and `/giphy` redirect into Settings | drop | | |
+| [x] | PICO-8 page | drop | | C5 |
 
 ## What a client can do over the API
 
 | | Capability | 2.0 | M | Note |
 |---|---|---|---|---|
-| [ ] | Status: state, uptime, memory, firmware, hardware, network, Makapix, storage, card health, repair and reboot counters | keep | M1.5 onwards | Free-space figure cached, not computed per request |
+| [x] | Status: state, uptime, memory, firmware, hardware, network, Makapix, storage, card health, repair and reboot counters | keep | M1.5 onwards | `test_api.py::test_status_describes_the_device` |
 | [x] | One call that returns everything the home page needs | change | M5.1 | `GET /api/v2/player` carries what changes by the second; the status, Makapix and the update are asked once a minute, each answered with 304 when unchanged |
-| [ ] | Read and write settings, with partial update | change | M1.4, M1.5 | Validated by the schema; unknown keys rejected; one settings surface |
-| [ ] | The settings read returns stored API keys in clear | decide | M1.5 | Q2 |
+| [x] | Read and write settings, with partial update | change | M1.4, M1.5 | `test_api.py`, host `test_settings` |
+| [x] | The settings read returns stored API keys in clear | change | M1.5 | D33: masked; the two museum keys have their own call. `test_api.py`, `test_settings.py` |
 | [ ] | Actions: next, previous, pause, resume, reboot, reset the advance timer | keep | M2.3 | |
-| [ ] | Actions: show URL, swap to, react, pin, unpin (checked against what is on screen) | keep | M4.4, M4.5 | Show URL, pin and unpin done in M4.4; swap to and react at M4.5 |
+| [ ] | Actions: show URL, swap to, react, pin, unpin (checked against what is on screen) | keep | M4.4, M4.5 | Show, pin, unpin and like have calls and tests (`test_pins.py`, `test_player_api.py`). Swap-to is a Makapix command only. A like on Makapix art: M4.5-a |
 | [ ] | Actions: start or cancel registration, unregister, reset the Giphy analytics id | keep | M4.2, M4.5 | |
-| [ ] | Rotation read and set | keep | M2.4 | Sets; never toggles |
+| [x] | Rotation read and set | keep | M2.4 | Through settings: `test_player.py`, `test_api.py` |
 | [x] | Intro animation list and choice | keep | M3.3 | The choice is the `intro_animation` setting (M3.3); listing the names over the API is to do |
-| [ ] | Device name read and set | keep | M1.5 | Through settings |
-| [ ] | Memory breakdown | keep | M1.5 | |
-| [ ] | Museum cooldown table and browser 429 report | keep | M4.3 | |
+| [x] | Device name read and set | keep | M1.5 | `test_net.py`, `test_setup.py` |
+| [x] | Memory breakdown | change | M1.5 | A summary of the internal pool in the status call (level, free, largest block, lowest). `test_api.py` |
+| [x] | Museum cooldown table and browser 429 report | change | M4.3 | No such calls: the device and the browser each keep their own waits (see the museums' row above) |
 | [x] | Update: status, check, install, rollback | keep | M5.2 | Install becomes a job |
-| [ ] | Erase Wi-Fi credentials and reboot | keep | M1.5 | |
-| [ ] | Legacy channel switch, deprecated channel read, channel stats, UI config, network status, state snapshot, storage, dwell-time endpoints | drop | | Finding 16: unused or duplicated |
-| [ ] | Frame-trace endpoints in trace builds | keep | M2.1 | |
+| [x] | Erase Wi-Fi credentials and reboot | keep | M1.5 | `test_setup.py` |
+| [x] | Legacy channel switch, deprecated channel read, channel stats, UI config, network status, state snapshot, storage, dwell-time endpoints | drop | | Finding 16: unused or duplicated |
+| [x] | Frame-trace endpoints in trace builds | keep | M2.1 | `test_timing.py` on the trace-test build |
 | [ ] | Raw SD debug endpoints behind their own option | decide | M1.3 | Q8 |
-| [ ] | The API starts only after the first successful Wi-Fi connection | keep | M1.5 | |
+| [x] | The API starts only after the first successful Wi-Fi connection | change | M1.5 | The server starts with the network layer and serves setup too. `test_setup.py` |
 
 ## Makapix
 
@@ -188,14 +188,14 @@ Same pages and look, new internals (D11).
 
 | | Capability | 2.0 | M | Note |
 |---|---|---|---|---|
-| [ ] | Configurable SD root, validated, reboot to apply | keep | M1.3, M1.4 | Validation and resolution done and host-tested (M1.3); the setting itself arrives with M1.4 |
-| [ ] | Atomic writes; health latch (boot probe or three failed writes) that stops downloads until reboot | keep | M1.3 | Atomic writes and the latch verified on the device; the content task downloads nothing onto a failed card (M4.1, not tested on the device) |
+| [x] | Configurable SD root, validated, reboot to apply | keep | M1.3, M1.4 | `test_settings.py`, host `test_sd_path` |
+| [x] | Atomic writes; health latch (boot probe or three failed writes) that stops downloads until reboot | keep | M1.3 | `test_storage.py`, host `test_sched_refresh` |
 | [ ] | Self-repair: quarantine to `lost/`, FAT mirror repair at boot, counters | keep | M1.3 | Moved; the boot-time FAT comparison runs. The repair paths need a failing card and are untested in 2.0 |
-| [ ] | Eviction: watermarks scaled to the card, age halving from 30 days to a 4-hour floor, needs a synced clock, never touches local files or pins | change | M4.1 | Same marks, floor and clock rule; oldest first in one walk instead of age halving (D65). Local files are not in the blob store. The walk is device-tested through a hook; starting by itself on a full card is not. Pins join the kept set at M4.4 |
+| [x] | Eviction: watermarks scaled to the card, age halving from 30 days to a 4-hour floor, needs a synced clock, never touches local files or pins | change | M4.1 | D65. Host `test_evict`, `test_content.py`, `test_pins.py`. Starting by itself on a full card was not seen |
 | [ ] | Stale channel indices dropped after 60 days | keep | M4.1 | Built (once per boot, the active playset's kept). Not tested |
-| [ ] | Five cache trees and a pinned tree on the card | change | M2.2 | One blob store |
+| [x] | Five cache trees and a pinned tree on the card | change | M2.2 | `test_library.py`, `test_fetch.py`, `test_pins.py` |
 | [ ] | USB mass storage: card exposed to a computer; swaps, upload, show URL and updates blocked meanwhile; every session ends in a reboot | keep | M3.6 | |
-| [ ] | Build-time switches to start with fresh NVS, Wi-Fi or card | keep | M1.4 | |
+| [x] | Build-time switches to start with fresh NVS, Wi-Fi or card | drop | M1.4 | Not carried over: `lab.py erase`, the factory reset and a release's `nvs-erased.bin` do it without a special build |
 | [ ] | Factory reset (new in 2.0, D28) | new | M1.4, M1.5, M5.1 | Store side done and device-tested |
 
 ## Network and system
@@ -207,29 +207,29 @@ Same pages and look, new internals (D11).
 | [ ] | Health monitor, reconnect, reinit, and a single reboot when the Wi-Fi chip is stuck, then degraded offline playback | keep | M1.5 | |
 | [ ] | SDIO link failure: countdown and reboot, degraded mode after three | keep | M1.5 | |
 | [ ] | Names: `p3a` or `p3a-{name}` for mDNS, DHCP, the setup-mode alias, the installed-app name and the screens | keep | M1.5 | |
-| [ ] | UTC clock from SNTP; connectivity ladder from no Wi-Fi to online | keep | M1.5 | |
+| [x] | UTC clock from SNTP; connectivity ladder from no Wi-Fi to online | keep | M1.5 | `test_net.py`, host `test_clock` |
 | [x] | Firmware update from GitHub Releases: check every 12 h and on request, owner approves, SHA-256 checked, rollback, blocked during USB sharing | keep | M5.2 | `p3a-v2.bin` (D85); first look two minutes after the network (D87); a real GitHub install is manual check M5.2-a |
 | [x] | No update check until 12 h after boot | decide | M5.2 | Changed: D87 |
 | [x] | Pre-release channel in developer builds | change | M5.2 | A setting, `update_prereleases`, in every build (D32) |
-| [ ] | Web UI updated over the air on its own | drop | | Change A |
+| [x] | Web UI updated over the air on its own | drop | | Change A |
 | [ ] | Co-processor firmware flashed at boot when stale; version lock detected and reported | keep | M1.2 | Link, versions and lock detection verified on the dev unit; the update transfer waits for manual check M1.2-e on another board |
-| [ ] | Core dump to flash; one-shot heap report on the first failed allocation | keep | M1.1 | Q6 on reading the dump |
-| [ ] | Persisted reboot counters for Wi-Fi, touch and SDIO, cleared by a validated update | keep | M1.4 | In the schema |
-| [ ] | Brightness set from the UI and over MQTT | keep | M2.4 | Remembered across reboots in 2.0 (D28); restore at boot is done A changed setting applies at once since M2.4; MQTT at M4.5 |
-| [ ] | PICO-8 streaming | drop | | C5 |
+| [x] | Core dump to flash; one-shot heap report on the first failed allocation | keep | M1.1 | D34. `test_api.py`, `test_events_and_memory.py` |
+| [ ] | Persisted reboot counters for Wi-Fi, touch and SDIO, cleared by a validated update | keep | M1.4 | Cleared when an updated firmware is kept (`p3a_recovery_clear`). The clearing itself has no test |
+| [x] | Brightness set from the UI and over MQTT | keep | M2.4 | `test_settings.py`, `test_board_display.py`, `test_makapix.py` (the command, by hook). Over MQTT: M4.5-a |
+| [x] | PICO-8 streaming | drop | | C5 |
 
 ## New in 2.0
 
 | | Capability | M |
 |---|---|---|
 | [x] | One binary: firmware and web UI update together (A) | M5.1 |
-| [ ] | Longer identifiers: no hidden Wellcome terms, no CMA table (B) | M4.3 |
+| [x] | Longer identifiers: no hidden Wellcome terms, no CMA table (B) | `test_museum.py`, node `test_museum`, host `test_record_index` |
 | [x] | Repetition suppression (C) | M2.4 |
 | [x] | Aspect-ratio filter for museum channels (D) | M2.4, M4.3. Seen on the device with a 5:1 picture: passed over with the filter on, played with it off |
-| [ ] | Clock overlay, off by default (idea 1) | M3.5 |
+| [x] | Clock overlay, off by default (idea 1) | `test_overlays.py`, host `test_ui_clock`. By eye: M3.5-a |
 | [x] | Giphy and Klipy branding in the letterbox band, on by default (idea 2) | M4.2, in words (D72); the marks wait on O6 |
-| [ ] | Pixel fonts on screen (idea 3) | M3.2 |
-| [ ] | Pins without duplicate bytes | M4.4 |
+| [x] | Pixel fonts on screen (idea 3) | `test_ui_drawing.py`, host `test_ui_text`. By eye: M3.2-a |
+| [x] | Pins without duplicate bytes | `test_pins.py`, host `test_pin_table` |
 | [x] | Back-off under memory pressure | M4.1 |
 
 ## Behaviours to decide

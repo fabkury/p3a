@@ -17,6 +17,8 @@
 #include "makapix_store.h"
 #include "mbedtls/sha256.h"
 #include "p3a_err.h"
+#include "p3a_event.h"
+#include "p3a_event_types.h"
 #include "p3a_job.h"
 #include "p3a_mem.h"
 #include "p3a_ui_hooks.h"
@@ -219,6 +221,15 @@ static p3a_reaction_t makapix_react(const p3a_record_t *record, bool undo)
     return undo ? P3A_REACTION_UNLIKED : P3A_REACTION_LIKED;
 }
 
+// A long press on the registration screen means "not now": the code is given up too.
+static void on_screen_closed(const p3a_event_t *event, void *ctx)
+{
+    (void)ctx;
+    if (event->payload.i32 == (int32_t)P3A_SCREEN_REGISTRATION) {
+        source_makapix_register_cancel();
+    }
+}
+
 esp_err_t source_makapix_start(void)
 {
     static const p3a_source_ops_t ops = {
@@ -247,5 +258,6 @@ esp_err_t source_makapix_start(void)
     if (err == ESP_OK) {
         err = makapix_task_start();  // last: its first tick uses all of the above
     }
+    p3a_event_subscribe(P3A_EVENT_UI_SCREEN_CLOSED, on_screen_closed, NULL);
     return err != ESP_OK ? err : p3a_source_register(&table);
 }

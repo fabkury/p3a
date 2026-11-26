@@ -19,6 +19,8 @@
 #include "freertos/task.h"
 #include "p3a_board.h"
 #include "p3a_err.h"
+#include "p3a_event.h"
+#include "p3a_event_types.h"
 #include "p3a_job.h"
 #include "p3a_pins.h"
 #include "p3a_settings.h"
@@ -147,6 +149,7 @@ static void act(ui_action_t action, p3a_screen_t screen, const ui_gesture_t *ges
         break;
     case UI_ACTION_CLOSE_SCREEN:
         p3a_ui_screen_hide(screen);
+        p3a_event_emit_i32(P3A_EVENT_UI_SCREEN_CLOSED, (int32_t)screen);
         break;
     case UI_ACTION_RESUME:
         play_scheduler_set_paused(false);

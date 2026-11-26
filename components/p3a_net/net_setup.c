@@ -85,6 +85,20 @@ static void dns_task(void *arg)
     }
 }
 
+// What the screen says in setup: the network to join, the two addresses the
+// page answers at, and whether anything has joined yet (so that a person
+// whose phone shows no page knows the join itself worked).
+static void show_setup_screen(int clients)
+{
+    p3a_ui_content_t words;
+    p3a_ui_content(&words, "Wi-Fi setup", -1,
+                   "Join this Wi-Fi network with a phone or a computer. The setup page opens by itself.\n\n"
+                   "Network\t%s\nOr open\thttp://192.168.4.1\nor\thttp://p3a.local\nJoined\t%s",
+                   SETUP_AP_SSID, clients <= 0 ? "Nobody yet" : clients == 1 ? "1 device" : "Several devices");
+    snprintf(words.hint, sizeof(words.hint), "Long press to hide");
+    p3a_ui_screen_show(P3A_SCREEN_SETUP, &words);
+}
+
 // On its own little network the device is simply "p3a": there is nothing
 // else there to clash with, and it is the name the instructions give.
 static void start_mdns(void)
@@ -182,15 +196,16 @@ static esp_err_t setup_job(void *arg)
     start_mdns();
     atomic_store(&s_active, true);
     ESP_LOGW(TAG, "setup: join the Wi-Fi network \"%s\" and open http://192.168.4.1/", SETUP_AP_SSID);
-    p3a_ui_content_t words;
-    p3a_ui_content(&words, "Wi-Fi setup", -1,
-                   "Join this Wi-Fi network with a phone or a computer. The setup page opens by itself.\n\n"
-                   "Network\t%s\nOr open\thttp://192.168.4.1",
-                   SETUP_AP_SSID);
-    snprintf(words.hint, sizeof(words.hint), "Long press to hide");
-    p3a_ui_screen_show(P3A_SCREEN_SETUP, &words);
+    show_setup_screen(0);
     p3a_event_emit(P3A_EVENT_NET_SETUP_STARTED);
     return ESP_OK;
+}
+
+void net_setup_clients_changed(int clients)
+{
+    if (atomic_load(&s_active)) {
+        show_setup_screen(clients);
+    }
 }
 
 void net_enter_setup(void)

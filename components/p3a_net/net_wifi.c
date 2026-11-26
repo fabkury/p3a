@@ -329,6 +329,14 @@ static void event_handler(void *arg, esp_event_base_t base, int32_t id, void *da
     } else if (base == WIFI_REMOTE_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) {
         const wifi_event_sta_disconnected_t *event = data;
         on_disconnected(event != NULL ? event->reason : 0);
+    } else if (base == WIFI_REMOTE_EVENT && (id == WIFI_EVENT_AP_STACONNECTED || id == WIFI_EVENT_AP_STADISCONNECTED)) {
+        // Someone joined or left the setup network: the setup screen says so.
+        static int clients;
+        clients += id == WIFI_EVENT_AP_STACONNECTED ? 1 : -1;
+        if (clients < 0) {
+            clients = 0;
+        }
+        net_setup_clients_changed(clients);
     } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
         on_got_ip((const ip_event_got_ip_t *)data);
     } else if (base == IP_EVENT && id == IP_EVENT_STA_LOST_IP) {

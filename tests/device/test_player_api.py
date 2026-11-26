@@ -144,3 +144,14 @@ def test_the_active_playset_is_set_whole_or_by_a_saved_name(api):
     api.call("PUT", "/api/v2/player/playset", {"channels": []}).error(400, "INVALID_PLAYSET")
     assert api.get("/api/v2/player/playset").data["name"] == "Saved one", "a refused request changes nothing"
     assert api.call("DELETE", "/api/v2/playsets/Saved%20one").status == 200
+
+
+def test_a_like_over_http_is_what_the_artworks_source_makes_of_it(api):
+    """A file of one's own has nobody to tell: the call answers "none" and nothing changes."""
+    assert api.call("POST", "/api/v2/files?name=zz-api-a.gif", GIF, timeout=30).status == 200
+    wait_player(api, "the file plays", lambda s: s["playing"] and not s["loading"]
+                and s["current"].get("name") == "zz-api-a.gif")
+    for call in ("like", "unlike"):
+        reply = api.call("POST", f"/api/v2/player/{call}")
+        assert reply.status == 200, reply.body
+        assert reply.data["reaction"] == "none" and reply.data["source"] == "local" and reply.data["name"] == "zz-api-a.gif"

@@ -139,15 +139,31 @@ static void fill_info(p3a_ui_content_t *out)
         }
         free(player);
     }
+    // Two short rows more: whether the device is registered with Makapix Club,
+    // and the restarts it gave itself as a remedy, if it ever did.
+    source_makapix_status_t makapix;
+    source_makapix_status(&makapix);
+    char extra[96];
+    int used = snprintf(extra, sizeof(extra), "\nMakapix\t%s",
+                        !makapix.registered                                  ? "Not registered"
+                        : makapix.link == SOURCE_MAKAPIX_LINK_CONNECTED      ? "Connected"
+                        : makapix.link == SOURCE_MAKAPIX_LINK_INVALID        ? "Register again"
+                                                                             : "Registered");
+    const unsigned restarts[] = {p3a_recovery_total(P3A_RECOVERY_WIFI), p3a_recovery_total(P3A_RECOVERY_TOUCH),
+                                 p3a_recovery_total(P3A_RECOVERY_LINK)};
+    if (restarts[0] + restarts[1] + restarts[2] > 0 && used > 0 && (size_t)used < sizeof(extra)) {
+        snprintf(extra + used, sizeof(extra) - (size_t)used, "\nRestarts\tWi-Fi %u, touch %u, link %u", restarts[0],
+                 restarts[1], restarts[2]);
+    }
     const char *name = net.hostname[0] ? net.hostname : "p3a";
     snprintf(out->title, sizeof(out->title), "%s", name);
     out->progress = -1;
     snprintf(out->text, sizeof(out->text),
              "Firmware\t%s\nUptime\t%s\nWi-Fi\t%s\nSignal\t%s\nAddress\t%s\nWeb page\thttp://%s.local\n"
-             "SD card\t%s\nPlayset\t%u artworks, %u channel%s%s",
+             "SD card\t%s\nPlayset\t%u artworks, %u channel%s%s%s",
              app->version, uptime, net.ssid[0] ? net.ssid : "Not set up", up ? signal : p3a_net_state_name(net.state),
              up ? net.ip : "None", name, card, (unsigned)playable, (unsigned)channels,
-             channels == 1 ? "" : "s", sources);
+             channels == 1 ? "" : "s", sources, extra);
     snprintf(out->hint, sizeof(out->hint), "Long press to close");
 }
 

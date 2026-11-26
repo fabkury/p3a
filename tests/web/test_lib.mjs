@@ -79,6 +79,12 @@ test("a channel's error says what stands in its way", () => {
 
 test('banners: one per source and problem, the card first', () => {
     assert.deepEqual(banners(null, null), []);
+    // Channels that did not fit in memory: one banner, with how many, whatever their source.
+    const big = banners({ channels: [{ source: 'giphy', state: 'ready' }, { source: 'giphy', state: 'not_loaded' },
+        { source: 'museum', state: 'not_loaded' }] }, null);
+    assert.equal(big.length, 1);
+    assert.match(big[0].text, /the last 2 are not playing/);
+    assert.equal(big[0].href, '/playsets');
     assert.deepEqual(banners(null, null, { available: false, latest: { version: '2.0.1' } }), []);
     const offered = banners(null, null, { available: true, latest: { version: '2.0.1' } });
     assert.equal(offered.length, 1);

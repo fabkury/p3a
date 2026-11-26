@@ -55,9 +55,11 @@ export const CHOICES = [
     { id: 'local', label: 'Local SD Card', once: true, kinds: [{ kind: '', label: 'SD Card', fields: [] }] },
 ];
 
-// Sources whose channels start at `offset` in their listing. Makapix's do not.
+// Sources whose channels start at `offset` in their listing. Makapix's do
+// not, and the SD card's does not either: its listing is newest first, and
+// an offset would hide the files just copied or uploaded.
 export function hasOffset(source) {
-    return source === 'local' || source === 'giphy' || source === 'klipy' || source === 'museum' || source === 'pinned';
+    return source === 'giphy' || source === 'klipy' || source === 'museum' || source === 'pinned';
 }
 
 const bytes = (text) => new TextEncoder().encode(String(text ?? '')).length;

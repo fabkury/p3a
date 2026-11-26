@@ -26,10 +26,18 @@
 #include "sched_refresh.h"
 #include "sched_turn.h"
 
-// Indices held in memory at once. A playset may name more channels; the
-// rest are not loaded.
-#define SCHED_RESIDENT_MAX     16
+// Every channel's index is held in memory while the playset is active, as
+// long as they fit a budget: what sixteen of the largest indices take
+// (about 13 MB of PSRAM). A playset of 64 ordinary channels fits several
+// times over; one that does not fit has its last channels not loaded, and
+// they say so (PLAY_CHANNEL_NOT_LOADED). 2.0 first capped the number of
+// channels at 16 whatever their size, which left the 17th channel of a
+// playset silently unplayed.
 #define SCHED_DEFAULT_CAPACITY 1024
+// What an index of `capacity` records takes: the records, the slot table
+// (at most four slots a record, two bytes each) and the availability bits.
+#define SCHED_INDEX_BYTES(capacity) ((uint64_t)(capacity) * (192u + 8u + 1u))
+#define SCHED_INDEX_BUDGET          (16u * SCHED_INDEX_BYTES(4096u))
 
 // What a request is for. NEW was picked from a channel; the others name one
 // artwork. NEW and SHOW enter the history when shown.
@@ -129,6 +137,8 @@ uint32_t sched_content_wanted(const p3a_index_t *index);
 
 // There may be work: a playset was put in place, a listing was asked for.
 void sched_content_wake(void);
+// How many records a channel of this source may hold: what its index is made for.
+uint32_t sched_content_capacity(const p3a_source_ops_t *ops);
 
 // Waits until the content task is between two pieces of work; false if it
 // did not get there in time. With `shut_down` set it then starts no more.

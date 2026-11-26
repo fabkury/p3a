@@ -5,8 +5,9 @@
 // times in a row, after which it carries on without the thing that failed.
 //
 // Two counters per kind, kept in NVS: the streak (reboots in a row, cleared
-// by the first success) bounds the loop, and the total (never cleared short
-// of a factory reset) is what the status page reports.
+// by the first success) bounds the loop, and the total (cleared by a
+// factory reset, and by a firmware update that proved itself) is what the
+// status page reports.
 //
 // p3a_recovery_policy() is host-testable; the rest needs NVS, which
 // p3a_settings_start() brings up.
@@ -14,6 +15,8 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+
+#include "esp_err.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -49,6 +52,11 @@ p3a_recovery_action_t p3a_recovery_report(p3a_recovery_kind_t kind, bool ok, uin
 
 uint16_t p3a_recovery_total(p3a_recovery_kind_t kind);
 uint16_t p3a_recovery_streak(p3a_recovery_kind_t kind);
+
+// Sets every counter to zero. For a firmware update that has proved
+// itself: what the firmware before it had to restart for says nothing of
+// this one.
+esp_err_t p3a_recovery_clear(void);
 
 // "touch", "wifi", "link".
 const char *p3a_recovery_name(p3a_recovery_kind_t kind);

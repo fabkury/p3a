@@ -553,7 +553,7 @@ static void install(const playset_t *playset)
     sched->generation++;
     sched->start_wanted = true;
     sched_core_init(&sched->core, playset->count, ((uint64_t)esp_random() << 32) | esp_random());
-    uint32_t resident = 0;
+    uint64_t held = 0;  // bytes of index memory spoken for
     for (uint32_t i = 0; i < playset->count; i++) {
         sched_slot_t *ch = &sched->channels[i];
         playset_channel_id(&playset->channels[i], ch->id);
@@ -561,12 +561,14 @@ static void install(const playset_t *playset)
         const p3a_source_ops_t *ops = p3a_source_get(playset->channels[i].source);
         if (ops == NULL) {
             ch->state = PLAY_CHANNEL_NO_SOURCE;
-        } else if (resident >= SCHED_RESIDENT_MAX) {
+        } else if (held + SCHED_INDEX_BYTES(sched_content_capacity(ops)) > SCHED_INDEX_BUDGET) {
             ch->state = PLAY_CHANNEL_NOT_LOADED;
+            ESP_LOGW(TAG, "channel %u of the playset is not loaded: the indices before it take %u MB", (unsigned)i,
+                     (unsigned)(held >> 20));
         } else {
             ch->state = PLAY_CHANNEL_WAITING;
             sched_refresh_init(&ch->refresh, ops->refresh_interval_s ? ops->refresh_interval_s() : 0, ops->remote);
-            resident++;
+            held += SCHED_INDEX_BYTES(sched_content_capacity(ops));
         }
     }
     sched_content_wake();

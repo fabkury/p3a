@@ -24,6 +24,18 @@ here is the specification for it.
 "host tests pass, device tests pass, awaiting manual check M1.2-a", never as
 plainly done.
 
+## A registered dev unit
+
+The dev unit's Makapix Club registration is made by its owner typing a code
+at makapix.club, and the factory-reset tests erase it with everything else.
+`python host/p3a-lab/lab.py nvs save` keeps the unit's NVS partition in the
+lab's private folder; the device tests' teardown writes it back when it
+finds the unit unregistered. Take it again after the unit is registered
+anew or moved to another Wi-Fi network. The live Makapix tests need the
+registration at the moment they run: run `tests/device/test_makapix.py` by
+itself for them (in a whole suite an earlier file has reset the unit, and
+they skip).
+
 ## What runs when
 
 Decided 2026-11-19 (D42), after the suite had grown to 18 minutes and every

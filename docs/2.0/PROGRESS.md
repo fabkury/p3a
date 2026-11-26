@@ -11,7 +11,7 @@ times.
 | Phase | 4, remote sources (Phases 0 to 3 complete but for their manual checks) |
 | Current milestone | Phase 6: M6.1 (soaks) and M6.2 (parity audit) together. Phase 5 is done but for what waits on Fab (M4.5-a, M5.2-a, M5.3-a, M5.3-b) |
 | Next action | Phase 6's machine work is done as far as it goes without Fab: the jitter and memory soaks passed (RUN-20261125-02, RUN-20261126-01), the parity audit is in `PARITY.md`, `legacy/` holds only what M4.5 part 4 reads. The dev unit has the test build, provisioned, playing the card. Next, in order of use: (1) if Fab has registered the unit (M4.5-a), M4.5 part 4: live Makapix tests, the "Followed" pill, the server's playsets by name, `get_post`, then delete `legacy/components/makapix` and the rest of `legacy/` but the 1.x `sdkconfig`. (2) O21 if Fab answers it (large artworks skipped when memory is short at a swap). (3) Click what was never clicked: upload on the home page, the Makapix registration on the settings page, drag to reorder, Harvard and the Smithsonian in the museum browser. Chrome is connected; stub `window.confirm` before clicking a button that asks. (4) The intermittent failure of `test_giphy.py::test_a_swipe_up_on_a_gif_is_told_to_giphy` (the swipe down did not unpin, once in a whole suite), and `test_the_setup_network_is_on_the_air` once back on the former LAN. (5) A multi-day soak before release (tell Fab first: it occupies the dev unit): `lab.py flash trace`, `python host/jitter-lab/soak.py --hours 72`. M6.3, the field test, is Fab's |
-| Blocked on | M4.5 part 4's last checks: M4.5-a again (the dev unit's registration was removed by a test on 2026-11-26; see the session log). Nothing else waits on it |
+| Blocked on | Nothing. The dev unit is registered with Makapix Club (M4.5-a done; its snapshot is `nvs-registered.bin` in the lab's folder) |
 | In flight | Nothing |
 | Uncommitted work | None |
 
@@ -85,7 +85,7 @@ Open:
   install, and see the device restart into it and be kept. The cycle is
   device-tested against a mirror on the LAN; this adds GitHub's redirect
   and its TLS.
-- **M4.5-a is open again (2026-11-26).** Fab registered the unit; a device test then removed the registration (fixed: D97). To do again: at makapix.club remove the player registered on 2026-11-26 (the device no longer has its key), then register as below. After that a session runs `python -m pytest tests/device/test_makapix.py` and, with Fab, the three things only an owner can do: a like and its taking back (swipe up, then down, on a Makapix artwork: public, under his name), a command from the site's buttons, and the "Followed" pill on the home page.
+- **M4.5-b, what only the owner can do on a registered unit.** With a Makapix artwork playing (the Promoted pill): swipe up (a like, with its icon; it should show on the post at makapix.club, under your name), then swipe down (taken back). Then, at makapix.club, the player's buttons: next, previous, pause, a channel, show on player on a post. Each should do on the device what it says.
 - **M4.5-a, registering the dev unit with Makapix Club** (D13). Needed
   before anything a registered player does can be tested (part 3 on).
   With the unit on and on the network: `curl -X POST
@@ -528,6 +528,43 @@ M4.3, 2026-11-25:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-26: the registration recovered, and kept from now on
+
+- **The dev unit's registration is back, the same player.** Removing a
+  registration erases its NVS entries, and an erased NVS entry is only
+  marked: the bytes stay until the page is recycled. The partition was
+  read off the unit; all eleven entries of the `makapix` namespace (key,
+  host, port, three certificates' parts, token) were there and matched
+  their checksums; an image with them marked live again was written
+  back. The unit came up registered and connected. Nothing is to be
+  done at makapix.club, and M4.5-a stands as done.
+- **`lab.py nvs save [name]` and `nvs restore [name]`** copy the unit's
+  NVS partition to and from the lab's private folder
+  (`%USERPROFILE%\.p3a-lab\backups\nvs-<name>.bin`; it holds the
+  player's key and the Wi-Fi password and stays there). A snapshot
+  named `registered` was taken.
+- **The device suite cannot leave a registration alone**: the
+  factory-reset tests (`test_api.py`, `test_settings.py`) erase all of
+  NVS, as a factory reset must. So the suite's teardown now looks, and
+  when the unit was left unregistered and a `registered` snapshot
+  exists, writes it back. Seen working: `test_makapix.py` then
+  `test_api.py` in one session (23 passed, 3 skipped), the unit
+  registered and connected afterwards.
+- Consequence for the tests: in a whole suite the live Makapix tests
+  skip, because `test_api.py` resets the unit before them. They run
+  when `test_makapix.py` is run by itself or first. Take the snapshot
+  again after the unit moves to another Wi-Fi network (the snapshot
+  holds the network of its day) or is registered anew.
+- **Now verified on a registered unit**: every live test of
+  `test_makapix.py` (the link, each kind of channel, views
+  acknowledged, the followed artists); that a cancel with nothing under
+  way leaves the registration alone (D97); the "Followed" pill clicked
+  in Chrome (nine channels, 543 artworks, the pill lit, the card
+  titled "Followed").
+- Still for Fab, with a session or alone: a like and its taking back
+  on a Makapix artwork (public, under his name), and a command from
+  the site's buttons.
 
 ### 2026-11-26: M4.5 part 4, a registered player; and the registration lost to a test
 

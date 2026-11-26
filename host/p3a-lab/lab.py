@@ -7,6 +7,8 @@
     python host/p3a-lab/lab.py erase                     erase the whole flash
     python host/p3a-lab/lab.py up [build]                build (default: test), flash, wait for the console, print identity
     python host/p3a-lab/lab.py provision                 put the unit on the test rig's Wi-Fi (from the secrets file)
+    python host/p3a-lab/lab.py nvs save [name]           keep the unit's memory (settings, Wi-Fi, Makapix registration)
+    python host/p3a-lab/lab.py nvs restore [name]        write it back; the name defaults to "registered"
     python host/p3a-lab/lab.py boot                      reset and print the boot log
     python host/p3a-lab/lab.py cmd <name> [json]         send one test-console command
     python host/p3a-lab/lab.py shot <file.png> [divisor] save what the test hooks last put on the panel

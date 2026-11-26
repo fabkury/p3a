@@ -529,6 +529,19 @@ M4.3, 2026-11-25:
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
 
+### 2026-11-26: the device tests leave the dev unit its API keys
+
+Fab found the unit without its Giphy key: the Giphy, Klipy and museum
+tests clear the keys they use when they finish, and the factory-reset
+tests erase all four. The session's teardown (`tests/device/conftest.py`)
+now sets the four keys again from the lab's secrets file, after the
+Makapix registration is put back when that was lost too. Over HTTP, so
+that no key is written into the UART log. `TESTING.md` says so.
+
+- Tested: two keys cleared by hand, a smoke session with `--no-flash`,
+  all four keys set afterwards and none in the run's UART log. The path
+  after an NVS restore (the unit restarts first) was not run.
+
 ### 2026-11-26: a channel's own size and refresh in a playset (D100); the playset editor redrawn
 
 Fab asked for both. Neither is a 1.x capability: 1.x and 2.0 until now

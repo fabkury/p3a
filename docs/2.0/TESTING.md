@@ -36,6 +36,15 @@ registration at the moment they run: run `tests/device/test_makapix.py` by
 itself for them (in a whole suite an earlier file has reset the unit, and
 they skip).
 
+## The dev unit's API keys
+
+The Giphy, Klipy and museum tests clear the keys they use (a device
+without a key is one of the things they test), and the factory-reset
+tests erase all four. The device tests' teardown sets them again from
+`api_keys` in the lab's secrets file, over HTTP so that no key is written
+into the UART log. A session that ends with the unit off the network
+leaves them as the last test did.
+
 ## What runs when
 
 Decided 2026-11-19 (D42), after the suite had grown to 18 minutes and every

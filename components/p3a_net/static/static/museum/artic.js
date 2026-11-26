@@ -15,6 +15,8 @@
 // Every request carries an AIC-User-Agent header per AIC's API terms.
 // CORS preflight on the API allows it.
 
+import { noteRateLimit } from './request.js';
+
 const API = 'https://api.artic.edu/api/v1';
 const SEARCH = `${API}/artworks/search`;
 const IIIF_HOST = 'https://www.artic.edu/iiif/2';
@@ -29,7 +31,7 @@ const HEADERS = {
 // origin fail. The metadata API (api.artic.edu) still works, but a browse
 // with no thumbnails and no downloadable art is useless, and the firmware
 // disables AIC refresh/downloads for the same reason (see
-// components/art_institution/art_institution.c unavailable_reason). Flip
+// components/source_museum/museum_artic.c, its `unavailable`). Flip
 // this to false to restore the browse if AIC unblocks image access.
 // https://github.com/art-institute-of-chicago/data-aggregator/issues/151
 const ARTIC_UNAVAILABLE = true;
@@ -76,7 +78,7 @@ const AXIS_DISPLAY_LABELS = {
 // Bool+range partitioning constants. AIC's public search endpoint hard-caps
 // `from + size ≤ 1000` (see docs/art-institutions/offset-tests/REPORT.md
 // §1.3-§1.6). For offsets beyond that we walk POST DSL buckets carved over
-// the artwork-ID space, mirroring components/art_institution/museums/artic.c
+// the artwork-ID space, mirroring components/source_museum/museum_artic.c
 // (aic_discover_buckets / aic_refresh_partitioned).
 const PARTITION_MAX_ID  = 1_000_000;
 const PARTITION_CAP     = 1000;
@@ -90,19 +92,7 @@ const POST_HEADERS = Object.assign({}, HEADERS, {
 async function getJson(url) {
     const r = await fetch(url, { headers: HEADERS });
     if (r.status === 429) {
-        // Tell the device about the cooldown so its own refresh path
-        // pauses too. Best-effort: ignore failures.
-        try {
-            const retryAfter = parseInt(r.headers.get('Retry-After') || '0', 10);
-            fetch('/api/museum/rate-limits/report-429', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    museum: 'artic',
-                    retry_after_sec: isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 60,
-                }),
-            }).catch(() => {});
-        } catch (_) { /* ignore */ }
+        noteRateLimit('artic', r);
         const err = new Error(`AIC 429 ${url}`);
         err.status = 429;
         throw err;
@@ -128,17 +118,7 @@ async function postJson(url, body) {
         method: 'POST', headers: POST_HEADERS, body: JSON.stringify(body),
     });
     if (r.status === 429) {
-        try {
-            const retryAfter = parseInt(r.headers.get('Retry-After') || '0', 10);
-            fetch('/api/museum/rate-limits/report-429', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    museum: 'artic',
-                    retry_after_sec: isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 60,
-                }),
-            }).catch(() => {});
-        } catch (_) { /* ignore */ }
+        noteRateLimit('artic', r);
         const err = new Error(`AIC 429 POST ${url}`);
         err.status = 429;
         throw err;

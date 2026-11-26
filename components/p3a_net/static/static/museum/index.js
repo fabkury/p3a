@@ -6,10 +6,9 @@
 // thumbnailUrl); the modal dispatches through it without per-museum
 // branches.
 //
-// The id MUST match the corresponding entry in
-// components/art_institution/art_institution.c's ART_INSTITUTION_MUSEUMS
-// table, because the device parses the channel `name` field as
-// `{museum_id}:{axis}`.
+// An adapter's id and its axes' names MUST be those of the museum's table
+// in components/source_museum (museum_<id>.c): a museum channel's kind is
+// `{museum_id}:{axis}`. tests/web/test_museum.mjs compares the two.
 
 import { ArticAdapter } from './artic.js';
 import { RijksmuseumAdapter } from './rijksmuseum.js';

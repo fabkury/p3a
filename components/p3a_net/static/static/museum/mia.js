@@ -18,7 +18,7 @@
 //
 // Term identifiers are the facet values themselves ("Paintings",
 // "Asian Art"), embedded in an ES phrase query. Buckets are dropped at
-// enumeration when the key: exceeds 32 UTF-8 BYTES (the playset
+// enumeration when the key: exceeds 95 UTF-8 bytes (the playset
 // identifier slot is bytes, and Mia has multi-byte keys like "Wiener
 // Werkstätte"), contains '"' or '\' (would break the phrase query), or
 // is not well-formed Unicode (Mia's Style facet contains mojibake with
@@ -32,10 +32,11 @@
 // See reference/museum-art/source/mia/output/report.md for the API
 // investigation and finalized-design.md §9.7 for the per-museum spec.
 
+import { fitsIdentifier, noteRateLimit } from './request.js';
+
 const API_ROOT = 'https://search.artsmia.org/';
 const IMG_ROOT = 'https://1.api.artsmia.org';
 const SCOPE = 'rights_type:"Public Domain" AND image:valid';
-const MAX_ID_BYTES = 32;  // playset identifier[33] slot (bytes, not chars)
 
 const AXES = [
     { name: 'classification', label: 'Classifications', agg: 'Classification' },
@@ -44,7 +45,6 @@ const AXES = [
     { name: 'style',          label: 'Styles',          agg: 'Style'          },
 ];
 
-const utf8len = (s) => new TextEncoder().encode(s).length;
 
 function isUsableTermKey(key) {
     if (typeof key !== 'string' || !key) return false;
@@ -56,24 +56,14 @@ function isUsableTermKey(key) {
     } else {
         try { encodeURIComponent(key); } catch (_) { return false; }
     }
-    if (utf8len(key) > MAX_ID_BYTES) return false;  // identifier slot
+    if (!fitsIdentifier(key)) return false;  // a term is a channel's identifier
     return true;
 }
 
 async function getJson(url) {
     const r = await fetch(url);
     if (r.status === 429) {
-        try {
-            const retryAfter = parseInt(r.headers.get('Retry-After') || '0', 10);
-            fetch('/api/museum/rate-limits/report-429', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    museum: 'mia',
-                    retry_after_sec: isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 60,
-                }),
-            }).catch(() => {});
-        } catch (_) { /* ignore */ }
+        noteRateLimit('mia', r);
         const err = new Error(`Mia 429 ${url}`);
         err.status = 429;
         throw err;

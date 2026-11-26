@@ -85,9 +85,9 @@ export function poller(fn, ms) {
 
 // A dialog over the page. `build(body, close)` fills it. Escape and a click
 // outside close it (1.x's dialogs had neither).
-export function dialog(build, { className = 'pin-modal' } = {}) {
+export function dialog(build, { className = 'pin-modal', overlayClass = 'pin-modal-overlay' } = {}) {
     const overlay = document.createElement('div');
-    overlay.className = 'pin-modal-overlay active';
+    overlay.className = `${overlayClass} active`;
     overlay.setAttribute('role', 'dialog');
     overlay.setAttribute('aria-modal', 'true');
     const body = document.createElement('div');

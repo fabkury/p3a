@@ -7,7 +7,7 @@
 // Rijks is axis-less: the only organizational facet is the curated
 // "Set" list. The OAI-PMH endpoint at data.rijksmuseum.nl/oai doesn't
 // expose CORS headers, so the sets list is pre-baked into
-// /museum/rijks-sets.json by the device's LittleFS image; this adapter
+// /static/museum/rijks-sets.json by the device; this adapter
 // fetches that local copy and uses the Linked-Art search endpoint for
 // per-set artwork listings.
 //
@@ -17,29 +17,22 @@
 // 24 requests up front. previewUrl() does the walk lazily for the one
 // currently-displayed item in the preview modal and caches the result
 // per adapter instance. The device does the same walk independently at
-// download time (components/art_institution/museums/rijksmuseum.c).
+// download time (components/source_museum/museum_rijks.c).
+
+import { mapLimit, noteRateLimit } from './request.js';
 
 const BASE = 'https://data.rijksmuseum.nl';
 const ID_PREFIX = 'https://id.rijksmuseum.nl/';
 // The bundled sets file is served by the device's HTTP server at the
 // path below (the route mirrors /pico8/* and /static/*).
-const SETS_URL = '/museum/rijks-sets.json';
+const SETS_URL = '/static/museum/rijks-sets.json';
 const MICRIO_PREFIX = 'https://iiif.micr.io/';
+const PROBE_CONCURRENCY = 6;
 
 async function fetchJsonLd(url) {
     const r = await fetch(url, { headers: { 'Accept': 'application/ld+json' } });
     if (r.status === 429) {
-        try {
-            const retryAfter = parseInt(r.headers.get('Retry-After') || '0', 10);
-            fetch('/api/museum/rate-limits/report-429', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    museum: 'rijks',
-                    retry_after_sec: isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 60,
-                }),
-            }).catch(() => {});
-        } catch (_) { /* ignore */ }
+        noteRateLimit('rijks', r);
         const err = new Error(`Rijks 429 ${url}`);
         err.status = 429;
         throw err;
@@ -110,10 +103,8 @@ export class RijksmuseumAdapter {
         const sets = await this._loadSets();
         // Probe partOf.totalItems for each set in parallel. Each request
         // is small (just the first page of a Linked-Art collection).
-        // Concurrency is bounded by the browser's per-host connection
-        // pool — no explicit cap needed for the Rijks endpoint, which is
-        // light and doesn't enforce 60-req/min the way AIC does.
-        const counts = await Promise.all(sets.map(async (s) => {
+        // A few at a time: 1.x sent all of them (193) at once (audit M19).
+        const counts = await mapLimit(sets, PROBE_CONCURRENCY, async (s) => {
             if (this._counts[s.spec] !== undefined) return this._counts[s.spec];
             try {
                 const d = await fetchJsonLd(this._setUrl(s.spec));
@@ -126,7 +117,7 @@ export class RijksmuseumAdapter {
                 this._counts[s.spec] = null;
                 return null;
             }
-        }));
+        });
         return sets
             .map((s, i) => ({ id: s.spec, label: s.name, count: counts[i] == null ? 0 : counts[i] }))
             .filter(t => t.count > 0)
@@ -150,7 +141,9 @@ export class RijksmuseumAdapter {
             if (this._counts[setSpec] == null && d && d.partOf && typeof d.partOf.totalItems === 'number') {
                 this._counts[setSpec] = d.partOf.totalItems;
             }
-            const nx = (d && d.next && d.next.id) || null;
+            // An empty page ends the walk even if it names a next one
+            // (1.x kept following them: audit M19).
+            const nx = items.length > 0 ? ((d && d.next && d.next.id) || null) : null;
             cache.cursors[cache.cursors.length - 1] = url;
             cache.cursors.push(nx);
         }
@@ -158,9 +151,7 @@ export class RijksmuseumAdapter {
         const slice = cache.items.slice(offset, offset + rows);
         // Hydrate metadata for the visible window in parallel. The 3-hop
         // walk for thumbnails is deliberately skipped — see file header.
-        const hmos = await Promise.all(slice.map(it =>
-            fetchJsonLd(it.id).catch(() => null)
-        ));
+        const hmos = await mapLimit(slice, PROBE_CONCURRENCY, (it) => fetchJsonLd(it.id).catch(() => null));
         const out = slice.map((it, i) => {
             const hmo = hmos[i];
             return {

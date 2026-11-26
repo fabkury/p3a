@@ -12,6 +12,8 @@
 // for every record, so the modal can build thumbnails immediately —
 // no equivalent of Rijks's three-hop Linked-Art walk is needed.
 
+import { noteRateLimit } from './request.js';
+
 const SEARCH = 'https://api.vam.ac.uk/v2/objects/search';
 const IIIF_HOST = 'https://framemark.vam.ac.uk/collections';
 
@@ -33,17 +35,7 @@ const COUNT_PROBE_CONCURRENCY = 6;
 async function getJson(url) {
     const r = await fetch(url);
     if (r.status === 429) {
-        try {
-            const retryAfter = parseInt(r.headers.get('Retry-After') || '0', 10);
-            fetch('/api/museum/rate-limits/report-429', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    museum: 'vam',
-                    retry_after_sec: isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 60,
-                }),
-            }).catch(() => {});
-        } catch (_) { /* ignore */ }
+        noteRateLimit('vam', r);
         const err = new Error(`V&A 429 ${url}`);
         err.status = 429;
         throw err;

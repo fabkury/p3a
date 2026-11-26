@@ -8,6 +8,7 @@ record's "file" address gives exactly the picture the device plays.
 """
 import gzip
 import hashlib
+import json
 import re
 import time
 
@@ -91,6 +92,30 @@ def test_the_settings_page_and_what_it_draws_itself_from_are_served(rig):
     finally:
         api.call("PATCH", "/api/v2/settings", {"harvard_api_key": ""})
     assert api.get("/api/v2/settings").data["harvard_api_key"] == ""
+
+
+def test_the_playsets_page_and_the_museum_browser_are_served(rig):
+    api = rig.api
+    page = api.get("/playsets")
+    assert page.status == 200 and page.body == api.get("/playsets.html").body
+    html = text(page)
+    assert "<title>p3a - Playsets</title>" in html and "/static/playsets.js" in html
+    for path in ("/static/playsets.js", "/static/playset-model.js", "/static/playsets.css"):
+        assert api.get(path).status == 200, path
+    # The museum browser is loaded only when it is opened: every file it imports is there.
+    index = text(api.get("/static/museum/index.js"))
+    adapters = re.findall(r"from '\./([a-z-]+\.js)'", index)
+    assert len(adapters) == 9
+    for module in adapters + ["browse.js", "request.js", "index.js"]:
+        assert api.get(f"/static/museum/{module}").status == 200, module
+    for data in ("cma-terms.json", "rijks-sets.json"):
+        reply = api.get(f"/static/museum/{data}")
+        assert reply.status == 200 and json.loads(text(reply)), data
+    # What the page asks the device: the saved playsets, the pin lists, the museums.
+    assert "playsets" in api.get("/api/v2/playsets").data
+    assert "lists" in api.get("/api/v2/pins").data
+    museums = {m["id"] for m in api.get("/api/v2/sources/museums").data["museums"]}
+    assert {a[:-3] for a in adapters} - museums <= {"rijksmuseum", "smithsonian"}, "an adapter per museum (two files are named in full)"
 
 
 def test_the_manifest_names_the_app_after_the_device(rig):

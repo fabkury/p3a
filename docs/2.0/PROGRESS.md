@@ -10,7 +10,7 @@ times.
 |---|---|
 | Phase | 4, remote sources (Phases 0 to 3 complete but for their manual checks) |
 | Current milestone | M5.1 Embedded web UI (M4.5 part 4 waits on M4.5-a) |
-| Next action | M5.1 part 3: the playset editor and the museum browser. `components/p3a_net/static/playsets.html` + `static/playsets.js` on `GET/PUT/DELETE /api/v2/playsets/{name}` and `PUT /api/v2/player/playset` (2.0's playset JSON: `source`, `kind`, `identifier`, `display_name`, `weight`, `offset`; see `playset.h`), with its pure parts (default names are `channelLabel` in `lib.js`; validation; the weight bar) in a model file tested with node. 1.x's page is `legacy/webui/playset-editor.html`: list, editor with the balance bar, add-channel dialog per source (Makapix kinds with the site's public `verify-user`, `verify-hashtag`, `verify-reactions` checks; Giphy; Klipy with its 36 categories; museum through the browser; SD card; and pin lists, which 1.x could not add), reorder, save, save and play, rename, delete; its toasts were an empty function (audit H11). The museum browser: `legacy/webui/museum/*.js` moved to `static/museum/`, one shared request helper, a `museums.json` that the page loads and a build check compares with `source_museum`'s table (finding 19; `GET /api/v2/sources/museums` already says which need keys and which are unavailable), keys from `GET /api/v2/secrets/museum-keys`, the 32-character term gates and Cleveland's truncation table removed (identifiers are 95 bytes now), Rijksmuseum's 193 simultaneous requests bounded (audit M19). Then part 4: the update page (with M5.2), the Followed pill (needs M4.5 part 4), museum titles in the home page's info panel, every page looked at and clicked in a browser, `legacy/webui` deleted. If Fab has registered the unit (M4.5-a), M4.5 part 4 comes first |
+| Next action | M5.1 part 4, which closes M5.1 together with M5.2: the update page (`components/p3a_net/static/update.html`; 1.x's is `legacy/webui/ota.html`; it needs the firmware update itself, M5.2, so read `PLAN.md` M5.2 first and build the two together), which also carries the Wi-Fi co-processor's version and the board's facts that the settings page's System tab lacks; museum titles in the home page's info panel (the adapters' `fetchInfo`/metadata calls in `static/museum/`, loaded on demand as the playset editor does); the Followed pill (needs M4.5 part 4); then `legacy/webui` deleted with its deletion-log entry (what is left there: `index.html`, `settings.html`, `playset-editor.html`, `giphy.html`, `network.html`, `ota.html`, `static/`), PARITY's web rows, the whole device suite, release and trace builds. Chrome is connected to this session now (`mcp__claude-in-chrome__*`): click through each page rather than only taking headless screenshots. Still to click: the home page's controls, pin and upload; the settings page's Makapix registration; drag-reorder in the playset editor; Harvard and Smithsonian in the museum browser (they need keys the dev unit does not have). If Fab has registered the unit (M4.5-a), M4.5 part 4 comes first |
 | Blocked on | M4.5 part 4 only: M4.5-a (Fab registers the dev unit with Makapix Club). Nothing else waits on it |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -56,7 +56,7 @@ reopened (why).
 | M4.3 Museums | done 2026-11-25. Tiers: host tests (36 programs, also under the sanitizers), device tests (the whole suite on the last build: 322 passed, 6 skipped), CI, test, release and trace builds. Manual: none. Not verified: listed in the log entries of 2026-11-25. O20 (what p3a tells the museums it is) stays open and holds nothing |
 | M4.4 Pinned lists and "show this" | done 2026-11-25. Tiers: host tests (38 programs, also under the sanitizers), device tests (the whole suite: 330 passed, 6 skipped; the pin tests again on the last build), test, release and trace builds. Manual: M4.4-a. Not verified: listed in the log entry |
 | M4.5 Makapix | in progress. Parts 1 to 3 (2026-11-25): the source, registration up to the owner's part, the link, commands, views, likes, renewal. Host and device tests for everything an unregistered unit can do. Waits on M4.5-a for the rest |
-| M5.1 Embedded web UI | in progress. Part 1 (2026-11-25): shared scripts, the home page, the device serving artworks to the page. Part 2 (2026-11-25): the settings page from the schema. Node, host and device tests |
+| M5.1 Embedded web UI | in progress. Part 1 (2026-11-25): shared scripts, the home page, the device serving artworks to the page. Part 2: the settings page from the schema. Part 3: the playset editor and the museum browser, clicked through in Chrome. Node, host and device tests |
 | M5.2 Firmware OTA for 2.x | not started |
 | M5.3 Release engineering | not started |
 | M5.4 Documentation | not started |
@@ -443,6 +443,72 @@ M4.3, 2026-11-25:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-25: M5.1 part 3, the playset editor and the museum browser
+
+- **The playsets page** (`playsets.html`, `static/playsets.js`,
+  `static/playset-model.js`): the saved playsets (play, edit, delete) and
+  the editor (name, balance bar, channels with weight and offset, reorder
+  by buttons or dragging, save, save and play). A rename saves the new
+  one and deletes the old. `/playsets#new` and `/playsets#edit=<name>`
+  open the editor directly.
+- The model holds what a playset must be, in the page's words, and the
+  node test reads the limits out of `playset.h` and the source names out
+  of `playset.c`: a limit changed in the firmware fails CI until the page
+  agrees.
+- **New against 1.x**: a pin list can be a channel (the active one or a
+  named one); a name may have spaces and any letters (1.x allowed
+  `[a-zA-Z0-9_]` only; the device refuses just slashes and control
+  characters); Giphy and Klipy say in the dialog when their key is not
+  set, with a link to Settings; every message is a toast (1.x's
+  `showToast` was empty: known issue H11).
+- **The museum browser** moved from `legacy/webui/museum/` to
+  `static/museum/` (`git mv`, then changed), loaded only when it is
+  opened. What changed:
+  - `request.js` is the one place for what all nine adapters repeated: a
+    museum's "slow down" (kept in the page; 1.x reported it to the device,
+    which keeps its own account now), a bound on simultaneous requests,
+    the two keys from `GET /api/v2/secrets/museum-keys`, and the length a
+    term may have.
+  - A term may be 95 bytes, a channel's identifier, where 1.x dropped
+    every term over 32 characters. Cleveland's two cut department names
+    are whole in `cma-terms.json` and the table that expanded them is gone.
+  - The Rijksmuseum's 193 probes go out six at a time, and its walk stops
+    at an empty page (known issue M19, both halves).
+  - The list of museums is the device's (`GET /api/v2/sources/museums`):
+    one the firmware lacks is not offered, one that cannot be played now
+    (AIC) is shown with the device's reason.
+  - A picked term comes back as `kind` ("vam:category"), `identifier`,
+    `display_name`: a 2.0 channel.
+- **Finding 19 (two museum tables kept by hand)** is closed without a
+  `museums.json`: `tests/web/test_museum.mjs` imports the adapters and
+  compares their ids and axes with the `.id` and `.axes` of each
+  `museum_<id>.c`. A third file would have been a third copy.
+- Verified, node (15 new cases, 35 in all): the playset model (limits
+  from the header, identifiers by source, names, what stops a save, the
+  balance bar, reordering, what is sent); the museums against the
+  firmware; the terms files; cooldowns; bounded requests; what is offered.
+- Verified, device tests (1 new case; smoke, web and playsets: 17 passed):
+  the page, its scripts, every museum module and data file are served.
+- **Clicked through in Chrome on the dev unit** (the extension is
+  connected now): a new playset named in the page; the museum browser
+  opened, V&A > Categories listed live with counts, Drawings previewed
+  with its image and added; a Giphy search (the empty query refused with
+  its toast, then added); the SD card; Klipy's 36 categories; a weight
+  changed and the bar following (20/60/20); a channel moved; Save & Play.
+  The device then held the playset exactly as built and was playing it
+  (the museum channel listed 1024 artworks). On the settings page: a
+  toggle saved and read back from the device both ways, a number out of
+  range refused with the schema's message and not sent, the tabs and
+  their hash.
+- Not verified: dragging to reorder; the Makapix checks in the dialog
+  (`verify-user` and the others, asked of the production site); Harvard
+  and the Smithsonian in the browser (no keys on the dev unit); the
+  other seven museums' listings after the port (their code changed only
+  in the shared 429 line and the term length); the Rijksmuseum's bounded
+  probes against the live service.
+- Seen and left: with no Giphy key the channel shows `NO_KEY` on the
+  device, as it should; the "Now Playing" badge wraps on a narrow list row.
 
 ### 2026-11-25: M5.1 part 2, the settings page
 

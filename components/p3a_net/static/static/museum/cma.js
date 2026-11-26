@@ -12,25 +12,19 @@
 // IIIF museums' !400,400 requests).
 //
 // CMA has no facet-enumeration endpoint, so the department/type term
-// lists are baked into /museum/cma-terms.json at release time by
-// scripts/build_cma_terms.py (rijks-sets.json pattern). The API's
-// department=/type= filters demand EXACT full names; two department
-// names exceed the 32-char playset identifier slot, so their baked
-// entries store a truncated `id` plus a `query` field with the full
-// name. This adapter expands id -> query before every API call; the
-// device-side mirror is CMA_TERM_EXPANSION in
-// components/art_institution/museums/cma.c.
-//
-// Unlike ham/smk/wellcome, no MAX_LABEL_CHARS gate is applied here:
-// baked ids are <= 32 chars by construction, and gating on the (full)
-// label would wrongly drop the two truncated departments.
+// lists are baked into /static/museum/cma-terms.json. The API's
+// department=/type= filters demand EXACT full names, and a term's id is
+// that full name (1.x cut two of them to 32 characters and kept a table
+// to expand them; a channel's identifier has 95 bytes now).
 //
 // See reference/museum-art/source/cma/output/report.md for the API
 // investigation and finalized-design.md §9.6 for the per-museum spec.
 
+import { noteRateLimit } from './request.js';
+
 const API_ROOT = 'https://openaccess-api.clevelandart.org/api/artworks/';
 const CDN_ROOT = 'https://openaccess-cdn.clevelandart.org';
-const TERMS_URL = '/museum/cma-terms.json';
+const TERMS_URL = '/static/museum/cma-terms.json';
 
 const AXES = [
     { name: 'department', label: 'Departments' },
@@ -40,17 +34,7 @@ const AXES = [
 async function getJson(url) {
     const r = await fetch(url);
     if (r.status === 429) {
-        try {
-            const retryAfter = parseInt(r.headers.get('Retry-After') || '0', 10);
-            fetch('/api/museum/rate-limits/report-429', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    museum: 'cma',
-                    retry_after_sec: isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 60,
-                }),
-            }).catch(() => {});
-        } catch (_) { /* ignore */ }
+        noteRateLimit('cma', r);
         const err = new Error(`CMA 429 ${url}`);
         err.status = 429;
         throw err;
@@ -82,8 +66,6 @@ export class CmaAdapter {
     constructor() {
         // Lazy-loaded baked terms (a Promise for the parsed JSON).
         this._termsPromise = null;
-        // id -> exact API query value (differs only for truncated ids).
-        this._queryById = new Map();
     }
 
     async _loadTerms() {
@@ -93,22 +75,11 @@ export class CmaAdapter {
                     if (!r.ok) throw new Error(`CMA terms fetch failed: HTTP ${r.status}`);
                     return r.json();
                 })
-                .then(j => {
-                    const axes = (j && j.axes) || {};
-                    for (const axis of Object.keys(axes)) {
-                        for (const t of axes[axis]) {
-                            this._queryById.set(t.id, t.query || t.id);
-                        }
-                    }
-                    return axes;
-                });
+                .then(j => (j && j.axes) || {});
         }
         return this._termsPromise;
     }
 
-    _expandTerm(termId) {
-        return this._queryById.get(termId) || termId;
-    }
 
     async listCollections({ axis = 'department' } = {}) {
         const ax = AXES.find(a => a.name === axis);
@@ -131,7 +102,7 @@ export class CmaAdapter {
             has_image: '1',
             skip: String(offset),
             limit: String(rows),
-            [axis]: this._expandTerm(termId),
+            [axis]: termId,
             fields: 'accession_number,title,creation_date,creators,images',
         });
 

@@ -12,26 +12,17 @@
 // `image_iiif_id`. The C-side build_iiif_url prepends the standard
 // host prefix at refresh / download time.
 
+import { fitsIdentifier, noteRateLimit } from './request.js';
+
 const SEARCH = 'https://api.smk.dk/api/v1/art/search';
 const IIIF_PREFIX = 'https://iip.smk.dk/iiif/jp2';
 
-const MAX_LABEL_CHARS = 32;
 const PAGE_SIZE = 100;
 
 async function getJson(url) {
     const r = await fetch(url);
     if (r.status === 429) {
-        try {
-            const retryAfter = parseInt(r.headers.get('Retry-After') || '0', 10);
-            fetch('/api/museum/rate-limits/report-429', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    museum: 'smk',
-                    retry_after_sec: isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 60,
-                }),
-            }).catch(() => {});
-        } catch (_) { /* ignore */ }
+        noteRateLimit('smk', r);
         const err = new Error(`SMK 429 ${url}`);
         err.status = 429;
         throw err;
@@ -147,7 +138,7 @@ export class SmkAdapter {
         for (const [name, count] of pairs) {
             if (!name) continue;
             if (count <= 0) continue;
-            if (name.length > MAX_LABEL_CHARS) continue;  // identifier[33] gate
+            if (!fitsIdentifier(name)) continue;  // a term is a channel's identifier
             out.push({ id: name, label: name, count });
         }
         out.sort((a, b) => b.count - a.count);

@@ -10,7 +10,7 @@
 // DEFERRED.md for excluded units and future axis ideas).
 //
 // BYOK: Smithsonian's API requires an api.data.gov key. The user enters
-// one via Settings > Museums (saved as `si_api_key` in NVS). When empty,
+// one via Settings > Museums (the device's `smithsonian_api_key` setting). When empty,
 // the adapter throws a recognizable error so the modal can show
 // "enter your key" instead of a generic failure.
 //
@@ -19,6 +19,8 @@
 // thumbnail URL prepends https://ids.si.edu/ids/iiif/ and appends IIIF
 // size syntax. The device-side adapter stores the same idsId verbatim in
 // iiif_key and builds the same URL.
+
+import { museumKey, noteRateLimit } from './request.js';
 
 const SEARCH = 'https://api.si.edu/openaccess/api/v1.0/search';
 const IIIF_PREFIX = 'https://ids.si.edu/ids/iiif/';
@@ -41,18 +43,11 @@ const AXES = [
     { name: 'unit', label: 'Museums' },
 ];
 
-async function loadConfigKey() {
-    const r = await fetch('/config', { credentials: 'same-origin' });
-    if (!r.ok) throw new Error(`/config returned HTTP ${r.status}`);
-    const j = await r.json();
-    const cfg = (j && j.ok && j.data) ? j.data : {};
-    return typeof cfg.si_api_key === 'string' ? cfg.si_api_key.trim() : '';
-}
 
 function makeNoKeyError() {
     const err = new Error('Smithsonian API key not configured');
     err.code = 'SI_NO_KEY';
-    err.userMessage = 'Enter your api.data.gov API key in Settings → Museums to browse the Smithsonian. Sign up free at https://api.data.gov/signup/.';
+    err.userMessage = 'Enter your api.data.gov API key in Settings > Museum to browse the Smithsonian. Sign up free at https://api.data.gov/signup/.';
     return err;
 }
 
@@ -64,21 +59,11 @@ async function getJsonWithKey(url, apiKey) {
     const r = await fetch(finalUrl);
     if (r.status === 401 || r.status === 403) {
         const err = makeNoKeyError();
-        err.userMessage = 'api.data.gov rejected the saved API key (' + r.status + '). Update it in Settings → Museums.';
+        err.userMessage = 'api.data.gov rejected the saved API key (' + r.status + '). Update it in Settings > Museum.';
         throw err;
     }
     if (r.status === 429) {
-        try {
-            const retryAfter = parseInt(r.headers.get('Retry-After') || '0', 10);
-            fetch('/api/museum/rate-limits/report-429', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    museum: 'si',
-                    retry_after_sec: isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 60,
-                }),
-            }).catch(() => {});
-        } catch (_) { /* ignore */ }
+        noteRateLimit('si', r);
         const err = new Error(`SI 429 ${url}`);
         err.status = 429;
         throw err;
@@ -188,7 +173,7 @@ export class SmithsonianAdapter {
 
     async _getKey() {
         if (!this._keyPromise) {
-            this._keyPromise = loadConfigKey().catch(() => '');
+            this._keyPromise = museumKey('smithsonian_api_key');
         }
         const key = await this._keyPromise;
         if (!key) throw makeNoKeyError();

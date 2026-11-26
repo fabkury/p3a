@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="p3a">
+<meta name="theme-color" content="#0E0A1A">
+<link rel="stylesheet" href="/static/common.css">
+<link rel="stylesheet" href="/static/playsets.css">
+<script src="/static/theme.js"></script>
+<title>p3a - Playsets</title>
+</head>
+<body class="has-bottom-nav">
+<div class="container">
+    <div id="listView">
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="color: var(--c-card-fg); margin: 0;">My Playsets</h2>
+                <button type="button" class="btn btn-primary btn-small" id="createNewBtn">+ Create New</button>
+            </div>
+            <div id="playsetList" class="playset-list">
+                <div class="empty-state">
+                    <div class="empty-state-icon">&#9203;</div>
+                    <p>Loading playsets...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="editorView" class="hidden">
+        <div class="card">
+            <h2 style="color: var(--c-card-fg);">Playset Configuration</h2>
+            <div class="form-group">
+                <label class="form-label" for="playsetName">Playset Name</label>
+                <input type="text" id="playsetName" class="form-input" maxlength="32" placeholder="My awesome mix">
+                <div class="error-message hidden" id="nameError"></div>
+            </div>
+            <div id="weightVizContainer" class="weight-viz-container">
+                <label class="form-label">Channel Balance</label>
+                <div id="weightViz" class="weight-viz"></div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Channels (<span id="channelCount">0</span>/64)</label>
+                <div id="channelList" class="channel-list"></div>
+                <button type="button" class="btn btn-secondary add-channel-btn" id="addChannelBtn">+ Add Channel</button>
+            </div>
+            <div class="button-group">
+                <button type="button" class="btn btn-secondary" id="cancelBtn">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveBtn">Save</button>
+                <button type="button" class="btn btn-primary" id="saveAndPlayBtn">Save &amp; Play</button>
+            </div>
+        </div>
+    </div>
+</div>
+<script type="module" src="/static/playsets.js"></script>
+</body>
+</html>

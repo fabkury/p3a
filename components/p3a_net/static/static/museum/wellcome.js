@@ -9,12 +9,14 @@
 //
 // For non-workType axes Wellcome doesn't expose a stable short id, so
 // the term label IS the filter value. We filter out terms whose label
-// exceeds 32 chars to fit the playset identifier[33] slot (decision
+// exceeds 95 bytes, a channel's identifier (decision
 // captured in docs/deferred/wellcome-long-labels.md).
 //
 // IIIF id (vid) lives nested under items[].locations[] where
 // locationType.id == 'iiif-image'; refresh stores the vid as the
 // iiif_key and the C-side build_iiif_url prepends the standard host.
+
+import { fitsIdentifier, noteRateLimit } from './request.js';
 
 const WORKS = 'https://api.wellcomecollection.org/catalogue/v2/works';
 const IIIF_HOST = 'https://iiif.wellcomecollection.org/image';
@@ -26,7 +28,6 @@ const AXES = [
     { name: 'contributors', label: 'Contributors', filter: 'contributors.agent.label',  agg: 'contributors.agent.label', keyField: 'label' },
 ];
 
-const MAX_LABEL_CHARS = 32;    // playset identifier[33] = 32 chars + null
 const PAGE_SIZE = 100;         // matches C-side refresh
 
 const IIIF_URL_RE = /^https:\/\/iiif\.wellcomecollection\.org\/image\/([^/]+)(?:\/info\.json)?$/;
@@ -41,17 +42,7 @@ function findAxis(name) {
 async function getJson(url) {
     const r = await fetch(url);
     if (r.status === 429) {
-        try {
-            const retryAfter = parseInt(r.headers.get('Retry-After') || '0', 10);
-            fetch('/api/museum/rate-limits/report-429', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    museum: 'wellcome',
-                    retry_after_sec: isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 60,
-                }),
-            }).catch(() => {});
-        } catch (_) { /* ignore */ }
+        noteRateLimit('wellcome', r);
         const err = new Error(`Wellcome 429 ${url}`);
         err.status = 429;
         throw err;
@@ -158,7 +149,7 @@ export class WellcomeAdapter {
             const count = Number((b && b.count) || 0);
             if (!id || !label) continue;
             if (count <= 0) continue;
-            if (label.length > MAX_LABEL_CHARS) continue;  // identifier[33] gate
+            if (!fitsIdentifier(label)) continue;  // a term is a channel's identifier
             out.push({ id, label, count });
         }
         out.sort((a, b) => b.count - a.count);

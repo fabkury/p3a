@@ -1,0 +1,560 @@
+/* The playset editor's own styles (from 1.x's playset-editor.html). */
+        * {
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            padding: var(--sp-5);
+            color: var(--c-text);
+        }
+
+        .container {
+            width: min(var(--w-content), 100%);
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: var(--sp-5);
+        }
+
+        h1, h2, h3 {
+            font-weight: 300;
+            color: var(--c-on-bg);
+            margin-bottom: var(--sp-3);
+        }
+
+        h1 {
+            font-size: clamp(24px, 6vw, 32px);
+        }
+
+        h2 {
+            font-size: clamp(20px, 5vw, 24px);
+        }
+
+        h3 {
+            font-size: clamp(16px, 4vw, 18px);
+            color: var(--c-text);
+        }
+
+        .card {
+            background: var(--c-card-bg);
+            border-radius: var(--r-lg);
+            padding: var(--sp-6);
+            box-shadow: var(--c-card-shadow);
+        }
+
+        .btn {
+            padding: var(--sp-3) var(--sp-6);
+            border: none;
+            border-radius: var(--r-md);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: var(--sp-2);
+            justify-content: center;
+        }
+
+        .btn-primary {
+            background: var(--c-gradient);
+            color: var(--c-on-primary);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px color-mix(in srgb, var(--c-primary) 40%, transparent);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-secondary {
+            background: var(--c-surface-sunk);
+            color: var(--c-text);
+        }
+
+        .btn-secondary:hover {
+            background: var(--c-card-border);
+        }
+
+        .btn-danger {
+            background: var(--c-danger);
+            color: var(--c-on-danger);
+            padding: var(--sp-2) var(--sp-4);
+            font-size: 12px;
+            border-radius: var(--r-sm);
+        }
+
+        .btn-danger:hover {
+            background: var(--c-danger-dark);
+        }
+
+        .btn-small {
+            padding: var(--sp-2) var(--sp-4);
+            font-size: 12px;
+            border-radius: var(--r-sm);
+        }
+
+        .add-channel-btn {
+            display: block;
+            margin: var(--sp-3) auto 0;
+            padding: var(--sp-4) var(--sp-8);
+            font-size: 16px;
+        }
+
+        .btn-icon {
+            padding: var(--sp-2);
+            border-radius: var(--r-sm);
+            background: transparent;
+            border: 1px solid var(--c-border);
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-icon:hover {
+            background: var(--c-bg-subtle);
+        }
+
+        .playset-list {
+            display: flex;
+            flex-direction: column;
+            gap: var(--sp-3);
+        }
+
+        .playset-item {
+            padding: var(--sp-4);
+            border: 2px solid var(--c-card-border);
+            border-radius: var(--r-md);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: var(--sp-3);
+            transition: all 0.2s;
+        }
+
+        .playset-item:hover {
+            background: var(--c-surface-sunk);
+            border-color: var(--c-primary);
+        }
+
+        .playset-item.active-playset {
+            border-color: var(--c-success);
+            background: var(--c-surface-sunk);
+        }
+
+        .playset-item.pending {
+            border-color: var(--c-primary);
+            background: color-mix(in srgb, var(--c-primary) 10%, transparent);
+            animation: pe-pending-pulse 1.1s ease-in-out infinite;
+            cursor: progress;
+        }
+
+        .btn.pending {
+            animation: pe-pending-pulse 1.1s ease-in-out infinite;
+            cursor: progress;
+            pointer-events: none;
+        }
+
+        @keyframes pe-pending-pulse {
+            0%, 100% { opacity: 0.7; }
+            50% { opacity: 1; }
+        }
+
+        .playset-info {
+            flex: 1;
+        }
+
+        .playset-name {
+            font-weight: 500;
+            font-size: 16px;
+            margin-bottom: var(--sp-1);
+            display: flex;
+            align-items: center;
+            gap: var(--sp-2);
+        }
+
+        .now-playing-badge {
+            display: inline-block;
+            padding: 2px var(--sp-2);
+            border-radius: var(--r-md);
+            font-size: 10px;
+            font-weight: 600;
+            background: var(--c-success);
+            color: var(--c-on-success);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .playset-meta {
+            font-size: 12px;
+            color: var(--c-text-light);
+        }
+
+        .playset-actions {
+            display: flex;
+            gap: var(--sp-2);
+        }
+
+        .form-group {
+            margin-bottom: var(--sp-5);
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: var(--sp-2);
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: var(--sp-3);
+            border: 1px solid var(--c-border);
+            border-radius: var(--r-sm);
+            font-size: 14px;
+            font-family: var(--font);
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--c-primary);
+            box-shadow: var(--focus-ring);
+        }
+
+        input.form-input:read-only {
+            background: var(--c-bg-subtle);
+            cursor: not-allowed;
+        }
+
+        .form-input.error {
+            border-color: var(--c-danger);
+        }
+
+        .sqid-input-row {
+            display: flex;
+            gap: var(--sp-2);
+            align-items: stretch;
+        }
+        .sqid-input-row .form-input {
+            flex: 1;
+        }
+        .check-results {
+            margin-top: var(--sp-1);
+            padding: var(--sp-2) var(--sp-3);
+            font-size: 12px;
+            color: var(--c-card-fg-faint);
+            background: var(--c-surface-sunk);
+            border-radius: var(--r-sm);
+            min-height: 24px;
+        }
+        .check-results.has-data {
+            color: var(--c-text);
+            display: flex;
+            align-items: center;
+            gap: var(--sp-3);
+        }
+        .check-results .avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 4px;
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: pixelated;
+            -ms-interpolation-mode: nearest-neighbor;
+            flex-shrink: 0;
+        }
+        .check-results .user-info {
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        .error-message {
+            color: var(--c-danger);
+            font-size: 12px;
+            margin-top: var(--sp-1);
+        }
+
+        .radio-group {
+            display: flex;
+            gap: var(--sp-3);
+            flex-wrap: wrap;
+        }
+
+        .radio-option {
+            flex: 1;
+            min-width: 120px;
+        }
+
+        .radio-option input[type="radio"] {
+            display: none;
+        }
+
+        .radio-label {
+            display: block;
+            padding: var(--sp-3);
+            border: 2px solid var(--c-border);
+            border-radius: var(--r-sm);
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+        }
+
+        .radio-option input[type="radio"]:checked + .radio-label {
+            border-color: var(--c-primary);
+            background: color-mix(in srgb, var(--c-primary) 10%, transparent);
+            font-weight: 500;
+        }
+
+        .radio-label:hover {
+            border-color: var(--c-primary);
+        }
+
+        .mode-description {
+            margin-top: var(--sp-2);
+            padding: var(--sp-3);
+            background: var(--c-surface-sunk);
+            border-radius: var(--r-sm);
+            font-size: 13px;
+            color: var(--c-text-light);
+        }
+
+        .channel-list {
+            display: flex;
+            flex-direction: column;
+            gap: var(--sp-3);
+            margin-bottom: var(--sp-4);
+        }
+
+        .channel-card {
+            border: 1px solid var(--c-border);
+            border-radius: var(--r-md);
+            padding: var(--sp-4);
+            background: var(--c-surface-sunk);
+            transition: all 0.2s;
+        }
+
+        .channel-card.dragging {
+            opacity: 0.5;
+        }
+
+        .channel-card.drag-over {
+            border-color: var(--c-primary);
+            background: color-mix(in srgb, var(--c-primary) 5%, transparent);
+        }
+
+        .channel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--sp-3);
+        }
+
+        .channel-type-badge {
+            display: inline-block;
+            padding: var(--sp-1) var(--sp-3);
+            border-radius: var(--r-md);
+            font-size: 12px;
+            font-weight: 500;
+            background: var(--c-primary);
+            color: var(--c-on-primary);
+        }
+
+        .channel-controls {
+            display: flex;
+            gap: var(--sp-2);
+        }
+
+        .channel-color-swatch {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            margin-right: var(--sp-2);
+            vertical-align: middle;
+            flex-shrink: 0;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .channel-header-left {
+            display: flex;
+            align-items: center;
+            min-width: 0;
+        }
+
+        .channel-fields {
+            display: flex;
+            flex-direction: column;
+            gap: var(--sp-3);
+        }
+
+        .field-row {
+            display: flex;
+            gap: var(--sp-3);
+            align-items: flex-start;
+        }
+
+        .field-row > * {
+            flex: 1;
+        }
+
+        .field-row .form-input {
+            margin-bottom: 0;
+        }
+
+        .weight-viz-container {
+            margin-bottom: var(--sp-5);
+        }
+
+        .weight-viz {
+            display: flex;
+            height: 40px;
+            border-radius: var(--r-sm);
+            overflow: hidden;
+            margin-top: var(--sp-2);
+        }
+
+        .weight-bar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: white;
+            font-weight: 500;
+            transition: all 0.3s;
+            position: relative;
+        }
+
+        .weight-bar:hover {
+            filter: brightness(1.1);
+        }
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: var(--sp-5);
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--c-card-bg);
+            border-radius: var(--r-lg);
+            padding: var(--sp-6);
+            max-width: 480px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--sp-5);
+        }
+
+        .modal-title {
+            font-size: 20px;
+            font-weight: 500;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: var(--c-text-light);
+            padding: 0;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: var(--r-sm);
+        }
+
+        .close-btn:hover {
+            background: var(--c-surface-sunk);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px var(--sp-5);
+            color: var(--c-text-light);
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: var(--sp-4);
+        }
+
+        .button-group {
+            display: flex;
+            gap: var(--sp-3);
+            margin-top: var(--sp-6);
+        }
+
+        .button-group .btn {
+            flex: 1;
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: var(--sp-3);
+            }
+
+            .card {
+                padding: var(--sp-4);
+            }
+
+            .radio-group {
+                flex-direction: column;
+            }
+
+            .radio-option {
+                min-width: 100%;
+            }
+
+            .playset-item {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .playset-actions {
+                justify-content: stretch;
+            }
+
+            .playset-actions .btn {
+                flex: 1;
+            }
+
+            .button-group {
+                flex-direction: column;
+            }
+
+            .field-row {
+                flex-direction: column;
+            }
+        }
+    
+.mode-description a { color: var(--c-primary); }

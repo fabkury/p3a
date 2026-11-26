@@ -4,8 +4,8 @@
 // Harvard Art Museums browse adapter — hybrid discovery model.
 //
 // Unlike the other adapters, HAM ships no API key. The user enters one
-// via Settings > Museums (saved as `ham_api_key` in NVS); the adapter
-// reads it lazily from /config on first use. If the key is empty, the
+// via Settings > Museums (the device's `harvard_api_key` setting); the adapter
+// asks the device for it on first use (request.js). If the key is empty, the
 // adapter throws a recognizable error so the modal can show "enter your
 // key" instead of a generic failure.
 //
@@ -14,7 +14,7 @@
 // curated subset of axes, the adapter declares a display-label map +
 // skip-list at compile time and discovers terms / counts at runtime from
 // whatever HAM actually returns. The label-length filter (drop labels >
-// 32 chars, the playset identifier-slot ceiling) is applied uniformly.
+// 95 bytes, a channel's identifier) is applied uniformly.
 //
 // Image flow: listing returns `primaryimageurl` of the form
 // `https://nrs.harvard.edu/urn-3:HUAM:NNNN_dynmc`. The browser uses it
@@ -25,10 +25,11 @@
 // See docs/art-institutions/ham-investigation/REPORT.md for the
 // investigation and finalized-design.md §9 for the per-museum spec.
 
+import { fitsIdentifier, museumKey, noteRateLimit } from './request.js';
+
 const API_ROOT = 'https://api.harvardartmuseums.org';
 const NRS_PREFIX = 'https://nrs.harvard.edu/';
 const PAGE_SIZE = 100;
-const MAX_LABEL_CHARS = 32;  // playset identifier[33] slot
 
 // Compile-time axis surface. Order matches the curated browse order in
 // REPORT.md §"Axes (filterable, in browse order)". The adapter discovers
@@ -56,18 +57,11 @@ const AXES = [
 //              flat 42 k picker; deferred to a future keyword-search
 //              feature.
 
-async function loadConfigKey() {
-    const r = await fetch('/config', { credentials: 'same-origin' });
-    if (!r.ok) throw new Error(`/config returned HTTP ${r.status}`);
-    const j = await r.json();
-    const cfg = (j && j.ok && j.data) ? j.data : {};
-    return typeof cfg.ham_api_key === 'string' ? cfg.ham_api_key.trim() : '';
-}
 
 function makeNoKeyError() {
     const err = new Error('HAM API key not configured');
     err.code = 'HAM_NO_KEY';
-    err.userMessage = 'Enter your Harvard Art Museums API key in Settings → Museums to browse this museum.';
+    err.userMessage = 'Enter your Harvard Art Museums API key in Settings > Museum to browse this museum.';
     return err;
 }
 
@@ -79,21 +73,11 @@ async function getJsonWithKey(url, apiKey) {
     const r = await fetch(finalUrl);
     if (r.status === 401) {
         const err = makeNoKeyError();
-        err.userMessage = 'Harvard Art Museums rejected the saved API key (401). Update it in Settings → Museums.';
+        err.userMessage = 'Harvard Art Museums rejected the saved API key (401). Update it in Settings > Museum.';
         throw err;
     }
     if (r.status === 429) {
-        try {
-            const retryAfter = parseInt(r.headers.get('Retry-After') || '0', 10);
-            fetch('/api/museum/rate-limits/report-429', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    museum: 'ham',
-                    retry_after_sec: isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 60,
-                }),
-            }).catch(() => {});
-        } catch (_) { /* ignore */ }
+        noteRateLimit('ham', r);
         const err = new Error(`HAM 429 ${url}`);
         err.status = 429;
         throw err;
@@ -142,7 +126,7 @@ export class HamAdapter {
 
     async _getKey() {
         if (!this._keyPromise) {
-            this._keyPromise = loadConfigKey().catch(() => '');
+            this._keyPromise = museumKey('harvard_api_key');
         }
         const key = await this._keyPromise;
         if (!key) throw makeNoKeyError();
@@ -176,7 +160,7 @@ export class HamAdapter {
         for (const r of records) {
             const name = typeof r.name === 'string' ? r.name : null;
             if (!name) continue;
-            if (name.length > MAX_LABEL_CHARS) continue;  // identifier slot
+            if (!fitsIdentifier(name)) continue;  // a term is a channel's identifier
             const count = typeof r.objectcount === 'number' ? r.objectcount : 0;
             if (hasCounts && count <= 0) continue;
             // Term-id field varies by axis (`classificationid`, `galleryid`,

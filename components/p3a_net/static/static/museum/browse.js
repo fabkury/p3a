@@ -10,6 +10,7 @@
 // runs the flow, and calls back exactly once with the result.
 
 import { listAdapters, getAdapter } from './index.js';
+import { cooldownSeconds, deviceMuseums } from './request.js';
 
 // PAGE_SIZE — items per listArtworks() round-trip during preview
 // navigation. Small enough to keep Next responsive, large enough to
@@ -120,15 +121,9 @@ function el(tag, attrs, children) {
 
 function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
 
+// Seconds the museum still asks to be left alone (it answered 429 to this page).
 async function fetchCooldown(museumId) {
-    try {
-        const r = await fetch('/api/museum/rate-limits');
-        if (!r.ok) return 0;
-        const j = await r.json();
-        return (j && j[museumId] && j[museumId].remaining_sec) | 0;
-    } catch (_) {
-        return 0;
-    }
+    return cooldownSeconds(museumId);
 }
 
 function truncateForDisplayName(s, max) {
@@ -138,11 +133,11 @@ function truncateForDisplayName(s, max) {
 
 // Display name format: "{museum_short} · {Term label}" (axis omitted —
 // it's an organizational facet, not user-meaningful in the channel row),
-// truncated at 64 chars with an ellipsis at the term tail.
+// truncated at 63 chars (a channel's display name) with an ellipsis at the term tail.
 function composeDisplayName(adapter, termLabel) {
     const prefix = `${adapter.shortName} · `;
-    const budget = 64 - prefix.length;
-    if (budget <= 1) return truncateForDisplayName(prefix + termLabel, 64);
+    const budget = 63 - prefix.length;
+    if (budget <= 1) return truncateForDisplayName(prefix + termLabel, 63);
     return prefix + truncateForDisplayName(termLabel, budget);
 }
 
@@ -156,6 +151,19 @@ function defaultHint(adapter) {
     }
     return 'Jumping fetches from the museum API — large jumps may take a moment ' +
            'and consume that museum\'s per-IP rate limit.';
+}
+
+// The adapters this device can play, each with why it cannot be picked
+// now ('' when it can). A museum the firmware does not have is left out;
+// if the device could not be asked, every adapter is offered.
+export function offered(adapters, known) {
+    if (!known || known.length === 0) return adapters.map((adapter) => ({ adapter, blocked: '' }));
+    const out = [];
+    for (const adapter of adapters) {
+        const m = known.find((k) => k.id === adapter.id);
+        if (m) out.push({ adapter, blocked: m.unavailable ? `Cannot be played: ${m.unavailable}.` : '' });
+    }
+    return out;
 }
 
 export function openMuseumBrowse({ onAdd, onCancel } = {}) {
@@ -206,21 +214,33 @@ export function openMuseumBrowse({ onAdd, onCancel } = {}) {
         back.disabled = true;
         clear(body);
 
-        const list = el('ul', { class: 'mb-list' });
-        const adapters = listAdapters();
-        if (adapters.length === 0) {
-            body.appendChild(el('div', { class: 'mb-status', text: 'No museums available.' }));
-            return;
-        }
-        for (const a of adapters) {
-            const row = el('li', { class: 'mb-item' }, [
-                el('span', { text: a.displayName }),
-                el('span', { class: 'mb-count', text: a.shortName }),
-            ]);
-            row.addEventListener('click', () => onPickMuseum(a));
-            list.appendChild(row);
-        }
-        body.appendChild(list);
+        body.appendChild(el('div', { class: 'mb-status', text: 'Loading…' }));
+        // The device says which museums its firmware plays, and why one cannot be.
+        deviceMuseums().then((known) => {
+            if (state.step !== 'museum') return;
+            clear(body);
+            const rows = offered(listAdapters(), known);
+            if (rows.length === 0) {
+                body.appendChild(el('div', { class: 'mb-status', text: 'No museums available.' }));
+                return;
+            }
+            const list = el('ul', { class: 'mb-list' });
+            for (const { adapter, blocked } of rows) {
+                const row = el('li', { class: 'mb-item' }, [
+                    el('span', { text: adapter.displayName }),
+                    el('span', { class: 'mb-count', text: blocked ? 'unavailable' : adapter.shortName }),
+                ]);
+                if (blocked) {
+                    row.style.opacity = '0.5';
+                    row.style.cursor = 'default';
+                    row.title = blocked;
+                } else {
+                    row.addEventListener('click', () => onPickMuseum(adapter));
+                }
+                list.appendChild(row);
+            }
+            body.appendChild(list);
+        });
     }
 
     async function onPickMuseum(adapter) {
@@ -731,12 +751,11 @@ export function openMuseumBrowse({ onAdd, onCancel } = {}) {
     function confirmAdd() {
         if (!state.adapter || !state.term) return;
         const axisName = state.axis ? state.axis.name : 'set';
+        // A museum channel as the device takes it: kind "{museum}:{axis}", the term as identifier.
         const spec = {
-            type: 'institution',
-            name: `${state.adapter.id}:${axisName}`,
+            kind: `${state.adapter.id}:${axisName}`,
             identifier: state.term.id,
             display_name: composeDisplayName(state.adapter, state.term.label),
-            weight: 100,
         };
         close_modal(false);
         if (typeof onAdd === 'function') onAdd(spec);

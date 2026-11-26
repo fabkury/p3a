@@ -529,6 +529,49 @@ M4.3, 2026-11-25:
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
 
+### 2026-11-26: time to first artwork (D99)
+
+Fab, watching the "Followed" playset load: nothing was fetched until the
+last channel had been listed, where 1.x played as soon as anything was
+ready.
+
+- **Why**: the content task does one thing per pass by a fixed order,
+  and a listing came before a download, always.
+- **Measured before**: twelve Makapix channels new to the device, each
+  listed in full (2,048 posts, 41 requests, about 20 s): the first
+  artwork after 235 s.
+- **The change, two rules in `sched_refresh.h`, pure and host-tested**:
+  while the playset has fewer than `SCHED_START_FLOOR` (3) playable
+  artworks, a download goes first whenever there is one to make; and in
+  such a playset a remote channel the device knows nothing of is listed
+  short first (`SCHED_QUICK_RECORDS`, 32), once, and in full straight
+  after. Above the floor the order is what it was.
+- **Measured after**: twelve new Makapix channels (of 256 posts, so
+  that the measurement did not lean on the server): the first artwork
+  after 10.2 s, the last full listing after 246 s. The first figure is
+  the short listing and one download; the old order would have shown
+  nothing before the second.
+- **Tests**: `test_sched_refresh.c` (both rules);
+  `test_content.py::test_the_first_artwork_of_a_new_playset_does_not_wait_for_every_channel`
+  with the test source made slow (`"delay_ms"`): six channels of two
+  seconds each, first artwork after 3.5 s, all listed after 15.7 s, and
+  no more than two listings before the first artwork.
+  `test_museum.py`'s long-listing test now waits for the full listing
+  that follows the short one.
+- Tested: host tests (43), tree checks; on the device smoke, content
+  (12), scheduler, museum (12), Makapix (registered), pins.
+- Found on the way, not changed: measuring this three times in a row
+  with channels of 2,048 posts ran into Makapix's rate limit (a full
+  listing is 41 requests). A person with a playset of many large
+  Makapix channels new to the device would meet it too; the channels
+  wait and are listed later, which is what the limit is for. The server
+  side is Fab's: worth knowing that 64 new channels are about 2,600
+  requests.
+- A lesson for the tests: `library evict` with everything asked for
+  empties the store under the indices of every channel not playing, and
+  the next test that plays one of them sees its first picks fail. The
+  new test removes only its own three blobs.
+
 ### 2026-11-26: the registration recovered, and kept from now on
 
 - **The dev unit's registration is back, the same player.** Removing a

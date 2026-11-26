@@ -7,7 +7,8 @@
 //
 // !content set {"items": [{"id": "a", "url": "https://..."}, ...],
 //               "result": "ok" | "RATE_LIMITED" | "NO_KEY" | "AUTH" | "FAILED",
-//               "interval_s": 3600}
+//               "interval_s": 3600, "delay_ms": 0}
+//     `delay_ms`: how long a listing takes, as a service of many pages would.
 //     What the source lists from now on (at most 12 items) and how a listing
 //     ends. Until the first `set` after a boot a listing fails, as a
 //     service that cannot be reached would. An item with no "url" is one
@@ -39,6 +40,7 @@ static item_t s_items[ITEMS_MAX];
 static uint32_t s_count;
 static esp_err_t s_result = ESP_FAIL;
 static uint32_t s_interval_s = 3600;
+static atomic_uint s_delay_ms;
 static atomic_uint s_listed;
 static SemaphoreHandle_t s_lock;
 
@@ -46,6 +48,10 @@ static esp_err_t refresh(const p3a_channel_ref_t *channel, p3a_index_t *index)
 {
     (void)channel;
     atomic_fetch_add(&s_listed, 1);
+    const uint32_t delay_ms = atomic_load(&s_delay_ms);
+    if (delay_ms > 0) {
+        vTaskDelay(pdMS_TO_TICKS(delay_ms));
+    }
     xSemaphoreTake(s_lock, portMAX_DELAY);
     esp_err_t err = s_result;
     for (uint32_t i = 0; err == ESP_OK && i < s_count; i++) {
@@ -136,6 +142,8 @@ static void cmd_content(const char *args)
     const cJSON *items = cJSON_GetObjectItemCaseSensitive(json, "items");
     const cJSON *result = cJSON_GetObjectItemCaseSensitive(json, "result");
     const cJSON *interval_s = cJSON_GetObjectItemCaseSensitive(json, "interval_s");
+    const cJSON *delay_ms = cJSON_GetObjectItemCaseSensitive(json, "delay_ms");
+    atomic_store(&s_delay_ms, cJSON_IsNumber(delay_ms) && delay_ms->valueint > 0 ? (uint32_t)delay_ms->valueint : 0);
     const esp_err_t wanted = cJSON_IsString(result) ? result_of(result->valuestring) : ESP_OK;
     if (json == NULL || wanted == ESP_ERR_INVALID_ARG || (items != NULL && cJSON_GetArraySize(items) > ITEMS_MAX)) {
         cJSON_Delete(json);

@@ -145,7 +145,9 @@ def test_changing_the_playset_does_not_wait_for_a_long_listing_to_end(rig):
     rig.uart.command("settings set", {"museum_cache_size": 1024})
     try:
         assert rig.uart.command("sched activate", playset("cma:department", "Drawings", offset=RUN + 7)) == {"result": "ok"}
-        rig.wait("the long listing has begun", lambda s: channel(s)["state"] == "listing", timeout=10)
+        # A channel new to the device is first listed short and gets a few artworks; the whole listing follows.
+        rig.wait("the long listing has begun", lambda s: channel(s)["listings"] >= 1 and channel(s)["state"] == "listing",
+                 timeout=90)
         time.sleep(3.0)
         assert channel(rig.status())["state"] == "listing", "still at it: a thousand artworks are many pages"
         started = time.monotonic()

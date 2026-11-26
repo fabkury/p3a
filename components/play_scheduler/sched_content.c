@@ -7,9 +7,11 @@
 //
 // One pass does at most one thing, in this order: load an index from the
 // card, list a channel, save an index, make room on the card, download an
-// artwork. Then it looks
-// again. With nothing to do it sleeps until something wakes it, or a
-// second.
+// artwork. Then it looks again. With nothing to do it sleeps until something
+// wakes it, or a second. One exception to the order: while the playset has
+// next to nothing to show, a download goes before the next listing
+// (sched_refresh_download_first), so that the first artwork of a playset
+// new to the device comes after its first channel is listed, not its last.
 //
 // The scheduler's lock is taken to choose the work and to put the result
 // in, never across the card or the network.
@@ -197,8 +199,11 @@ static sched_list_result_t list_result(esp_err_t err)
     }
 }
 
+static uint32_t playable_now(void);
+
 static bool list_one(void)
 {
+    const uint32_t playable = playable_now();
     LOCK();
     uint32_t at = SCHED_NONE;
     const int64_t now = sched_now_ms();
@@ -217,12 +222,16 @@ static bool list_one(void)
     }
     const uint32_t generation = sched->generation;
     const playset_channel_t spec = sched->playset.channels[at];
+    const p3a_source_ops_t *ops = p3a_source_get(spec.source);  // checked when the playset was activated
+    // The first listing of a channel new to the device, in a playset with nothing to show yet, is a short one.
+    const bool quick = sched_refresh_quick_first(playable, ops->remote, sched->channels[at].has_index,
+                                                 sched->channels[at].quick_listed);
+    sched->channels[at].quick_listed = sched->channels[at].quick_listed || quick;
     sched->channels[at].state = PLAY_CHANNEL_LISTING;
     sched_refresh_started(&sched->channels[at].refresh);
     UNLOCK();
     sched_changed();
 
-    const p3a_source_ops_t *ops = p3a_source_get(spec.source);  // checked when the playset was activated
     uint32_t listed_for = generation;
     const p3a_channel_ref_t ref = {.kind = spec.kind,
                                    .identifier = spec.identifier,
@@ -230,7 +239,8 @@ static bool list_one(void)
                                    .stop = should_abort,
                                    .stop_ctx = &listed_for};
     p3a_index_t fresh = {0};
-    esp_err_t err = p3a_index_create(&fresh, capacity_of(ops));
+    const uint32_t full = capacity_of(ops);
+    esp_err_t err = p3a_index_create(&fresh, quick && full > SCHED_QUICK_RECORDS ? SCHED_QUICK_RECORDS : full);
     if (err == ESP_OK) {
         err = ops->refresh(&ref, &fresh);
     }
@@ -259,6 +269,9 @@ static bool list_one(void)
             ch->error = ESP_OK;
             ch->state = PLAY_CHANNEL_READY;
             ch->cursor = 0;
+            if (quick && full > SCHED_QUICK_RECORDS) {
+                sched_refresh_ask(&ch->refresh, sched_now_ms());  // the rest of it, as soon as there is something to show
+            }
             if (ops->remote) {
                 ch->dirty = true;
                 ch->save_at_ms = 0;  // a fresh listing is saved at once
@@ -619,6 +632,21 @@ static bool download_one(void)
 
 // --- the task -------------------------------------------------------------------------
 
+// How many artworks of the active playset could be shown now.
+static uint32_t playable_now(void)
+{
+    uint32_t playable = 0;
+    LOCK();
+    for (uint32_t i = 0; i < sched->playset.count; i++) {
+        const sched_slot_t *ch = &sched->channels[i];
+        if (channel_is_live(ch) && ch->has_index) {
+            playable += ch->index.available_count;
+        }
+    }
+    UNLOCK();
+    return playable;
+}
+
 static void content_task(void *arg)
 {
     (void)arg;
@@ -626,7 +654,8 @@ static void content_task(void *arg)
         bool worked = false;
         atomic_store(&s_busy, true);
         if (!sched->shut_down && !p3a_storage_is_handed_over()) {
-            worked = load_one() || list_one() || save_one() || make_room() || download_one() || drop_stale_indices();
+            worked = load_one() || (sched_refresh_download_first(playable_now()) && download_one()) || list_one() ||
+                     save_one() || make_room() || download_one() || drop_stale_indices();
         }
         atomic_store(&s_busy, false);
         if (!worked) {

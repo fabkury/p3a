@@ -120,6 +120,27 @@ static void test_a_failed_card_stops_it_for_good_and_asking_while_listing_change
     TEST_ASSERT_EQUAL(0, sched_refresh_wait_s(&r, 100));
 }
 
+static void test_a_playset_with_next_to_nothing_downloads_before_it_lists(void)
+{
+    TEST_ASSERT_TRUE(sched_refresh_download_first(0));
+    TEST_ASSERT_TRUE(sched_refresh_download_first(SCHED_START_FLOOR - 1));
+    TEST_ASSERT_FALSE(sched_refresh_download_first(SCHED_START_FLOOR));
+    TEST_ASSERT_FALSE(sched_refresh_download_first(5000));
+}
+
+static void test_a_channel_new_to_the_device_is_listed_short_first_when_nothing_plays(void)
+{
+    // remote, nothing known of it, not done before, nothing to show: short.
+    TEST_ASSERT_TRUE(sched_refresh_quick_first(0, true, false, false));
+    TEST_ASSERT_TRUE(sched_refresh_quick_first(SCHED_START_FLOOR - 1, true, false, false));
+    // Once per channel: a short listing that found nothing must not be repeated for ever.
+    TEST_ASSERT_FALSE(sched_refresh_quick_first(0, true, false, true));
+    // Not when the device already holds an index of it, the card's folder, or enough to show.
+    TEST_ASSERT_FALSE(sched_refresh_quick_first(0, true, true, false));
+    TEST_ASSERT_FALSE(sched_refresh_quick_first(0, false, false, false));
+    TEST_ASSERT_FALSE(sched_refresh_quick_first(SCHED_START_FLOOR, true, false, false));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -130,5 +151,7 @@ int main(void)
     RUN_TEST(test_a_rate_limit_waits_what_the_server_asked_and_never_less_than_a_quarter_hour);
     RUN_TEST(test_a_missing_key_waits_an_hour_or_until_asked);
     RUN_TEST(test_a_failed_card_stops_it_for_good_and_asking_while_listing_changes_nothing);
+    RUN_TEST(test_a_playset_with_next_to_nothing_downloads_before_it_lists);
+    RUN_TEST(test_a_channel_new_to_the_device_is_listed_short_first_when_nothing_plays);
     return UNITY_END();
 }

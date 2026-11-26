@@ -60,6 +60,34 @@ typedef struct {
     int64_t due_ms;        // when it is next due; INT64_MAX for "not by itself"
 } sched_refresh_t;
 
+// --- which comes first, a listing or a download ---------------------------------------
+//
+// Listing comes before downloading: a playset's channels are all known
+// before the card fills with the first one's artworks. But a playset with
+// nothing to show should show something as soon as it can, not after its
+// last channel is listed (with sixty channels new to the device, a minute
+// or more). So while the playset has fewer playable artworks than this, a
+// download goes first whenever there is one to make.
+#define SCHED_START_FLOOR 3
+
+// `playable`: artworks of the active playset that could be shown now.
+static inline bool sched_refresh_download_first(uint32_t playable)
+{
+    return playable < SCHED_START_FLOOR;
+}
+
+// A full listing of a large channel is many pages (Makapix: 2,048 posts,
+// some twenty seconds). While the playset has next to nothing to show, a
+// channel the device knows nothing of is first listed short, its newest
+// few, and listed in full straight after: once per channel, and only for a
+// source asked over the network.
+#define SCHED_QUICK_RECORDS 32
+
+static inline bool sched_refresh_quick_first(uint32_t playable, bool remote, bool knows_any, bool quick_done)
+{
+    return remote && !knows_any && !quick_done && playable < SCHED_START_FLOOR;
+}
+
 // A channel that was never listed: due at once.
 void sched_refresh_init(sched_refresh_t *r, uint32_t interval_s, bool needs_network);
 

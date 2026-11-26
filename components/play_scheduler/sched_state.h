@@ -52,6 +52,7 @@ typedef struct {
     // The content task's.
     sched_refresh_t refresh;  // when it is listed again
     bool load_tried;          // its index was looked for on the card
+    bool quick_listed;        // it has had its short first listing (sched_refresh_quick_first)
     bool dirty;               // the index holds something its file does not
     int64_t save_at_ms;       // when a dirty index is written
     uint32_t cursor;          // where the search for the next artwork to download starts

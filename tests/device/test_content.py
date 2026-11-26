@@ -45,6 +45,7 @@ def rig(bring_up):
             refs.append(hashlib.sha256(reply.read()).hexdigest()[:32])
     for ref in refs:
         uart.command(f"library blob-remove {ref} {WEBP}")  # left by a run that did not finish
+    r.refs = refs
     uart.command("settings set", {"dwell_s": 600})
     yield r
     uart.command("sched activate", LOCAL_ONLY)
@@ -280,3 +281,39 @@ def test_a_very_elongated_picture_is_passed_over_unless_the_filter_is_off(rig):
         assert rig.on_panel()[:2] == (720, 144)
     finally:
         uart.command("settings set", {"aspect_filter": True})
+
+
+def test_the_first_artwork_of_a_new_playset_does_not_wait_for_every_channel(rig):
+    """Seen by Fab with nine followed artists: nothing was fetched until the last channel had
+    been listed. While a playset has next to nothing to show, a download goes before a listing."""
+    run = int(time.time())
+    many = {"name": "Many", "channels": [{"source": "test", "kind": f"many{run}-{i}"} for i in range(6)]}
+    # A listing that takes two seconds, as one of many pages does.
+    assert rig.uart.command("content set", {"items": items("a", "b", "c"), "result": "ok", "delay_ms": 2000}) \
+        == {"items": 3}
+    try:
+        # Nothing of it on the card: the first artwork has to be listed and fetched. (Only these
+        # three: emptying the store would leave every other channel's index on the card wrong.)
+        assert rig.uart.command("sched activate", LOCAL_ONLY) == {"result": "ok"}
+        for ref in rig.refs:
+            rig.uart.command(f"library blob-remove {ref} {WEBP}")
+        before = rig.status()
+        asked = rig.uart.command("content listed")["listed"]
+        started = time.monotonic()
+        assert rig.uart.command("sched activate", many) == {"result": "ok"}
+        status = rig.wait("an artwork of the new playset is up",
+                          lambda s: s["playset"] == "Many" and s["downloads"] > before["downloads"] and s["playing"]
+                          and not s["loading"] and s["current_source"] == "giphy"
+                          and s["shown"] > before["shown"], timeout=60)
+        first = time.monotonic() - started
+        listed = rig.uart.command("content listed")["listed"] - asked
+        assert listed <= 2, f"shown after {listed} of 6 listings: it must not wait for all of them"
+        assert sum(c["state"] == "ready" for c in status["channels"]) < 6
+        # The rest are listed all the same, once the playset has something to show.
+        rig.wait("every channel listed", lambda s: all(c["state"] == "ready" for c in s["channels"]), timeout=60)
+        every = time.monotonic() - started
+        assert rig.uart.command("content listed")["listed"] - asked == 6, "each channel once"
+        assert first < every - 4, (first, every)
+        print(f"first artwork after {first:.1f} s; all six channels listed after {every:.1f} s")
+    finally:
+        rig.uart.command("content set", {"items": items("a", "b"), "result": "ok"})

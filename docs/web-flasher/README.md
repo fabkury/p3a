@@ -12,6 +12,13 @@ Browser-based flashing for the p3a board, served from GitHub Pages.
 3. **Flash:** "Flash Device" writes every file at the addresses in that
    release's `flash_args`.
 
+A 2.x release erases the device: its `flash_args` include `nvs-erased.bin`,
+blank bytes written over the settings partition, so that a device that ran
+1.x starts fresh. The page says so when a 2.x release is selected, and the
+Flash button stays off until the box under the warning is ticked. A 2.x
+device updates itself from its own Update page; the flasher is for new
+devices, for 1.x devices, and for recovery.
+
 GitHub release assets don't support CORS, so the flasher loads firmware from
 the same origin: `./firmware/{tag}/`. The `publish-firmware-to-pages`
 workflow fills `firmware/{tag}/` on `main` whenever a release is published.

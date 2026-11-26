@@ -9,8 +9,8 @@ times.
 | | |
 |---|---|
 | Phase | 4, remote sources (Phases 0 to 3 complete but for their manual checks) |
-| Current milestone | M5.2 Firmware update, with M5.1's last page (M4.5 part 4 waits on M4.5-a) |
-| Next action | M5.2 part 2 and M5.1's end: the update page (`components/p3a_net/static/update.html`, `static/update.js`, a model file tested with node; 1.x's is `legacy/webui/ota.html`) on `GET /api/v2/update` and its three POSTs: versions, the newest release with its notes, check, install with progress and the wait across the restart, the firmware on trial, going back, the one that was undone, why an install cannot start; the two `update_*` settings; the Wi-Fi co-processor's version and the board's facts. A banner on the home page when an update is available. Then the Followed pill (needs M4.5 part 4), `legacy/webui` deleted with its deletion-log entry (what is left there: `index.html`, `settings.html`, `playset-editor.html`, `giphy.html`, `network.html`, `ota.html`, `static/`), `legacy/components/ota_manager` deleted (rewritten as `p3a_update`), PARITY's web and update rows, the whole device suite, release and trace builds (`tools/compare_sdkconfig.py` may need the update's options listed). Chrome is connected to this session (`mcp__claude-in-chrome__*`): click through each page. Still to click: upload on the home page; the settings page's Makapix registration; drag-reorder in the playset editor; Harvard and Smithsonian in the museum browser (no keys on the dev unit). If Fab has registered the unit (M4.5-a), M4.5 part 4 comes first |
+| Current milestone | M5.3 Release engineering. M5.1 and M5.2 are done but for what waits on Fab (M4.5-a, M5.2-a) |
+| Next action | The milestone-end run for M5.1 and M5.2: the whole device suite (`python -m pytest tests/device`, about 30 minutes, nothing else on the device meanwhile), `lab.py build release` and `build trace`, CI read. Then M5.3 (read `PLAN.md` M5.3 and `legacy/CMakeLists.txt`, which holds 1.x's release packaging and flasher build): the release folder with `p3a-v2.bin` (D85) and no `storage.bin`, the size check against the slot, the web flasher for 2.x with its warning that 2.0 erases a 1.x device, `p3a-flasher.exe`, the publish workflow. Left open in M5.1, small: the "Followed" pill on the home page (1.x: `{ id: 'followed_artists', label: 'Followed', needsRegistration: true }`, a Makapix channel kind 2.0's source does not have yet; M4.5 part 4), and clicking what was not clicked (upload on the home page, the Makapix registration on the settings page, drag to reorder in the playset editor, Harvard and the Smithsonian in the museum browser). Chrome is connected to this session (`mcp__claude-in-chrome__*`); stub `window.confirm` before clicking a button that asks. If Fab has registered the unit (M4.5-a), M4.5 part 4 comes first |
 | Blocked on | M4.5 part 4 only: M4.5-a (Fab registers the dev unit with Makapix Club). Nothing else waits on it |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -56,8 +56,8 @@ reopened (why).
 | M4.3 Museums | done 2026-11-25. Tiers: host tests (36 programs, also under the sanitizers), device tests (the whole suite on the last build: 322 passed, 6 skipped), CI, test, release and trace builds. Manual: none. Not verified: listed in the log entries of 2026-11-25. O20 (what p3a tells the museums it is) stays open and holds nothing |
 | M4.4 Pinned lists and "show this" | done 2026-11-25. Tiers: host tests (38 programs, also under the sanitizers), device tests (the whole suite: 330 passed, 6 skipped; the pin tests again on the last build), test, release and trace builds. Manual: M4.4-a. Not verified: listed in the log entry |
 | M4.5 Makapix | in progress. Parts 1 to 3 (2026-11-25): the source, registration up to the owner's part, the link, commands, views, likes, renewal. Host and device tests for everything an unregistered unit can do. Waits on M4.5-a for the rest |
-| M5.1 Embedded web UI | in progress. Part 1 (2026-11-25): shared scripts, the home page, the device serving artworks to the page. Part 2: the settings page from the schema. Part 3: the playset editor and the museum browser, clicked through in Chrome. Node, host and device tests |
-| M5.2 Firmware OTA for 2.x | in progress. Part 1 (2026-11-25): looking for releases, the install, the trial, going back, the API. Host and device tests, the whole cycle on the dev unit between two firmwares from a mirror. Left: the page, one real update from a GitHub pre-release (manual M5.2-a) |
+| M5.1 Embedded web UI | done 2026-11-25 but for the "Followed" pill (M4.5 part 4). Four pages, the museum browser. Tiers: node (42 cases), device tests, every page clicked in Chrome on the dev unit. `legacy/webui` is gone |
+| M5.2 Firmware OTA for 2.x | done 2026-11-25 but for manual check M5.2-a (one update from GitHub itself). Tiers: host tests, device tests (the whole cycle from a mirror), and the cycle clicked through the update page in Chrome |
 | M5.3 Release engineering | not started |
 | M5.4 Documentation | not started |
 | M6.1 Soaks | not started |
@@ -73,6 +73,13 @@ check reopens its milestone.
 
 Open:
 
+- **M5.3-a, the web flasher end to end.** From the page (served locally
+  or from Pages once `v2` is `main`), flash a 2.x release folder onto a
+  board: the warning shows, the button stays off until the box is
+  ticked, the board comes up fresh.
+- **M5.3-b, the flasher program.** Build it
+  (`python host/p3a-flasher/build_flasher.py release/v<version>`), run
+  `p3a-flasher.exe`, flash a board, see the question before it erases.
 - **M5.2-a, one real update from GitHub.** Publish a pre-release with a
   `p3a-v2.bin` built from `v2`, turn on "Offer pre-release firmware", look,
   install, and see the device restart into it and be kept. The cycle is
@@ -247,6 +254,31 @@ its own commit on `main`; nothing else of 2.0 goes there.
 
 What was deleted from `legacy/` without being moved, and why. Filled from
 M0.1 on.
+
+M5.3, 2026-11-25:
+
+- `flasher/build.ps1`: a manual PowerShell build of the flasher that
+  `build_flasher.py` had already replaced in 1.x (its own README called
+  it legacy). The rest of `flasher/` moved to `host/p3a-flasher`.
+
+M5.1 and M5.2, 2026-11-25:
+
+- `webui/` (what was left of it: `index.html`, `settings.html`,
+  `playset-editor.html`, `ota.html`, `giphy.html`, `network.html`,
+  `static/reactions/`): rewritten as `components/p3a_net/static/`. Each
+  1.x page was one file with its script and style inline and its own
+  copy of the shared helpers; the 2.0 pages are a page, a script, a
+  model tested with node, and three shared scripts. `giphy.html` and
+  `network.html` are tabs of the settings page. The reaction icons were
+  copied in part 1 (re-encoded). `webui/museum/` was moved, not deleted
+  (part 3).
+- `components/ota_manager/` (all of it): rewritten as
+  `components/p3a_update`. More than half of it was the web UI's own
+  update (the `storage.bin` download, the LittleFS remount, the repair
+  and recovery flows), which change A removes. The firmware half read
+  three releases and compared three numbers; it looked for a `.sha256`
+  file, marked a new image valid at the top of `app_main`, and left its
+  screen up on two early failures (H8).
 
 M4.4, 2026-11-25:
 
@@ -448,6 +480,105 @@ M4.3, 2026-11-25:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-25: M5.3 part 1, the release folder and the two flashers
+
+- **`tools/make_release.py`**: reads a release build (`flasher_args.json`,
+  the partition table, the app image) and writes `release/v<version>/`:
+  `p3a-v2.bin` (D85), the bootloader, the partition table, the boot
+  selection, the co-processor's image, `nvs-erased.bin` (D89),
+  `flash_args`, `flash_command.txt`, `SHA256SUMS`, a README. No
+  `storage.bin`, no manifest, no per-file `.sha256` (devices use GitHub's
+  digest). 1.x did this inside the firmware's CMake, with the addresses
+  typed in.
+- It refuses what must not ship: a build with the test hooks or the frame
+  trace, a `-dev` version (unless `--allow-dev`), a version that is not
+  2.x, an image that is not whole or not p3a, an image over 90% of its
+  slot, a layout that is not the 2.x partition table.
+- **A USB flash erases the device** (D89). C6 says nothing carries over
+  from 1.x, but the settings partition is at the same address in both
+  layouts; `nvs-erased.bin` makes the erase part of the release, the same
+  for every way of flashing.
+- **The web flasher** (`docs/web-flasher/index.html`): a warning and a
+  box to tick before a 2.x release can be flashed; a yes is for one
+  release. It already read each release's `flash_args`, so the new layout
+  and file names needed nothing else. It is served from `main`: the
+  change goes live when `v2` becomes `main`. The workflow that copies a
+  release's files to Pages (`publish-firmware-to-pages.yml`) takes its
+  list from `flash_args` too and is unchanged.
+- **The flasher program** moved from `legacy/flasher` to
+  `host/p3a-flasher`. It writes what the release's `flash_args` lists
+  (`flash_plan.py`) and holds no address and no file list (1.x had both,
+  twice); it asks before a flash that erases; a release on GitHub is
+  offered if it has a `flash_args`, which 1.x releases do. `build.ps1`,
+  an older way of building it, is deleted (deletion log).
+- Verified, self-tests (CI runs them): `test_make_release.py` (18 cases:
+  what is packaged, each refusal, the asset name against
+  `update_release.h`, the layout against `partitions.csv`),
+  `test_flash_plan.py` (7 cases: parsing, refusals, overlap, a 1.x
+  release's `flash_args`, and that what `make_release.py` writes is a
+  plan the flasher reads).
+- Verified by running: `make_release.py` on the real release build
+  (refused as `-dev`; with `--allow-dev`, a folder of 9 files, the app
+  at 21% of its slot) and on the test build (refused: test hooks).
+- Not verified: the web flasher in a browser (it needs the files on
+  Pages or a local copy: manual check M5.3-a); the flasher program run
+  or built (`build_flasher.py` needs a virtual environment with
+  PyInstaller: M5.3-b); a device flashed from a release folder, with the
+  settings really gone (next: flash the dev unit from
+  `release/v2.0.0-dev/` with esptool and look).
+
+### 2026-11-25: M5.2 part 2 and M5.1's end, the update page
+
+- **The update page** (`update.html`, `static/update.js`,
+  `static/update-model.js`): what runs, the newest release with its size,
+  date and notes, check, install with the device's progress, the wait
+  while it restarts and what became of what was asked (it runs, it was
+  undone, it failed and why), the firmware on trial, going back to the
+  other slot's firmware at any time, a version that was undone before,
+  why an install cannot start. 1.x could not say most of that.
+- The notes are GitHub's Markdown shown as text, never as HTML.
+- Every page's Update tab shows a dot when a newer firmware is known
+  (`ui.js`), and the home page a banner. The two `update_*` settings
+  are on Settings > System with their words.
+- `GET /api/v2/status` says what the board is: the chip and its
+  revision, the co-processor's running firmware, what this firmware
+  carries for it, and whether it is locked. The update page shows them.
+  The dev unit's co-processor is on the known 2.7.0 lock (manual check
+  M1.2-a), and the page says so.
+- **`legacy/webui` and `legacy/components/ota_manager` are deleted**
+  (deletion log). Known issues that went with them or were fixed on the
+  way: H8 and M23 (part 1), H9 and M15 (the web UI update, change A),
+  H11, M18 (`poller` keeps one timer), M19, M20 (the update keeps
+  nothing in NVS), M29 (`ui.js`, `lib.js`).
+- PARITY: the web and update rows are ticked, with what each still
+  lacks.
+- Verified, node (8 new cases, 43 in all): the page's reading of every
+  state of the device, the wait, the outcome, times, notes.
+- Verified, device tests: the page and what it loads are served; the
+  status' new parts.
+- **Clicked through in Chrome on the dev unit, against a mirror**: the
+  page before a look; Check for Updates; the release offered with its
+  notes and the dot on the tab; Install, with the bar following the
+  device (15%, 86%); "The device is restarting"; then "Installed 2.0.1",
+  the toast "Now running 2.0.1" and the way back offered; Go back, and
+  the device on its first firmware again with the newer one kept in the
+  other slot.
+- Not verified: the page when an install fails or a firmware is undone
+  (its model is node-tested, the device's side device-tested); the
+  banner on the home page seen in a browser.
+- **The whole device suite at the end of M5.1 and M5.2**: 350 passed, 6
+  skipped, 2 failed, both in the tests. `test_setup` still expected "/"
+  to be a 404 on the LAN, where it is the home page since M5.1 part 1;
+  `test_card_flow` slept 1.5 s where it had to wait for a listing to
+  end. Both corrected and passed alone. The release and trace builds
+  pass.
+- Seen afterwards and left: `test_the_setup_network_is_on_the_air`
+  failed twice when run alone, after passing in the suite. The device
+  reports its access point up; the workstation's own Wi-Fi scan did not
+  list it within the test's 150 seconds. The code on that path did not
+  change today. Likely the workstation's scan schedule on the new LAN;
+  to look at again if it repeats in the next whole suite.
 
 ### 2026-11-25: M5.2 part 1, the firmware update
 

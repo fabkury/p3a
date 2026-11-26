@@ -79,6 +79,11 @@ test("a channel's error says what stands in its way", () => {
 
 test('banners: one per source and problem, the card first', () => {
     assert.deepEqual(banners(null, null), []);
+    assert.deepEqual(banners(null, null, { available: false, latest: { version: '2.0.1' } }), []);
+    const offered = banners(null, null, { available: true, latest: { version: '2.0.1' } });
+    assert.equal(offered.length, 1);
+    assert.equal(offered[0].href, '/update');
+    assert.match(offered[0].text, /Version 2\.0\.1 .*Nothing is installed until you say so/);
     assert.deepEqual(banners({ channels: [{ source: 'local' }] }, { storage: { health: 'ok', repairs: 0 } }), []);
     const failed = banners({ channels: [] }, { storage: { health: 'failed', repairs: 2 } });
     assert.deepEqual(failed.map((b) => [b.id, b.tone]), [['sd-failed', 'danger']]);

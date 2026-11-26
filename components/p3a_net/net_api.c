@@ -21,6 +21,7 @@
 #include <string.h>
 
 #include "esp_app_desc.h"
+#include "esp_chip_info.h"
 #include "esp_core_dump.h"
 #include "esp_log.h"
 #include "esp_memory_utils.h"
@@ -40,6 +41,7 @@
 #include "sd_health.h"
 #include "sd_path.h"
 #include "sd_repair.h"
+#include "slave_ota.h"
 
 static const char *TAG = "api";
 
@@ -152,6 +154,26 @@ static void get_status(p3a_http_request_t *req)
     cJSON_AddNumberToObject(memory, "largest", mem.largest_block);
     cJSON_AddNumberToObject(memory, "min_free", mem.min_free_bytes);
     cJSON_AddNumberToObject(memory, "total", mem.total_bytes);
+
+    // What the board is. The co-processor's firmware is flashed by this one at boot.
+    esp_chip_info_t chip_info;
+    esp_chip_info(&chip_info);
+    char text[24];
+    cJSON *chip = cJSON_AddObjectToObject(data, "chip");
+    cJSON_AddStringToObject(chip, "model", CONFIG_IDF_TARGET);
+    snprintf(text, sizeof(text), "v%d.%d", chip_info.revision / 100, chip_info.revision % 100);
+    cJSON_AddStringToObject(chip, "revision", text);
+    cJSON *coprocessor = cJSON_AddObjectToObject(data, "coprocessor");
+    uint32_t major = 0, minor = 0, patch = 0;
+    if (slave_ota_get_running_version(&major, &minor, &patch) == ESP_OK) {
+        snprintf(text, sizeof(text), "%u.%u.%u", (unsigned)major, (unsigned)minor, (unsigned)patch);
+        cJSON_AddStringToObject(coprocessor, "running", text);  // absent: it did not answer
+    }
+    if (slave_ota_get_embedded_version(&major, &minor, &patch) == ESP_OK) {
+        snprintf(text, sizeof(text), "%u.%u.%u", (unsigned)major, (unsigned)minor, (unsigned)patch);
+        cJSON_AddStringToObject(coprocessor, "embedded", text);  // what this firmware carries for it
+    }
+    cJSON_AddBoolToObject(coprocessor, "locked", slave_ota_is_version_locked());
 
     // Restarts the device gave itself as a remedy, ever. Zero is the healthy answer.
     cJSON *recovery = cJSON_AddObjectToObject(data, "recovery_restarts");

@@ -23,6 +23,10 @@ export function nav(active) {
         + (p.href === '/update' ? '<span class="bottom-nav-badge" id="update-badge"></span>' : '')
         + '</a>').join('');
     document.body.appendChild(bar);
+    // A dot on Update when a newer firmware is known. Asked once per page; it costs a few bytes.
+    fetch('/api/v2/update').then((r) => r.json()).then((j) => {
+        if (j && j.ok && j.data && j.data.available) bar.querySelector('#update-badge')?.classList.add('visible');
+    }).catch(() => {});
 }
 
 let toastTimer = null;

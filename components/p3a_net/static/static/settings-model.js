@@ -18,6 +18,8 @@ const RATINGS = [['g', 'G - General Audiences'], ['pg', 'PG - Parental Guidance'
 // Per setting: help text, a unit, named options, a slider.
 export const PRESENTATION = {
     brightness: { range: true, unit: '%' },
+    update_auto_check: { help: 'Asks GitHub for new releases about twice a day. Nothing is installed until you ask on the Update page.' },
+    update_prereleases: { help: 'Also offers versions still being tested. They may have faults; you can go back from the Update page.' },
     rotation: { unit: '°' },
     background_color: { help: 'Background color for transparent artwork' },
     intro_animation: {
@@ -135,6 +137,7 @@ export const TABS = [
     ] },
     { id: 'system', label: 'System', groups: ['update'], sections: [
         { title: 'Firmware', widget: 'firmware' },
+        { title: 'Updates', keys: ['update_auto_check', 'update_prereleases'] },
         { title: 'Actions', widget: 'actions' },
         { title: 'About p3a', widget: 'about' },
         { title: 'About this device', widget: 'device' },

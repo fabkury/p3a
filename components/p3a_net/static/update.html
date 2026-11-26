@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="p3a">
+<meta name="theme-color" content="#0E0A1A">
+<link rel="stylesheet" href="/static/common.css">
+<link rel="stylesheet" href="/static/update.css">
+<script src="/static/theme.js"></script>
+<title>p3a - Update</title>
+</head>
+<body class="has-bottom-nav">
+<div class="container">
+    <h1>Firmware Update</h1>
+    <div class="card">
+        <div class="section-header">Firmware</div>
+        <div id="versions">
+            <div class="version-row"><span class="version-label">Installed</span><span class="version-value">-</span></div>
+        </div>
+        <div class="update-note info" id="headline">Loading&hellip;</div>
+        <div class="progress-container" id="progress">
+            <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+            <div class="progress-text" id="progress-text">0%</div>
+        </div>
+        <div id="messages"></div>
+        <div class="release-notes" id="release-notes"></div>
+        <div class="card-actions">
+            <button type="button" class="btn-primary" id="install-btn" disabled>Install update</button>
+            <button type="button" class="btn-danger" id="back-btn" style="display:none"></button>
+        </div>
+    </div>
+    <button type="button" class="btn-secondary" id="check-btn">Check for Updates</button>
+    <div class="last-checked" id="last-checked"></div>
+    <div class="card">
+        <div class="section-header">This device</div>
+        <div id="device"></div>
+    </div>
+    <div class="footer-tip">The device looks for updates by itself and never installs one without you.
+        That, and pre-release firmware, are under <a href="/settings#system">Settings &gt; System</a>.</div>
+</div>
+<script type="module" src="/static/update.js"></script>
+</body>
+</html>

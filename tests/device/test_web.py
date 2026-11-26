@@ -118,6 +118,23 @@ def test_the_playsets_page_and_the_museum_browser_are_served(rig):
     assert {a[:-3] for a in adapters} - museums <= {"rijksmuseum", "smithsonian"}, "an adapter per museum (two files are named in full)"
 
 
+def test_the_update_page_is_served_and_the_nav_asks_for_updates(rig):
+    api = rig.api
+    page = api.get("/update")
+    assert page.status == 200 and page.body == api.get("/update.html").body
+    html = text(page)
+    assert "<title>p3a - Update</title>" in html and "/static/update.js" in html
+    for path in ("/static/update.js", "/static/update-model.js", "/static/update.css"):
+        assert api.get(path).status == 200, path
+    script = text(api.get("/static/update.js"))
+    for module in re.findall(r"from '\./([a-z-]+\.js)'", script):
+        assert api.get(f"/static/{module}").status == 200, module
+    # What it draws from. Every page's bar asks the same thing for its dot.
+    update = api.get("/api/v2/update").data
+    assert {"running", "state", "on_trial", "checked", "available"} <= set(update)
+    assert "/api/v2/update" in text(api.get("/static/ui.js"))
+
+
 def test_the_manifest_names_the_app_after_the_device(rig):
     reply = rig.api.get("/manifest.webmanifest")
     assert reply.status == 200 and reply.headers["content-type"] == "application/manifest+json"

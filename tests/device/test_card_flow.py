@@ -104,8 +104,11 @@ def test_the_warning_can_be_cancelled_and_its_confirm_button_is_dead_at_first(ri
     wait_ui(api, "closed", lambda s: s["screen"] != "info")
     # The card was not touched: its files can still be listed.
     assert uart.command("sched refresh 1") == {"result": "ok"}
-    time.sleep(1.5)
+    deadline = time.monotonic() + 20
     channel = api.get("/api/v2/player").data["channels"][0]
+    while channel["state"] == "listing" and time.monotonic() < deadline:
+        time.sleep(0.5)
+        channel = api.get("/api/v2/player").data["channels"][0]
     assert channel["state"] == "ready" and "error" not in channel
 
 

@@ -35,11 +35,11 @@ describe what a client can do, not the 1.x URL.
 | [x] | Giphy: rejected-key latch with hourly re-probe, 429 cooldown, analytics id with reset, click registered on swipe up | keep | M4.2 | The waits are the content task's for every source (D66): an hour or a settings change after a refused key, at least 15 minutes after a 429. The id, its reset and the click are device-tested; a 429 was not provoked |
 | [ ] | Giphy: rendition, format and prefer-downsized, settable through the API only | decide | M4.2 | Q7 |
 | [x] | Klipy: GIF or sticker, each as trending, search or category; own key; rating; format; refresh interval; cache size | keep | M4.2 | M4.2. Live device tests for GIF trending and sticker search in both formats; categories are a search by name (host-tested) |
-| [ ] | Klipy: 36 fixed categories offered in the editor | keep | M5.1 | |
+| [x] | Klipy: 36 fixed categories offered in the editor | keep | M5.1 | Seen in the editor in Chrome |
 | [x] | Museums: Rijks, V&A, Wellcome, SMK, Harvard, Smithsonian, Cleveland, Minneapolis; AIC present but marked unavailable, cached AIC art still plays | keep | M4.3 | M4.3. Eight play on the device; AIC is in the table, unavailable, and a device test watches for its image server letting the device in again. AIC art already on the card is not a special case: it plays while its blobs last |
 | [x] | Museums: Harvard and Smithsonian keys; a channel without its key sleeps and wakes when the key is saved | keep | M4.3 | M4.3. Device-tested: no key, a wrong key, the right key |
 | [x] | Museums: Rijks resolved lazily in the background; refresh interval and cache size settings | keep | M4.3 | M4.3. Resolved when the picture is fetched (D75); the settings were already there |
-| [ ] | Museums: 429 cooldown shared between device and browser | keep | M4.3, M5.1 | The device's waits are the content task's (D66); the browser's half comes with the web page, M5.1 |
+| [x] | Museums: 429 cooldown shared between device and browser | change | M4.3, M5.1 | Each keeps its own: the device's waits are the content task's (D66), the browser's are the page's (`static/museum/request.js`). They ask from different addresses at different times |
 | [x] | Museums: long identifiers handled by truncation tables (CMA) and hidden terms (Wellcome) | change | M4.3 | M4.3. Gone: a term is 95 characters |
 | [x] | Pin lists: up to 64 lists of 4096; one active list; "My Pins" created and recreated automatically; the active list cannot be deleted | keep | M4.4 | |
 | [x] | Pin lists: create, rename, set active, delete, pin, unpin, is-pinned, page through, entry detail, fetch the artwork file, play as a channel | keep | M4.4 | Done in M4.4 over `/api/v2/pins`. Fetching an entry's file for the browser comes with the page (M5.1) |
@@ -112,7 +112,7 @@ describe what a client can do, not the 1.x URL.
 | [ ] | Info screen: name and version, uptime, Wi-Fi and signal, Makapix state, Giphy key state, card space, playset counts, web UI address, IP, reboot counters, format button when the card has failed | keep | M3.3 | Done in M3.3 except the Makapix and Giphy rows (with those sources) and the reboot counters |
 | [ ] | Setup screen: network name, both addresses, connected clients; appears when setup mode starts | keep | M3.3 | |
 | [ ] | Registration: status, the 6-character code with a colour-coded countdown, success notice for 10 s; expiry leaves the mode | keep | M3.3, M4.5 | |
-| [ ] | Firmware update screen with versions and progress | keep | M3.3, M5.2 | |
+| [x] | Firmware update screen with versions and progress | keep | M3.3, M5.2 | |
 | [ ] | Co-processor update screen with reboot countdown | keep | M1.2, M3.3 | |
 | [ ] | Channel messages: fetching, downloading with progress, failed, empty, loading, waiting for network, empty pin list, no playable files, key needed, museum unavailable, starting | keep | M3.3 | One message surface (finding 11) |
 | [x] | Refresh-error notices with a 20 s life and a cap of two per boot; the Giphy invalid-key notice stays | keep | M4.2 | D71. The refused-key notice is device-tested; the once-only ones are host-tested |
@@ -130,19 +130,19 @@ Same pages and look, new internals (D11).
 
 | | Capability | 2.0 | M | Note |
 |---|---|---|---|---|
-| [ ] | Home: artwork preview loaded from its source, info panel, previous and next, react, pin, pause | keep | M5.1 | |
-| [ ] | Home: now-playing card with shuffle toggle, playset stats, per-channel rows with refresh state and museum markers | keep | M5.1 | |
-| [ ] | Home: pill bar of playsets, pin lists and built-ins; pin manage and pin browse dialogs | keep | M5.1 | |
+| [x] | Home: artwork preview loaded from its source, info panel, previous and next, react, pin, pause | keep | M5.1 | The preview comes from the device, not the source (D83) |
+| [x] | Home: now-playing card with shuffle toggle, playset stats, per-channel rows with refresh state and museum markers | keep | M5.1 | |
+| [x] | Home: pill bar of playsets, pin lists and built-ins; pin manage and pin browse dialogs | keep | M5.1 | The "Followed" pill waits for M4.5 part 4 |
 | [ ] | Home: upload by drag and drop with progress; show-URL box | keep | M5.1 | |
-| [ ] | Home: banners for update, card failure, card repair, rate limits, invalid or missing keys, registration needed, museum unavailable | keep | M5.1 | |
-| [ ] | Settings, Display: theme (5, per browser), brightness, rotation, background colour, boot animation and duration, indicator size, FPS, max speed, auto-advance, channel selection, refresh override | keep | M5.1 | Rendered from the schema |
-| [ ] | Settings, Network: status, device name, erase Wi-Fi | keep | M5.1 | |
-| [ ] | Settings, Giphy, Klipy, Museum, Storage, Makapix, System tabs with their 1.x controls | keep | M5.1 | |
-| [ ] | Playset editor: list, play, edit, delete, rename; channel cards with reorder, weight, offset, balance bar; add-channel dialog for every source; museum browse; Makapix user and hashtag check | keep | M5.1 | |
-| [ ] | Update page: versions, release notes, install, rollback, check, pre-release markers | keep | M5.1, M5.2 | |
+| [x] | Home: banners for update, card failure, card repair, rate limits, invalid or missing keys, registration needed, museum unavailable | keep | M5.1 | |
+| [x] | Settings, Display: theme (5, per browser), brightness, rotation, background colour, boot animation and duration, indicator size, FPS, max speed, auto-advance, channel selection, refresh override | keep | M5.1 | Rendered from the schema |
+| [x] | Settings, Network: status, device name, erase Wi-Fi | keep | M5.1 | |
+| [x] | Settings, Giphy, Klipy, Museum, Storage, Makapix, System tabs with their 1.x controls | keep | M5.1 | Makapix registration on the page not clicked yet (M4.5-a) |
+| [x] | Playset editor: list, play, edit, delete, rename; channel cards with reorder, weight, offset, balance bar; add-channel dialog for every source; museum browse; Makapix user and hashtag check | keep | M5.1 | Rename is save, then delete. Pin lists can be channels |
+| [x] | Update page: versions, release notes, install, rollback, check, pre-release markers | keep | M5.1, M5.2 | Going back to the other firmware at any time; a firmware on trial and one that was undone are said |
 | [ ] | Update page: web UI section, repair, recovery page, "outdated" banner | drop | | Gone with change A |
 | [ ] | Setup pages: form with optional device name, success page with countdown, erase, error | keep | M1.5 | Served from the embedded table |
-| [ ] | Installable as an app: manifest named after the device, icons, theme colour | keep | M5.1 | Icons shrunk |
+| [x] | Installable as an app: manifest named after the device, icons, theme colour | keep | M5.1 | Icons shrunk |
 | [ ] | Old addresses `/config/network` and `/giphy` redirect into Settings | drop | | |
 | [ ] | PICO-8 page | drop | | C5 |
 
@@ -151,7 +151,7 @@ Same pages and look, new internals (D11).
 | | Capability | 2.0 | M | Note |
 |---|---|---|---|---|
 | [ ] | Status: state, uptime, memory, firmware, hardware, network, Makapix, storage, card health, repair and reboot counters | keep | M1.5 onwards | Free-space figure cached, not computed per request |
-| [ ] | One call that returns everything the home page needs | keep | M5.1 | |
+| [x] | One call that returns everything the home page needs | change | M5.1 | `GET /api/v2/player` carries what changes by the second; the status, Makapix and the update are asked once a minute, each answered with 304 when unchanged |
 | [ ] | Read and write settings, with partial update | change | M1.4, M1.5 | Validated by the schema; unknown keys rejected; one settings surface |
 | [ ] | The settings read returns stored API keys in clear | decide | M1.5 | Q2 |
 | [ ] | Actions: next, previous, pause, resume, reboot, reset the advance timer | keep | M2.3 | |
@@ -162,7 +162,7 @@ Same pages and look, new internals (D11).
 | [ ] | Device name read and set | keep | M1.5 | Through settings |
 | [ ] | Memory breakdown | keep | M1.5 | |
 | [ ] | Museum cooldown table and browser 429 report | keep | M4.3 | |
-| [ ] | Update: status, check, install, rollback | keep | M5.2 | Install becomes a job |
+| [x] | Update: status, check, install, rollback | keep | M5.2 | Install becomes a job |
 | [ ] | Erase Wi-Fi credentials and reboot | keep | M1.5 | |
 | [ ] | Legacy channel switch, deprecated channel read, channel stats, UI config, network status, state snapshot, storage, dwell-time endpoints | drop | | Finding 16: unused or duplicated |
 | [ ] | Frame-trace endpoints in trace builds | keep | M2.1 | |
@@ -208,9 +208,9 @@ Same pages and look, new internals (D11).
 | [ ] | SDIO link failure: countdown and reboot, degraded mode after three | keep | M1.5 | |
 | [ ] | Names: `p3a` or `p3a-{name}` for mDNS, DHCP, the setup-mode alias, the installed-app name and the screens | keep | M1.5 | |
 | [ ] | UTC clock from SNTP; connectivity ladder from no Wi-Fi to online | keep | M1.5 | |
-| [ ] | Firmware update from GitHub Releases: check every 12 h and on request, owner approves, SHA-256 checked, rollback, blocked during USB sharing | keep | M5.2 | New asset name (D12) |
-| [ ] | No update check until 12 h after boot | decide | M5.2 | Q3 |
-| [ ] | Pre-release channel in developer builds | keep | M5.2 | |
+| [x] | Firmware update from GitHub Releases: check every 12 h and on request, owner approves, SHA-256 checked, rollback, blocked during USB sharing | keep | M5.2 | `p3a-v2.bin` (D85); first look two minutes after the network (D87); a real GitHub install is manual check M5.2-a |
+| [x] | No update check until 12 h after boot | decide | M5.2 | Changed: D87 |
+| [x] | Pre-release channel in developer builds | change | M5.2 | A setting, `update_prereleases`, in every build (D32) |
 | [ ] | Web UI updated over the air on its own | drop | | Change A |
 | [ ] | Co-processor firmware flashed at boot when stale; version lock detected and reported | keep | M1.2 | Link, versions and lock detection verified on the dev unit; the update transfer waits for manual check M1.2-e on another board |
 | [ ] | Core dump to flash; one-shot heap report on the first failed allocation | keep | M1.1 | Q6 on reading the dump |
@@ -222,7 +222,7 @@ Same pages and look, new internals (D11).
 
 | | Capability | M |
 |---|---|---|
-| [ ] | One binary: firmware and web UI update together (A) | M5.1 |
+| [x] | One binary: firmware and web UI update together (A) | M5.1 |
 | [ ] | Longer identifiers: no hidden Wellcome terms, no CMA table (B) | M4.3 |
 | [x] | Repetition suppression (C) | M2.4 |
 | [x] | Aspect-ratio filter for museum channels (D) | M2.4, M4.3. Seen on the device with a 5:1 picture: passed over with the filter on, played with it off |

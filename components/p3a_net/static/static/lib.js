@@ -107,8 +107,14 @@ export function channelProblem(ch) {
 // The banners the home page shows, from the player's channels and the
 // device's status. Each: {id, tone: 'danger' | 'warn' | 'info', title, text, href?}.
 // One banner per source and kind of problem, whatever the number of channels.
-export function banners(player, status) {
+export function banners(player, status, update) {
     const out = [];
+    if (update?.available && update.latest) {
+        out.push({
+            id: 'update', tone: 'info', title: '\u21E1 Update Available', href: '/update',
+            text: `Version ${update.latest.version} of the firmware is available. Tap here to see it. Nothing is installed until you say so.`,
+        });
+    }
     const storage = status?.storage;
     if (storage && storage.health && storage.health !== 'ok') {
         out.push({

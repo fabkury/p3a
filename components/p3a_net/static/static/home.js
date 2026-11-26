@@ -148,7 +148,7 @@ function renderBanners() {
         warn: '',
         info: 'background:var(--c-info-soft-bg);color:var(--c-info-soft-fg);',
     };
-    $('banners').innerHTML = banners(state.player, state.status).map((b) =>
+    $('banners').innerHTML = banners(state.player, state.status, state.update).map((b) =>
         `<div class="cooldown-banner" style="display:block;${tones[b.tone]}${b.href ? 'cursor:pointer;' : ''}"`
         + `${b.href ? ` data-href="${esc(b.href)}"` : ''}><h4>${esc(b.title)}</h4><p>${esc(b.text)}</p></div>`).join('');
 }
@@ -279,9 +279,11 @@ const poll = poller(tick, 4000);
 
 // Things that change seldom: once at load, and every minute.
 async function slowTick() {
-    const [status, makapix] = await Promise.all([get('/api/v2/status'), get('/api/v2/makapix')]);
+    const [status, makapix, update] = await Promise.all([get('/api/v2/status'), get('/api/v2/makapix'),
+        get('/api/v2/update').catch(() => null)]);
     state.status = status;
     state.makapix = makapix;
+    state.update = update;
     renderPills();
     renderBanners();
 }

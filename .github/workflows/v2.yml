@@ -28,6 +28,10 @@ jobs:
         run: python3 tools/test_gen_settings.py
       - name: Page embedder self-test
         run: python3 tools/test_embed_static.py
+      - name: Release packager self-test
+        run: python3 tools/test_make_release.py
+      - name: Flasher's plan self-test
+        run: python3 tools/test_flash_plan.py
       - name: Layer rule, forbidden patterns, configuration guard
         run: python3 tools/check_tree.py
       - name: Web page logic (node)

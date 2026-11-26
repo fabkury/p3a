@@ -10,7 +10,7 @@ components/makapix/certs/*.pem
 !components/makapix/certs/convert_cert.py
 !components/makapix/certs/get_certificates.*
 nul
-flasher/.venv/
+host/p3a-flasher/.venv/
 .claude/
 release/
 !images/webui-manifest/out/

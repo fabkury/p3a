@@ -5,6 +5,7 @@ The workstation talks to the unit at the address it reports on the UART, and
 the UART is used to cross-check what HTTP says and does.
 """
 import json
+import re
 import time
 import urllib.error
 import urllib.request
@@ -105,6 +106,11 @@ def test_status_describes_the_device(api, uart, identity):
     assert data["recovery_restarts"] == {"touch": 0, "wifi": 0, "link": 0}
     assert data["uptime_s"] >= 0 and data["reboot_needed"] is False
     assert data["coredump"]["checked"] is True
+    assert data["chip"] == {"model": "esp32p4", "revision": f"v{identity['chip_rev'] // 100}.{identity['chip_rev'] % 100}"} \
+        if "chip_rev" in identity else data["chip"]["model"] == "esp32p4"
+    # The co-processor answered at boot, and runs what this firmware carries for it.
+    assert re.fullmatch(r"\d+\.\d+\.\d+", data["coprocessor"]["running"]), data["coprocessor"]
+    assert data["coprocessor"]["embedded"] and isinstance(data["coprocessor"]["locked"], bool)
 
 
 def test_unknown_paths_and_wrong_methods_get_the_error_envelope(api):

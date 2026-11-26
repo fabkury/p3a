@@ -70,6 +70,9 @@ The firmware is public (Apache 2.0). 1.x runs on real users' devices from
 | `tools/gen_font.py` | Makes a UI font file from a pixel font's TTF. Run by hand when a font changes; the result under `components/p3a_ui/fonts/` is committed. |
 | `tools/gen_image.py` | Makes a UI picture file from a PNG, the same way: by hand, result committed under `components/p3a_ui/images/`. |
 | `tools/gen_settings.py` | Generates the settings table and struct from `components/p3a_settings/settings.json` at configure time. `tools/test_gen_settings.py` is its self-test. |
+| `tools/make_release.py` | Makes the release folder (`release/v<version>/`) from a release build: `p3a-v2.bin`, the other flash files, `flash_args`, and `nvs-erased.bin` (D89). Refuses a build that must not ship. `tools/test_make_release.py` is its self-test. |
+| `host/p3a-flasher/` | The Windows flasher program. It writes what a release's `flash_args` lists (`flash_plan.py`, tested by `tools/test_flash_plan.py`) and holds no address of its own. `build_flasher.py` builds the executable by hand, after `make_release.py`. |
+| `docs/web-flasher/` | The web flasher, served by GitHub Pages from `main`. It too reads each release's `flash_args`. |
 | `tools/compare_sdkconfig.py` | Fails a release build whose configuration drifts from what 1.x shipped, apart from a listed set of explained differences. When a component returns and a listed difference disappears, remove it from the list. |
 | `sdkconfig.trace.defaults`, `sdkconfig.diag.defaults`, `sdkconfig.nowrap.defaults` | The jitter work's overlays (`lab.py build trace`, `build diag`; `build trace-test` adds the test hooks, for `tests/device/test_timing.py`). Never folded into the release configuration. |
 | `host/p3a-lab/` | Builds, flashes and talks to the dev unit. Use it instead of raw `idf.py` for anything that involves the device. |

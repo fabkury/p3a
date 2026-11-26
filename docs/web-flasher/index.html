@@ -422,6 +422,18 @@ details.card summary::-webkit-details-marker {
             <option value="">Loading releases...</option>
         </select>
         <div class="release-info" id="release-info"></div>
+        <!-- 2.x is a fresh start: the release's flash_args write blank bytes over the settings. -->
+        <div class="card warning-card" id="erase-warning" style="display:none; margin:12px 0 0;">
+            <h3>This erases the device</h3>
+            <p>p3a 2.x is a fresh start. Flashing it erases the device's settings, its Wi-Fi network and its
+               Makapix Club registration. A device that runs 1.x keeps none of them: you will set it up again
+               from its screen. Files on the SD card are not touched.</p>
+            <p>To return to 1.x later, flash a 1.x release from this page.</p>
+            <label style="display:flex; gap:8px; align-items:flex-start; color:#333; font-size:0.9rem; cursor:pointer;">
+                <input type="checkbox" id="erase-ok" style="margin-top:3px;">
+                <span>I understand. Erase this device and install <span id="erase-version">2.x</span>.</span>
+            </label>
+        </div>
     </div>
 
     <!-- Step 2: Connect Device -->
@@ -509,6 +521,9 @@ const elements = {
     connectBtn: document.getElementById('connect-btn'),
     connectionStatus: document.getElementById('connection-status'),
     flashBtn: document.getElementById('flash-btn'),
+    eraseWarning: document.getElementById('erase-warning'),
+    eraseOk: document.getElementById('erase-ok'),
+    eraseVersion: document.getElementById('erase-version'),
     progressCard: document.getElementById('progress-card'),
     fileList: document.getElementById('file-list'),
     overallFill: document.getElementById('overall-fill'),
@@ -591,6 +606,22 @@ async function fetchReleases() {
 function isOffered(release) {
     const major = parseInt(release.tag_name.replace(/^v/, ''), 10);
     return Number.isFinite(major) && major >= CONFIG.MIN_MAJOR_VERSION;
+}
+
+// From 2.0 on, a release writes over the device's settings (nvs-erased.bin in
+// its flash_args): the owner says yes to that first.
+function erasesDevice(release) {
+    return !!release && parseInt(release.tag_name.replace(/^v/, ''), 10) >= 2;
+}
+
+// The one place that decides whether the Flash button can be pressed.
+function updateFlashButton() {
+    const release = state.selectedRelease;
+    const erases = erasesDevice(release);
+    elements.eraseWarning.style.display = erases ? 'block' : 'none';
+    if (erases) elements.eraseVersion.textContent = release.tag_name.replace(/^v/, '');
+    elements.flashBtn.disabled = state.isFlashing || !state.isConnected || !release
+        || (erases && !elements.eraseOk.checked);
 }
 
 function getAssetUrl(release, filename) {
@@ -680,6 +711,7 @@ function populateReleases(releases) {
         showReleaseInfo(releases[0]);
         log(`Auto-selected ${releases[0].tag_name}`);
     }
+    updateFlashButton();
 }
 
 function showReleaseInfo(release) {
@@ -710,7 +742,7 @@ function setConnected(isConnected, chipName = '') {
     elements.connectionStatus.innerHTML = isConnected
         ? `<span class="status-connected">Connected: ${chipName}</span>`
         : '<span class="status-disconnected">Not connected</span>';
-    elements.flashBtn.disabled = !isConnected || !state.selectedRelease;
+    updateFlashButton();
 }
 
 function initializeFileProgress(files) {
@@ -751,7 +783,8 @@ function updateOverallProgress(percent) {
 
 function setFlashing(isFlashing) {
     state.isFlashing = isFlashing;
-    elements.flashBtn.disabled = isFlashing || !state.isConnected;
+    updateFlashButton();
+    elements.eraseOk.disabled = isFlashing;
     elements.flashBtn.textContent = isFlashing ? 'Flashing...' : 'Flash Device';
     elements.connectBtn.disabled = isFlashing;
     elements.releaseSelect.disabled = isFlashing;
@@ -863,7 +896,8 @@ elements.releaseSelect.addEventListener('change', (e) => {
     const tagName = e.target.value;
     state.selectedRelease = state.releases.find(r => r.tag_name === tagName) || null;
     showReleaseInfo(state.selectedRelease);
-    elements.flashBtn.disabled = !state.isConnected || !state.selectedRelease;
+    elements.eraseOk.checked = false;  // a yes is for one release
+    updateFlashButton();
 
     // Log available assets for debugging
     if (state.selectedRelease) {
@@ -874,6 +908,8 @@ elements.releaseSelect.addEventListener('change', (e) => {
         }
     }
 });
+
+elements.eraseOk.addEventListener('change', updateFlashButton);
 
 elements.connectBtn.addEventListener('click', async () => {
     if (state.isConnected) {
@@ -918,6 +954,11 @@ elements.flashBtn.addEventListener('click', async () => {
         return;
     }
 
+    if (erasesDevice(state.selectedRelease) && !elements.eraseOk.checked) {
+        showToast('Tick the box above first: this release erases the device', 'error');
+        return;
+    }
+
     setFlashing(true);
 
     try {
@@ -941,7 +982,7 @@ elements.flashBtn.addEventListener('click', async () => {
 
             // Verify magic byte for app images
             if (file.filename.endsWith('.bin') &&
-                (file.filename === 'bootloader.bin' || file.filename === 'p3a.bin' || file.filename === 'network_adapter.bin')) {
+                (file.filename === 'bootloader.bin' || file.filename === 'p3a.bin' || file.filename === 'p3a-v2.bin' || file.filename === 'network_adapter.bin')) {
                 if (data[0] === 0xE9) {
                     log(`  Magic byte OK (0xE9)`);
                 } else {

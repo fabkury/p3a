@@ -14,7 +14,7 @@ Rules (see `docs/2.0/README.md` and `AGENTS.md`):
 - When this folder is empty, it is removed, and that is a release gate for
   2.0 (milestone M6.2).
 
-What is here besides `components/`, `main/` and `webui/`:
+What is here besides `components/` and `main/`:
 
 | File | What |
 |---|---|

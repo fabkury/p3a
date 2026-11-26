@@ -78,8 +78,11 @@ def test_the_setup_page_is_served_compressed_and_revalidates(api):
 
 
 def test_on_the_lan_unknown_pages_are_not_redirected(api):
-    for path in ("/", "/generate_204", "/hotspot-detect.html", "/setup", "/setup/missing.html"):
+    for path in ("/generate_204", "/hotspot-detect.html", "/setup", "/setup/missing.html"):
         api.get(path).error(404, "NOT_FOUND")
+    # "/" is the home page here, not the setup page it is in setup mode.
+    home = api.get("/")
+    assert home.status == 200 and home.headers["content-type"].startswith("text/html")
 
 
 def test_wifi_status_over_http(api):

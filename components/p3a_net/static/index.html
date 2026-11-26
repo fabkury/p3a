@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="p3a">
+<meta name="theme-color" content="#0E0A1A">
+<link rel="stylesheet" href="/static/common.css">
+<link rel="stylesheet" href="/static/home.css">
+<script src="/static/theme.js"></script>
+<title>p3a</title>
+</head>
+<body class="has-bottom-nav">
+<div class="header">
+    <h1>p3a</h1>
+</div>
+<div class="artwork-area" id="artwork-area">
+    <img id="artwork-img" alt="" style="display:none;">
+    <img id="reaction-overlay-img" class="reaction-overlay" alt="" hidden>
+    <img id="pin-overlay-img" class="pin-overlay" alt="" hidden>
+</div>
+<div class="artwork-info-area" id="artwork-info-area" hidden>
+    <div class="artwork-info-spinner" id="artwork-info-spinner" aria-hidden="true"></div>
+    <div class="artwork-info-rows">
+        <div class="artwork-info-row title">
+            <span class="artwork-info-label">Title:</span><span class="artwork-info-value" id="artwork-info-title"></span>
+        </div>
+        <div class="artwork-info-row artist">
+            <span class="artwork-info-label">Author:</span><span class="artwork-info-value" id="artwork-info-artist"></span>
+        </div>
+        <div class="artwork-info-row date">
+            <span class="artwork-info-label">Date:</span><span class="artwork-info-value" id="artwork-info-date"></span>
+        </div>
+        <div class="artwork-info-row channel">
+            <span class="artwork-info-label">Source:</span><span class="artwork-info-value" id="artwork-info-source"></span>
+        </div>
+    </div>
+</div>
+<div class="now-playing collapsed" id="now-playing" style="display:none;">
+    <div class="now-playing-header" id="now-playing-header">
+        <button type="button" class="shuffle-btn" id="shuffle-btn" aria-pressed="false">Shuffle is <span class="shuffle-state" id="shuffle-state">off</span></button>
+        <div class="now-playing-header-text">
+            <div class="now-playing-name" id="now-playing-name"></div>
+            <div class="now-playing-stats" id="now-playing-stats"></div>
+        </div>
+        <span class="now-playing-toggle" id="now-playing-toggle">&#9660;</span>
+    </div>
+    <div class="now-playing-channels" id="now-playing-channels"></div>
+</div>
+<div class="arrow-row">
+    <button class="arrow-btn" id="back-btn" type="button" aria-label="Previous">&#9664;</button>
+    <button class="reaction-btn" id="reaction-btn" type="button" style="visibility:hidden;" aria-label="React"></button>
+    <button class="pin-btn" id="pin-btn" type="button" style="visibility:hidden;" aria-label="Pin">&#128204;</button>
+    <button class="pause-btn" id="pause-btn" type="button">Pause</button>
+    <button class="info-btn" id="info-btn" type="button" style="visibility:hidden;" aria-label="Show artwork info" title="Show artwork info">&#8505;&#65039;</button>
+    <button class="arrow-btn" id="next-btn" type="button" aria-label="Next">&#9654;</button>
+</div>
+<div class="pill-bar" id="pill-bar"></div>
+<div class="upload-section collapsed" id="upload-section">
+    <div class="upload-header" id="upload-header">
+        <h3>Play from...</h3>
+        <span class="upload-toggle">&#9660;</span>
+    </div>
+    <div class="upload-content">
+        <form class="upload-form" id="upload-form">
+            <div class="drop-zone" id="drop-zone">
+                <div class="drop-zone-prompt">
+                    <span class="drop-icon">&#128193;</span>
+                    <span>Drop file here or click to browse</span>
+                </div>
+                <input type="file" id="file-input" name="file" accept=".webp,.gif,.jpg,.jpeg,.png,.apng,.bmp,image/webp,image/gif,image/jpeg,image/png,image/apng,image/bmp" required>
+            </div>
+            <div class="file-info" id="file-info"></div>
+            <button type="submit" class="upload-btn" id="upload-btn">Upload</button>
+            <div class="upload-progress" id="upload-progress">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+            </div>
+        </form>
+        <div class="show-url-row">
+            <input type="url" class="show-url-input" id="show-url-input" placeholder="https://example.com/artwork.gif">
+            <button type="button" class="show-url-btn" id="show-url-btn">Show</button>
+        </div>
+    </div>
+</div>
+<div id="banners" style="display:contents;"></div>
+<script type="module" src="/static/home.js"></script>
+</body>
+</html>

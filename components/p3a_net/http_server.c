@@ -336,10 +336,10 @@ static void send_static(httpd_req_t *raw, const p3a_static_file_t *file)
 static bool serve_unrouted_get(httpd_req_t *raw, const char *path, size_t path_len)
 {
     const p3a_static_file_t *file = p3a_static_find(path, path_len);
-    if (file == NULL && net_setup_active()) {
-        if (path_len == 1) {
-            file = p3a_static_find("/setup/", 7);
-        } else if (strncmp(path, "/api/", 5) != 0) {
+    if (net_setup_active() && path_len == 1) {
+        file = p3a_static_find("/setup/", 7);  // not the home page: there is no network for it to be of use on
+    } else if (file == NULL && net_setup_active()) {
+        if (strncmp(path, "/api/", 5) != 0) {
             httpd_resp_set_status(raw, "302 Found");
             httpd_resp_set_hdr(raw, "Location", SETUP_URL);
             httpd_resp_set_hdr(raw, "Cache-Control", "no-store");

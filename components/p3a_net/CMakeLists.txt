@@ -35,6 +35,7 @@ idf_component_register(
          "makapix_command_map.c"
          "net_makapix_api.c"
          "net_makapix_commands.c"
+         "net_media_api.c"
          "net_pins_api.c"
          "net_sources_api.c"
          "net_ui_api.c"

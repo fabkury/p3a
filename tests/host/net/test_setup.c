@@ -172,12 +172,18 @@ static void test_the_setup_page_is_embedded_and_found(void)
 static void test_static_lookup_is_exact(void)
 {
     TEST_ASSERT_NULL(find("/setup"));
+    // A page may be asked for without its ending; nothing else may.
+    TEST_ASSERT_EQUAL_PTR(find("/setup/index.html"), find("/setup/index"));
+    TEST_ASSERT_EQUAL_PTR(find("/index.html"), find("/index"));
+    TEST_ASSERT_NULL(find("/static/common"));
+    TEST_ASSERT_NULL(find("/setup/index."));
     TEST_ASSERT_NULL(find("/setup/index.htm"));
     TEST_ASSERT_NULL(find("/setup/index.html/"));
     TEST_ASSERT_NULL(find("/SETUP/index.html"));
     TEST_ASSERT_NULL(find("setup/index.html"));
     TEST_ASSERT_NULL(find("/setup/../setup/index.html"));
-    TEST_ASSERT_NULL(find("/"));
+    TEST_ASSERT_EQUAL_PTR(find("/index.html"), find("/"));
+    TEST_ASSERT_NOT_NULL(find("/"));
     TEST_ASSERT_NULL(find(""));
     TEST_ASSERT_NULL(p3a_static_find(NULL, 5));
     // The length is honoured, not the terminator.

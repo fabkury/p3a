@@ -108,7 +108,8 @@ def test_status_describes_the_device(api, uart, identity):
 
 
 def test_unknown_paths_and_wrong_methods_get_the_error_envelope(api):
-    for path in ("/", "/nothing", "/api/v2", "/api/v2/", "/api/v2/status/", "/api/v1/status", "/API/v2/status"):
+    # "/" is the home page (test_web.py).
+    for path in ("/nothing", "/api/v2", "/api/v2/", "/api/v2/status/", "/api/v1/status", "/API/v2/status"):
         api.get(path).error(404, "NOT_FOUND")
     reply = api.call("POST", "/api/v2/status")
     reply.error(405, "METHOD_NOT_ALLOWED")

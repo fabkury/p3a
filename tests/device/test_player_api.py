@@ -66,7 +66,8 @@ def test_an_uploaded_file_is_listed_and_played(api):
     state = wait_player(api, "both are listed and one plays",
                         lambda s: s["channels"][0]["records"] == count + 2 and s["playing"] and not s["loading"])
     assert state["channels"][0]["available"] == count + 2
-    assert state["current"] == {"source": "local", "name": "zz api c.PNG", "format": "png", "width": 48, "height": 32}, \
+    assert state["current"] == {"source": "local", "name": "zz api c.PNG", "format": "png", "width": 48, "height": 32,
+                                "file": "/api/v2/files/zz%20api%20c.PNG", "pinned": False}, \
         "what was just sent is what plays"
 
     # The same name again replaces the file; it does not add one.

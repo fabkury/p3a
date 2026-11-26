@@ -30,6 +30,8 @@ jobs:
         run: python3 tools/test_embed_static.py
       - name: Layer rule, forbidden patterns, configuration guard
         run: python3 tools/check_tree.py
+      - name: Web page logic (node)
+        run: node --test tests/web/test_lib.mjs
       - name: Lab unit tests
         run: |
           python3 -m pip install --quiet pyserial pytest

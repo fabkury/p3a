@@ -479,7 +479,57 @@ static void delete_wifi(p3a_http_request_t *req)
 
 // --- the table ------------------------------------------------------------------
 
+// What a phone needs to keep the page on its home screen as an app. Named
+// after the device, so that two of them can be told apart there.
+static void get_manifest(p3a_http_request_t *req)
+{
+    httpd_req_t *raw = p3a_http_raw(req);
+    static p3a_settings_t settings;
+    p3a_settings_get(&settings);
+    char name[24] = "p3a";
+    if (settings.device_name[0] != '\0') {
+        snprintf(name, sizeof(name), "p3a-%s", settings.device_name);
+    }
+    cJSON *doc = cJSON_CreateObject();
+    cJSON_AddStringToObject(doc, "name", name);
+    cJSON_AddStringToObject(doc, "short_name", name);
+    cJSON_AddStringToObject(doc, "start_url", "/");
+    cJSON_AddStringToObject(doc, "scope", "/");
+    cJSON_AddStringToObject(doc, "display", "standalone");
+    cJSON_AddStringToObject(doc, "background_color", "#0E0A1A");
+    cJSON_AddStringToObject(doc, "theme_color", "#0E0A1A");
+    cJSON *icons = cJSON_AddArrayToObject(doc, "icons");
+    static const struct {
+        const char *src, *sizes, *purpose;
+    } list[] = {{"/static/icon-192.png", "192x192", NULL},
+                {"/static/icon-512.png", "512x512", NULL},
+                {"/static/icon-192-maskable.png", "192x192", "maskable"},
+                {"/static/icon-512-maskable.png", "512x512", "maskable"}};
+    for (size_t i = 0; i < sizeof(list) / sizeof(list[0]); i++) {
+        cJSON *icon = cJSON_CreateObject();
+        cJSON_AddStringToObject(icon, "src", list[i].src);
+        cJSON_AddStringToObject(icon, "sizes", list[i].sizes);
+        cJSON_AddStringToObject(icon, "type", "image/png");
+        if (list[i].purpose != NULL) {
+            cJSON_AddStringToObject(icon, "purpose", list[i].purpose);
+        }
+        cJSON_AddItemToArray(icons, icon);
+    }
+    char *text = cJSON_PrintUnformatted(doc);
+    cJSON_Delete(doc);
+    if (text == NULL) {
+        p3a_http_fail_err(req, ESP_ERR_NO_MEM, "writing the manifest");
+        return;
+    }
+    httpd_resp_set_type(raw, "application/manifest+json");
+    httpd_resp_set_hdr(raw, "Cache-Control", "no-cache");
+    httpd_resp_sendstr(raw, text);
+    cJSON_free(text);
+    p3a_http_mark_answered(req);
+}
+
 static const p3a_http_route_t s_routes[] = {
+    {P3A_HTTP_GET, P3A_HTTP_RAW, "/manifest.webmanifest", get_manifest},
     {P3A_HTTP_GET, 0, "/api/v2/status", get_status},
     {P3A_HTTP_GET, 0, "/api/v2/settings", get_settings},
     {P3A_HTTP_PATCH, P3A_HTTP_BODY_JSON, "/api/v2/settings", patch_settings},
@@ -503,6 +553,7 @@ void net_api_register(void)
     net_sources_api_register();
     net_pins_api_register();
     net_makapix_api_register();
+    net_media_api_register();
     net_makapix_commands_register();
 #if CONFIG_P3A_FRAME_TRACE
     net_trace_api_register();

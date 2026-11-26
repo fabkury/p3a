@@ -8,6 +8,8 @@
 //   POST   /api/v2/player/pause           black panel, backlight off, no moving on
 //   POST   /api/v2/player/resume
 //   POST   /api/v2/player/refresh         list every channel of the active playset again, now
+//   POST   /api/v2/player/like            what the artwork's source makes of a like (Makapix: a
+//   POST   /api/v2/player/unlike          thumbs-up from the owner; Giphy: a click); answers the reaction
 //   POST   /api/v2/player/show            {"url"}: fetch the picture at that address, keep it among the
 //                                         user's files and play it; answers 202 with the job
 //   GET    /api/v2/player/playset         the active playset
@@ -35,6 +37,9 @@
 #include "p3a_err.h"
 #include "p3a_http.h"
 #include "p3a_limits.h"
+#include "p3a_pins.h"
+#include "p3a_settings.h"
+#include "p3a_source.h"
 #include "p3a_storage.h"
 #include "play_scheduler.h"
 #include "show_url.h"
@@ -66,9 +71,16 @@ cJSON *net_record_json(const p3a_record_t *r)
         case P3A_SOURCE_MUSEUM:
             cJSON_AddStringToObject(o, "id", r->identity.museum.iiif_key);
             break;
-        case P3A_SOURCE_MAKAPIX:
+        case P3A_SOURCE_MAKAPIX: {
             cJSON_AddNumberToObject(o, "post_id", r->id32);
+            // The storage key, as the site spells it: what its public pages know the artwork by.
+            char key[37];
+            const uint8_t *u = r->identity.makapix.uuid;
+            snprintf(key, sizeof(key), "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x", u[0], u[1],
+                     u[2], u[3], u[4], u[5], u[6], u[7], u[8], u[9], u[10], u[11], u[12], u[13], u[14], u[15]);
+            cJSON_AddStringToObject(o, "storage_key", key);
             break;
+        }
         default:
             break;
     }
@@ -80,17 +92,59 @@ cJSON *net_record_json(const p3a_record_t *r)
         cJSON_AddNumberToObject(o, "width", r->width);
         cJSON_AddNumberToObject(o, "height", r->height);
     }
+    // Where the page gets the picture: from this device (net_media_api.c).
+    char file[P3A_RECORD_FILENAME_LEN * 3 + 24];
+    if (r->source == P3A_SOURCE_LOCAL) {
+        // The name goes into an address: everything but letters, digits and "-._~" escaped.
+        size_t at = (size_t)snprintf(file, sizeof(file), "/api/v2/files/");
+        for (const unsigned char *p = (const unsigned char *)r->identity.local.filename; *p != 0 && at + 4 < sizeof(file); p++) {
+            const bool plain = (*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z') || (*p >= '0' && *p <= '9') ||
+                               *p == '-' || *p == '.' || *p == '_' || *p == '~';
+            at += (size_t)snprintf(file + at, sizeof(file) - at, plain ? "%c" : "%%%02X", *p);
+        }
+        cJSON_AddStringToObject(o, "file", file);
+    } else if (p3a_record_has_blob(r) && extension != NULL) {
+        size_t at = (size_t)snprintf(file, sizeof(file), "/api/v2/blobs/");
+        for (int i = 0; i < P3A_RECORD_BLOB_REF_LEN; i++) {
+            at += (size_t)snprintf(file + at, sizeof(file) - at, "%02x", r->blob_ref[i]);
+        }
+        snprintf(file + at, sizeof(file) - at, "%s", extension);
+        cJSON_AddStringToObject(o, "file", file);
+    }
     return o;
+}
+
+// Whether the artwork on the screen is in the active pin list. Asking reads
+// the list from the card, and the page asks for the player's state every few
+// seconds: the answer is kept until the lists or the artwork change.
+static bool current_is_pinned(const p3a_record_t *current)
+{
+    static uint32_t revision = UINT32_MAX;
+    static p3a_record_t asked;
+    static bool pinned;
+    const uint32_t now = p3a_pins_revision();
+    if (now != revision || memcmp(&asked, current, sizeof(asked)) != 0) {
+        revision = now;
+        asked = *current;
+        pinned = p3a_pins_is_pinned(NULL, current);
+    }
+    return pinned;
 }
 
 static void get_player(p3a_http_request_t *req)
 {
     play_scheduler_status_t *st = psram_calloc(1, sizeof(*st));
-    if (st == NULL) {
+    playset_t *playset = psram_calloc(1, sizeof(*playset));
+    static p3a_settings_t settings;  // large; the server has one task
+    if (st == NULL || playset == NULL) {
+        free(st);
+        free(playset);
         p3a_http_fail_err(req, ESP_ERR_NO_MEM, "reading the player's state");
         return;
     }
     play_scheduler_get_status(st);
+    play_scheduler_get_playset(playset);
+    p3a_settings_get(&settings);
     cJSON *data = cJSON_CreateObject();
     cJSON_AddBoolToObject(data, "playing", st->playing);
     cJSON_AddBoolToObject(data, "loading", st->loading);
@@ -104,15 +158,27 @@ static void get_player(p3a_http_request_t *req)
         cJSON_AddStringToObject(data, "problem", p3a_err_to_name(st->problem));
     }
     if (st->playing) {
-        cJSON_AddItemToObject(data, "current", net_record_json(&st->current));
+        cJSON *current = net_record_json(&st->current);
+        cJSON_AddBoolToObject(current, "pinned", current_is_pinned(&st->current));  // in the active list
+        cJSON_AddItemToObject(data, "current", current);
     }
     cJSON_AddStringToObject(data, "playset", st->playset);
+    cJSON_AddBoolToObject(data, "shuffle", settings.pick_mode != P3A_PICK_MODE_RECENCY);
+    cJSON_AddNumberToObject(data, "pins_revision", p3a_pins_revision());  // changes when the pin lists do
     cJSON *channels = cJSON_AddArrayToObject(data, "channels");
     for (uint32_t i = 0; i < st->channel_count; i++) {
         const play_channel_status_t *c = &st->channels[i];
         cJSON *item = cJSON_CreateObject();
         cJSON_AddStringToObject(item, "id", c->id);
         cJSON_AddStringToObject(item, "source", playset_source_name(c->source));
+        if (i < playset->count) {
+            // What the playset says of it: enough for the page to name the channel.
+            const playset_channel_t *spec = &playset->channels[i];
+            cJSON_AddStringToObject(item, "kind", spec->kind);
+            cJSON_AddStringToObject(item, "identifier", spec->identifier);
+            cJSON_AddStringToObject(item, "display_name", spec->display_name);
+            cJSON_AddNumberToObject(item, "weight", spec->weight);
+        }
         cJSON_AddStringToObject(item, "state", c->state < 6 ? s_channel_states[c->state] : "unknown");
         cJSON_AddNumberToObject(item, "records", c->records);
         cJSON_AddNumberToObject(item, "available", c->available);
@@ -140,6 +206,7 @@ static void get_player(p3a_http_request_t *req)
         cJSON_AddStringToObject(data, "last_error", p3a_err_to_name(st->last_error));
     }
     free(st);
+    free(playset);
     p3a_http_ok(req, data);
 }
 
@@ -457,6 +524,37 @@ static void post_file(p3a_http_request_t *req)
     p3a_http_ok(req, data);
 }
 
+// A like, or its taking back, for the artwork on the screen: what a swipe up
+// or down does on the device, without the pin.
+static void react(p3a_http_request_t *req, bool undo)
+{
+    static const char *const names[] = {"none", "liked", "unliked", "noted"};
+    p3a_record_t record;
+    if (!play_scheduler_current(&record)) {
+        p3a_http_fail(req, 409, "NOTHING_SHOWN", "no artwork is on the screen");
+        return;
+    }
+    const p3a_source_ops_t *ops = p3a_source_get(record.source);
+    p3a_reaction_t reaction = ops != NULL && ops->react != NULL ? ops->react(&record, undo) : P3A_REACTION_NONE;
+    if (reaction > P3A_REACTION_NOTED) {
+        reaction = P3A_REACTION_NONE;
+    }
+    cJSON *data = net_record_json(&record);
+    // "none": this artwork's source has no such thing, or cannot now (no key, not registered).
+    cJSON_AddStringToObject(data, "reaction", names[reaction]);
+    p3a_http_ok(req, data);
+}
+
+static void post_like(p3a_http_request_t *req)
+{
+    react(req, false);
+}
+
+static void post_unlike(p3a_http_request_t *req)
+{
+    react(req, true);
+}
+
 // "Show this": a picture at an address, fetched, saved among the user's
 // files and played (show_url.h). The answer is the job that does it.
 static void post_show(p3a_http_request_t *req)
@@ -491,6 +589,8 @@ static const p3a_http_route_t s_routes[] = {
     {P3A_HTTP_POST, 0, "/api/v2/player/pause", post_pause},
     {P3A_HTTP_POST, 0, "/api/v2/player/resume", post_resume},
     {P3A_HTTP_POST, 0, "/api/v2/player/refresh", post_refresh},
+    {P3A_HTTP_POST, 0, "/api/v2/player/like", post_like},
+    {P3A_HTTP_POST, 0, "/api/v2/player/unlike", post_unlike},
     {P3A_HTTP_POST, P3A_HTTP_BODY_JSON, "/api/v2/player/show", post_show},
     {P3A_HTTP_GET, 0, "/api/v2/player/playset", get_active_playset},
     {P3A_HTTP_PUT, P3A_HTTP_BODY_JSON, "/api/v2/player/playset", put_active_playset},

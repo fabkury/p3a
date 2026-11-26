@@ -9,8 +9,8 @@ times.
 | | |
 |---|---|
 | Phase | 4, remote sources (Phases 0 to 3 complete but for their manual checks) |
-| Current milestone | M4.5 Makapix |
-| Next action | M4.5 part 4, which needs M4.5-a done first (Fab registers the dev unit; see the manual checklist). Then, live against production: `GET /api/v2/makapix` says `link: connected` within a minute and `certificate_ends` about three years on; the five channels a registered player can list (`all`, `user`, `by_user`, `hashtag`, `reactions`) through `makapix_rpc()`, more than one page; record a real answer to replace `tests/assets/sources/makapix_rpc_written.json`; a command sent from makapix.club (next, a post, pause, brightness, rotation) and what the site shows back (state, acknowledgement); a swipe up on a Makapix artwork (the like appears on the site) and down; a view counted on the site after 5 s; the token: delete `api_token` from NVS and see it asked for again. Device tests for what can be automated go in `test_makapix.py` (they skip on an unregistered unit). Then close M4.5: delete `legacy/components/makapix`, `p3a_core/p3a_reaction_dispatcher.c` and `p3a_current_post.c` (deletion log), PARITY rows, known-issues H4, H13, M26, the whole device suite, release and trace builds. Until Fab is back: M5.1 (the web UI) does not depend on any of this and can be started |
+| Current milestone | M5.1 Embedded web UI (M4.5 part 4 waits on M4.5-a) |
+| Next action | M5.1 part 2: the settings page, drawn from `GET /api/v2/settings/schema` (groups as 1.x's tabs: display, clock, playback, network, storage, makapix, giphy, klipy, museum, system), saved with `PATCH /api/v2/settings`, secrets shown masked; the Makapix tab's registration (code and countdown from `GET /api/v2/makapix`, which 1.x's page never showed), unregister; network read-outs and erase Wi-Fi; system (versions, uptime, reboot, factory reset, crash-dump warning); theme select. `components/p3a_net/static/settings.html` + `static/settings.js`, reusing `api.js`, `ui.js`, `lib.js` (add its pure parts to `lib.js` with node tests: what control a schema entry gets, validation). 1.x's page is `legacy/webui/settings.html`; what it did is in the part 1 log entry's digest notes. Then part 3: the playset editor and the museum browser (a `museums.json` shared by the page and the build, finding 19); part 4: the update page (with M5.2), the Followed pill (needs Makapix part 4), museum titles in the info panel, look at every page in a browser, delete `legacy/webui`. If Fab has registered the unit (M4.5-a), M4.5 part 4 comes first: its Next action is in the M4.5 part 3 entry |
 | Blocked on | M4.5 part 4 only: M4.5-a (Fab registers the dev unit with Makapix Club). Nothing else waits on it |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -56,7 +56,7 @@ reopened (why).
 | M4.3 Museums | done 2026-11-25. Tiers: host tests (36 programs, also under the sanitizers), device tests (the whole suite on the last build: 322 passed, 6 skipped), CI, test, release and trace builds. Manual: none. Not verified: listed in the log entries of 2026-11-25. O20 (what p3a tells the museums it is) stays open and holds nothing |
 | M4.4 Pinned lists and "show this" | done 2026-11-25. Tiers: host tests (38 programs, also under the sanitizers), device tests (the whole suite: 330 passed, 6 skipped; the pin tests again on the last build), test, release and trace builds. Manual: M4.4-a. Not verified: listed in the log entry |
 | M4.5 Makapix | in progress. Parts 1 to 3 (2026-11-25): the source, registration up to the owner's part, the link, commands, views, likes, renewal. Host and device tests for everything an unregistered unit can do. Waits on M4.5-a for the rest |
-| M5.1 Embedded web UI | not started |
+| M5.1 Embedded web UI | in progress. Part 1 (2026-11-25): shared scripts, the home page, the device serving artworks to the page. Node, host and device tests |
 | M5.2 Firmware OTA for 2.x | not started |
 | M5.3 Release engineering | not started |
 | M5.4 Documentation | not started |
@@ -443,6 +443,74 @@ M4.3, 2026-11-25:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-25: M5.1 part 1, the home page
+
+Started while M4.5 part 4 waits for the unit to be registered. The work
+is on a different Wi-Fi network for some days (Fab's note); the lab's
+secrets file holds it, and the former one under `wifi_2`.
+
+- **Read first**: a digest of 1.x's web UI (320 KB of pages) and of what
+  the review asks of it. D11 stands: the pages, the layout and the
+  themes are kept; the internals change.
+- **Shared scripts** under `components/p3a_net/static/static/`, as ES
+  modules: `api.js` (one request function; an answer is the data or an
+  error with its code; jobs; uploads with progress), `ui.js` (the bottom
+  bar, toasts, a poller that is one timer and stops while the page is
+  hidden, dialogs that close on Escape and on a click outside), `lib.js`
+  (everything worked out from what the device says, with no DOM, so node
+  can test it). This is finding 19's "one api.js" and audit M29; M18
+  (pollers stacking) cannot happen with the one timer.
+- **The home page** (`index.html`, `static/home.js`, `home.css` taken
+  from 1.x's inline styles): the preview, previous and next, pause
+  (now following the device), like, pin (now knowing whether the
+  artwork is pinned), the info panel, now playing with a row per
+  channel, shuffle, the pills (saved playsets, pin lists, built-ins),
+  the pin dialogs, upload with a photograph shrunk in the browser,
+  "show this address", and banners for what stands in a channel's way.
+- **D83: the page gets an artwork's bytes from the device.** `GET
+  /api/v2/blobs/{reference}.{ext}` (kept by the browser for good: the
+  name is the content's hash) and `GET /api/v2/files/{name}`; a record's
+  JSON names its address in `file`. 1.x had the browser fetch from each
+  source, which put the Giphy and Klipy keys in the browser (D33 says
+  they never leave the device) and showed nothing for a user's own file.
+  Now every source previews, pins included, and opening the page
+  contacts nobody but the device.
+- `GET /api/v2/player` now carries what the page needs in one answer:
+  each channel's kind, identifier, name and weight, whether shuffle is
+  on, whether the artwork is pinned, and a number that changes when the
+  pin lists do. `POST /api/v2/player/like` and `/unlike`.
+- Pages may be asked for without ".html" (`/settings`), "/" is the home
+  page (the setup page while the device is its own access point), and
+  `/manifest.webmanifest` names the app after the device.
+- Moved out of `legacy/webui`: `common.css`, `theme.js`, the favicon,
+  the overlay icons and the app icons. The icons were re-encoded with a
+  palette: 267 KB to 46 KB (the review: two thirds of the pages' weight).
+- Verified, node (`node --test tests/web/test_lib.mjs`, 11 cases; added
+  to CI): names, badges, problems, banners, which pill is active, what
+  may be uploaded, shrinking, explanations.
+- Verified, host tests: pages found without their ending (41 programs,
+  also under gcc with ASan and UBSan).
+- Verified, device tests (`test_web.py`, 4 cases): every file the home
+  page loads and imports is served with its type, gzipped, and answers
+  304; the manifest and its icons; a user's file served byte for byte
+  under an escaped name, and paths that are not names refused; a blob
+  served whose SHA-256 is its name; the player's answer; a pin made from
+  the page shows in the answer. Also the API, player API, pins and
+  network tests (two expectations updated for the changes above).
+- Looked at: the page in headless Edge at phone width, playing nothing
+  and playing a Makapix artwork (the Chrome extension was not connected,
+  so nothing was clicked: the controls are not yet exercised in a
+  browser).
+- Not verified: any click in a real browser; the pages on a phone; the
+  other four themes; an upload and a shrunk photograph through the page;
+  the pin dialogs.
+- Not done, and where it goes: titles for museum art in the info panel
+  (with the museum scripts, part 3); a Giphy or Klipy title (the keys do
+  not leave the device; a lookup by the device could give it); the
+  "Followed" pill (needs a registered player: M4.5 part 4); the update
+  banner and badge (M5.2); a channel's last listing time (the page shows
+  when the next one is due instead).
 
 ### 2026-11-25: M4.5 part 3, the link, commands, views, likes, renewal
 

@@ -8,6 +8,7 @@ idf_component_register(
          "p3a_evict.c"
          "p3a_index.c"
          "p3a_index_file.c"
+         "p3a_index_shared.c"
          "p3a_pin_table.c"
          "p3a_pins.c"
          "p3a_record.c"

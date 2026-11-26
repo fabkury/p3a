@@ -63,7 +63,9 @@ A `GET` carries an `ETag`; send it back as `If-None-Match` and an unchanged answ
 | GET | `/api/v2/blobs/{reference}.{ext}` | A downloaded artwork's bytes. Never changes, so it is cached for good |
 | GET | `/api/v2/files/{name}` | One of the user's own files |
 
-A playset is `{"name", "channels": [{"source", "kind", "identifier", "display_name", "weight", "offset"}]}`, at most 64 channels. `source` is one of `local`, `makapix`, `giphy`, `klipy`, `museum`, `pinned`; what `kind` and `identifier` mean is each source's (`playset.h` and the source's header).
+A playset is `{"name", "channels": [{"source", "kind", "identifier", "display_name", "weight", "offset", "cache_size", "refresh_s"}]}`, at most 64 channels. `source` is one of `local`, `makapix`, `giphy`, `klipy`, `museum`, `pinned`; what `kind` and `identifier` mean is each source's (`playset.h` and the source's header).
+
+`cache_size` and `refresh_s` are the channel's own in this playset: how many artworks it holds and how many seconds pass between two listings. Zero, or leaving the key out, means what the source's settings say (`<source>_cache_size`, `<source>_refresh_s`). A value must be within the range the settings schema gives for that source's setting; one outside it, or either key on a `local` or `pinned` channel, is refused with `INVALID_PLAYSET`. In `GET /api/v2/player` each channel reports what it has as `capacity` and `refresh_s`.
 
 ## Saved playsets
 

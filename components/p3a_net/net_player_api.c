@@ -191,6 +191,8 @@ static void get_player(p3a_http_request_t *req)
         cJSON_AddNumberToObject(item, "available", c->available);
         cJSON_AddNumberToObject(item, "listings", c->listings);
         cJSON_AddNumberToObject(item, "refresh_in_s", c->refresh_in_s);
+        cJSON_AddNumberToObject(item, "capacity", c->capacity);    // as this playset has it: the channel's own, or its source's
+        cJSON_AddNumberToObject(item, "refresh_s", c->refresh_s);
         if (c->remote) {
             cJSON_AddNumberToObject(item, "to_download", c->wanted);
         }
@@ -302,7 +304,8 @@ static void put_active_playset(p3a_http_request_t *req)
             p3a_http_fail_err(req, err, "loading that playset");
             return;
         }
-    } else if ((err = playset_from_json(body, playset, why, sizeof(why))) != ESP_OK) {
+    } else if ((err = playset_from_json(body, playset, why, sizeof(why))) != ESP_OK ||
+               (err = play_scheduler_check_playset(playset, why, sizeof(why))) != ESP_OK) {
         free(playset);
         p3a_http_fail(req, 400, "INVALID_PLAYSET", "%s", why);
         return;
@@ -382,6 +385,9 @@ static void put_playset(p3a_http_request_t *req)
     }
     char why[120] = "";
     esp_err_t err = playset_from_json(p3a_http_body(req), playset, why, sizeof(why));
+    if (err == ESP_OK) {
+        err = play_scheduler_check_playset(playset, why, sizeof(why));
+    }
     if (err == ESP_OK && playset->name[0] != '\0' && strcmp(playset->name, name) != 0) {
         err = ESP_ERR_INVALID_ARG;
         snprintf(why, sizeof(why), "the body names another playset than the address does");

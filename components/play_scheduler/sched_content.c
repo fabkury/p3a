@@ -96,14 +96,24 @@ static esp_err_t index_path(const char *id, char *out, size_t len)
     return snprintf(out, len, "%s/%s.idx", dir, id) < (int)len ? ESP_OK : ESP_ERR_INVALID_SIZE;
 }
 
-static uint32_t capacity_of(const p3a_source_ops_t *ops)
+uint32_t sched_channel_capacity(const playset_channel_t *spec, const p3a_source_ops_t *ops)
 {
-    return ops->index_capacity ? ops->index_capacity() : SCHED_DEFAULT_CAPACITY;
+    p3a_channel_range_t range = {0};
+    if (ops->channel_range != NULL) {
+        ops->channel_range(&range);
+    }
+    return playset_value(spec->cache_size, ops->index_capacity ? ops->index_capacity() : SCHED_DEFAULT_CAPACITY,
+                         range.capacity_min, range.capacity_max);
 }
 
-uint32_t sched_content_capacity(const p3a_source_ops_t *ops)
+uint32_t sched_channel_interval(const playset_channel_t *spec, const p3a_source_ops_t *ops)
 {
-    return capacity_of(ops);
+    p3a_channel_range_t range = {0};
+    if (ops->channel_range != NULL) {
+        ops->channel_range(&range);
+    }
+    return playset_value(spec->refresh_s, ops->refresh_interval_s ? ops->refresh_interval_s() : 0,
+                         range.refresh_min_s, range.refresh_max_s);
 }
 
 static bool channel_is_live(const sched_slot_t *ch)
@@ -117,7 +127,7 @@ static bool load_one(void)
 {
     char id[PLAYSET_CHANNEL_ID_LEN];
     const p3a_source_ops_t *ops = NULL;
-    uint32_t at = SCHED_NONE, generation = 0;
+    uint32_t at = SCHED_NONE, generation = 0, capacity = 0;
     LOCK();
     for (uint32_t i = 0; i < sched->playset.count && at == SCHED_NONE; i++) {
         sched_slot_t *ch = &sched->channels[i];
@@ -130,6 +140,7 @@ static bool load_one(void)
             at = i;
             memcpy(id, ch->id, sizeof(id));
             generation = sched->generation;
+            capacity = sched_channel_capacity(&sched->playset.channels[i], ops);
         }
     }
     UNLOCK();
@@ -139,12 +150,15 @@ static bool load_one(void)
 
     char path[P3A_FS_PATH_MAX];
     p3a_index_t index = {0};
+    p3a_index_listing_t listing = {0};
+    uint32_t in_file = 0;
     esp_err_t err = index_path(id, path, sizeof(path));
     if (err == ESP_OK) {
-        err = p3a_index_create(&index, capacity_of(ops));
+        err = p3a_index_create(&index, capacity);
     }
     if (err == ESP_OK) {
-        err = p3a_index_load(&index, path);
+        // The file may hold more than this playset wants of the channel: the first `capacity` are taken.
+        err = p3a_index_load_shared(&index, path, &listing, &in_file);
     }
     int64_t age_s = -1;  // unknown unless the clock is right
     struct stat st;
@@ -170,10 +184,16 @@ static bool load_one(void)
         if (ch->state == PLAY_CHANNEL_WAITING) {
             ch->state = PLAY_CHANNEL_READY;
         }
+        ch->listing = listing;
+        ch->in_file = in_file;
         sched_core_set_available(&sched->core, at, ch->index.available_count);
         sched_refresh_known(&ch->refresh, age_s, sched_now_ms());
-        ESP_LOGI(TAG, "channel %s (%s): %u records known, %u playable", id, ops->name, (unsigned)ch->index.count,
-                 (unsigned)ch->index.available_count);
+        if (listing.cut && listing.listed < capacity) {
+            // Last listed for a playset that wanted less of it, and the source had more: listed again now.
+            sched_refresh_ask(&ch->refresh, sched_now_ms());
+        }
+        ESP_LOGI(TAG, "channel %s (%s): %u records known (%u in its file), %u playable", id, ops->name,
+                 (unsigned)ch->index.count, (unsigned)in_file, (unsigned)ch->index.available_count);
         sched_start_if_wanted();
     } else {
         p3a_index_destroy(&index);
@@ -229,6 +249,11 @@ static bool list_one(void)
     sched->channels[at].quick_listed = sched->channels[at].quick_listed || quick;
     sched->channels[at].state = PLAY_CHANNEL_LISTING;
     sched_refresh_started(&sched->channels[at].refresh);
+    const uint32_t full = sched_channel_capacity(&spec, ops);
+    // The channel's file knows artworks this playset does not hold: another playset asked deeper.
+    const bool file_knows_more = sched->channels[at].in_file > sched->channels[at].index.count;
+    char id[PLAYSET_CHANNEL_ID_LEN];
+    memcpy(id, sched->channels[at].id, sizeof(id));
     UNLOCK();
     sched_changed();
 
@@ -239,10 +264,14 @@ static bool list_one(void)
                                    .stop = should_abort,
                                    .stop_ctx = &listed_for};
     p3a_index_t fresh = {0};
-    const uint32_t full = capacity_of(ops);
     esp_err_t err = p3a_index_create(&fresh, quick && full > SCHED_QUICK_RECORDS ? SCHED_QUICK_RECORDS : full);
     if (err == ESP_OK) {
         err = ops->refresh(&ref, &fresh);
+    }
+    char path[P3A_FS_PATH_MAX];
+    if (err == ESP_OK && file_knows_more && index_path(id, path, sizeof(path)) == ESP_OK) {
+        // So that what was downloaded for the deeper playset is not fetched again when this listing reaches it.
+        p3a_index_carry_over_file(&fresh, path);
     }
 
     LOCK();
@@ -266,6 +295,7 @@ static bool list_one(void)
             }
             ch->index = fresh;
             ch->has_index = true;
+            ch->listing = (p3a_index_listing_t){.listed = fresh.count, .cut = fresh.count >= fresh.capacity};
             ch->error = ESP_OK;
             ch->state = PLAY_CHANNEL_READY;
             ch->cursor = 0;
@@ -294,8 +324,9 @@ static bool save_one(void)
 {
     char id[PLAYSET_CHANNEL_ID_LEN];
     p3a_record_t *copy = NULL;
-    uint32_t count = 0;
-    bool found = false;
+    uint32_t count = 0, at = 0, generation = 0;
+    p3a_index_listing_t listing = {0};
+    bool found = false, keep_file = false;
     LOCK();
     const int64_t now = sched_now_ms();
     for (uint32_t i = 0; i < sched->playset.count && !found; i++) {
@@ -312,6 +343,10 @@ static bool save_one(void)
         }
         memcpy(copy, ch->index.records, (size_t)count * sizeof(p3a_record_t));
         memcpy(id, ch->id, sizeof(id));
+        listing = ch->listing;
+        keep_file = ch->in_file > count;  // another playset asked deeper: what the file knows beyond this is kept
+        at = i;
+        generation = sched->generation;
         ch->dirty = false;
         found = true;
     }
@@ -324,11 +359,26 @@ static bool save_one(void)
     if (err == ESP_OK) {
         err = sd_path_ensure_parent_dirs(path);
     }
+    p3a_index_t snapshot = {0};
     if (err == ESP_OK) {
-        const p3a_index_t snapshot = {.records = copy, .count = count};
-        err = p3a_index_save(&snapshot, path, P3A_FRAME_REBUILDABLE);
+        err = p3a_index_create(&snapshot, count > 0 ? count : 1);
+    }
+    if (err == ESP_OK) {
+        err = p3a_index_set_records(&snapshot, copy, count);
     }
     free(copy);
+    uint32_t written = 0;
+    if (err == ESP_OK) {
+        err = p3a_index_save_shared(&snapshot, &listing, keep_file, path, &written);
+    }
+    p3a_index_destroy(&snapshot);
+    if (err == ESP_OK) {
+        LOCK();
+        if (generation == sched->generation) {
+            sched->channels[at].in_file = written;
+        }
+        UNLOCK();
+    }
     if (err != ESP_OK) {
         // Not tried again by itself: the next change to the index will.
         ESP_LOGW(TAG, "channel %s: its index could not be saved: %s", id, p3a_err_to_name(err));

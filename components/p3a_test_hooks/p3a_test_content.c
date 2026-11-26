@@ -54,7 +54,8 @@ static esp_err_t refresh(const p3a_channel_ref_t *channel, p3a_index_t *index)
     }
     xSemaphoreTake(s_lock, portMAX_DELAY);
     esp_err_t err = s_result;
-    for (uint32_t i = 0; err == ESP_OK && i < s_count; i++) {
+    // As a real source does: no more than the index was made for.
+    for (uint32_t i = 0; err == ESP_OK && i < s_count && index->count < index->capacity; i++) {
         p3a_record_t record;
         err = p3a_record_init_giphy(&record, s_items[i].id);
         if (err == ESP_OK) {
@@ -89,6 +90,12 @@ static uint32_t capacity(void)
     return 32;
 }
 
+// Wide enough for a test to set a channel's own size and interval.
+static void channel_range(p3a_channel_range_t *out)
+{
+    *out = (p3a_channel_range_t){.capacity_min = 2, .capacity_max = 32, .refresh_min_s = 1, .refresh_max_s = 86400};
+}
+
 static const p3a_source_ops_t s_ops = {
     .source = P3A_CHANNEL_SOURCE_TEST,
     .name = "test",
@@ -98,6 +105,7 @@ static const p3a_source_ops_t s_ops = {
     .user_agent = "p3a-test",
     .refresh_interval_s = interval,
     .index_capacity = capacity,
+    .channel_range = channel_range,
     .smooth = true,
     .filter_aspect = true,  // so that the aspect filter can be tested with a picture of a known shape
     .redirects = true,

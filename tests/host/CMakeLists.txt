@@ -154,6 +154,10 @@ p3a_host_test(test_record_index
     SOURCES library/test_record_index.c ${LIBRARY}/p3a_record.c ${LIBRARY}/p3a_index.c ${LIBRARY}/p3a_source.c
             ${P3A_COMPONENTS}/source_local/source_local_names.c ${UTIL}/p3a_err.c
     INCLUDES ${LIBRARY}/include ${P3A_COMPONENTS}/source_local/include ${P3A_STUBS} ${UTIL}/include)
+p3a_host_test(test_index_shared
+    SOURCES library/test_index_shared.c ${LIBRARY}/p3a_record.c ${LIBRARY}/p3a_index.c ${LIBRARY}/p3a_index_shared.c
+            ${UTIL}/p3a_err.c
+    INCLUDES ${LIBRARY}/include ${P3A_STUBS} ${UTIL}/include)
 p3a_host_test(test_pin_table
     SOURCES library/test_pin_table.c ${LIBRARY}/p3a_pin_table.c ${UTIL}/p3a_err.c
     INCLUDES ${LIBRARY}/include ${P3A_STUBS} ${UTIL}/include)

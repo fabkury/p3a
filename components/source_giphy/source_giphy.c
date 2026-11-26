@@ -288,6 +288,15 @@ static uint32_t giphy_index_capacity(void)
     return n;
 }
 
+// What one channel of a playset may set for itself: the ranges of the two settings above.
+static void giphy_channel_range(p3a_channel_range_t *out)
+{
+    out->capacity_min = (uint32_t)p3a_setting_defs[P3A_SET_GIPHY_CACHE_SIZE].min;
+    out->capacity_max = (uint32_t)p3a_setting_defs[P3A_SET_GIPHY_CACHE_SIZE].max;
+    out->refresh_min_s = (uint32_t)p3a_setting_defs[P3A_SET_GIPHY_REFRESH_S].min;
+    out->refresh_max_s = (uint32_t)p3a_setting_defs[P3A_SET_GIPHY_REFRESH_S].max;
+}
+
 esp_err_t source_giphy_start(void)
 {
     static const p3a_source_ops_t ops = {
@@ -300,6 +309,7 @@ esp_err_t source_giphy_start(void)
         .credit = "Powered by GIPHY",
         .refresh_interval_s = giphy_refresh_interval_s,
         .index_capacity = giphy_index_capacity,
+        .channel_range = giphy_channel_range,
         .smooth = true,  // photographs and video, mostly: scaled smoothly
     };
     return p3a_source_register(&ops);

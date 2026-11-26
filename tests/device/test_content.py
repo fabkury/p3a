@@ -317,3 +317,63 @@ def test_the_first_artwork_of_a_new_playset_does_not_wait_for_every_channel(rig)
         print(f"first artwork after {first:.1f} s; all six channels listed after {every:.1f} s")
     finally:
         rig.uart.command("content set", {"items": items("a", "b"), "result": "ok"})
+
+
+def test_two_playsets_hold_the_same_channel_at_different_sizes(rig):
+    """A channel may say, in a playset, how many artworks it holds and how often it is listed
+    (D100). Its index on the card is one: the playset that wants less plays the start of it, the
+    one that wants more has it listed deeper, and neither makes the other fetch anything twice."""
+    kind = f"sized{int(time.time())}"
+    small = {"name": "Small", "channels": [{"source": "test", "kind": kind, "cache_size": 2, "refresh_s": 120}]}
+    large = {"name": "Large", "channels": [{"source": "test", "kind": kind, "cache_size": 5, "refresh_s": 7200}]}
+    six = items("a", "b", "c", d=GALLERY + PICTURES["a"], e=GALLERY + PICTURES["b"], f=GALLERY + PICTURES["c"])
+    assert rig.uart.command("content set", {"items": six, "result": "ok"}) == {"items": 6}
+    try:
+        asked = rig.uart.command("content listed")["listed"]
+        assert rig.uart.command("sched activate", small) == {"result": "ok"}
+        status = rig.wait("the first two listed and fetched",
+                          lambda s: s["playset"] == "Small" and channel(s)["available"] == 2
+                          and channel(s)["state"] == "ready" and not s["downloading"], timeout=90)
+        ch = channel(status)
+        assert (ch["records"], ch["capacity"], ch["refresh_s"]) == (2, 2, 120), "its own size and interval"
+        assert 0 < ch["refresh_in_s"] <= 120
+        assert rig.uart.command("content listed")["listed"] == asked + 1
+
+        # The larger playset finds two where the source had more: it lists again at once, to its own depth.
+        assert rig.uart.command("sched activate", large) == {"result": "ok"}
+        status = rig.wait("five listed and fetched",
+                          lambda s: s["playset"] == "Large" and channel(s)["records"] == 5
+                          and channel(s)["available"] == 5 and not s["downloading"], timeout=120)
+        ch = channel(status)
+        assert (ch["capacity"], ch["refresh_s"]) == (5, 7200)
+        assert rig.uart.command("content listed")["listed"] == asked + 2
+        # A listing is saved at once; an index changed by downloads half a minute later. Listing again saves it now.
+        relist(rig, "listed again", lambda s: channel(s)["available"] == 5)
+        time.sleep(3)
+        asked = rig.uart.command("content listed")["listed"]
+        fetched = rig.status()["downloads"]
+
+        # Back and forth: each finds what it wants in the one file, and nothing is listed or fetched.
+        for playset, records in ((small, 2), (large, 5), (small, 2), (large, 5)):
+            assert rig.uart.command("sched activate", playset) == {"result": "ok"}
+            status = rig.wait(f"{playset['name']} plays from the card",
+                              lambda s: s["playset"] == playset["name"] and channel(s)["state"] == "ready"
+                              and channel(s)["records"] == records and s["playing"] and not s["loading"], timeout=30)
+            assert channel(status)["available"] == records and channel(status)["listings"] == 0
+            time.sleep(2)
+        assert rig.uart.command("content listed")["listed"] == asked
+        assert rig.status()["downloads"] == fetched
+
+        # The smaller one lists (its turn came, or it was asked): the file keeps what the larger one fetched.
+        assert rig.uart.command("sched activate", small) == {"result": "ok"}
+        rig.wait("Small is in place", lambda s: s["playset"] == "Small" and channel(s)["state"] == "ready")
+        relist(rig, "the smaller playset listed", lambda s: channel(s)["records"] == 2)
+        time.sleep(3)
+        assert rig.uart.command("sched activate", large) == {"result": "ok"}
+        status = rig.wait("the larger one listed again and has all five without fetching",
+                          lambda s: s["playset"] == "Large" and channel(s)["listings"] >= 1
+                          and channel(s)["state"] == "ready" and channel(s)["records"] == 5, timeout=60)
+        assert channel(status)["available"] == 5 and rig.status()["downloads"] == fetched
+    finally:
+        rig.uart.command("sched activate", LOCAL_ONLY)
+        rig.uart.command("content set", {"items": items("a", "b"), "result": "ok"})

@@ -68,6 +68,8 @@ static void cmd_status(void)
         cJSON_AddNumberToObject(item, "available", c->available);
         cJSON_AddNumberToObject(item, "listings", c->listings);
         cJSON_AddNumberToObject(item, "refresh_in_s", c->refresh_in_s);
+        cJSON_AddNumberToObject(item, "capacity", c->capacity);
+        cJSON_AddNumberToObject(item, "refresh_s", c->refresh_s);
         if (c->error != ESP_OK) {
             cJSON_AddStringToObject(item, "error", p3a_err_to_name(c->error));
         }

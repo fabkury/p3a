@@ -12,6 +12,7 @@
 #include "play_scheduler.h"
 
 #include <stdatomic.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -558,20 +559,51 @@ static void install(const playset_t *playset)
         sched_slot_t *ch = &sched->channels[i];
         playset_channel_id(&playset->channels[i], ch->id);
         sched_core_set_weight(&sched->core, i, playset->channels[i].weight);
-        const p3a_source_ops_t *ops = p3a_source_get(playset->channels[i].source);
+        const playset_channel_t *spec = &playset->channels[i];
+        const p3a_source_ops_t *ops = p3a_source_get(spec->source);
         if (ops == NULL) {
             ch->state = PLAY_CHANNEL_NO_SOURCE;
-        } else if (held + SCHED_INDEX_BYTES(sched_content_capacity(ops)) > SCHED_INDEX_BUDGET) {
+        } else if (held + SCHED_INDEX_BYTES(sched_channel_capacity(spec, ops)) > SCHED_INDEX_BUDGET) {
             ch->state = PLAY_CHANNEL_NOT_LOADED;
             ESP_LOGW(TAG, "channel %u of the playset is not loaded: the indices before it take %u MB", (unsigned)i,
                      (unsigned)(held >> 20));
         } else {
             ch->state = PLAY_CHANNEL_WAITING;
-            sched_refresh_init(&ch->refresh, ops->refresh_interval_s ? ops->refresh_interval_s() : 0, ops->remote);
-            held += SCHED_INDEX_BYTES(sched_content_capacity(ops));
+            sched_refresh_init(&ch->refresh, sched_channel_interval(spec, ops), ops->remote);
+            held += SCHED_INDEX_BYTES(sched_channel_capacity(spec, ops));
         }
     }
     sched_content_wake();
+}
+
+esp_err_t play_scheduler_check_playset(const playset_t *playset, char *why, size_t why_len)
+{
+    for (uint32_t i = 0; i < playset->count && i < PLAYSET_MAX_CHANNELS; i++) {
+        const playset_channel_t *ch = &playset->channels[i];
+        const uint32_t size = ch->cache_size, refresh_s = ch->refresh_s;  // the struct is packed
+        const p3a_source_ops_t *ops = p3a_source_get(ch->source);
+        if ((size == 0 && refresh_s == 0) || ops == NULL) {
+            continue;
+        }
+        if (ops->channel_range == NULL) {
+            snprintf(why, why_len, "channel %u: a %s channel has no cache_size or refresh_s of its own",
+                     (unsigned)(i + 1), ops->name);
+            return ESP_ERR_INVALID_ARG;
+        }
+        p3a_channel_range_t range = {0};
+        ops->channel_range(&range);
+        if (size != 0 && (size < range.capacity_min || size > range.capacity_max)) {
+            snprintf(why, why_len, "channel %u: cache_size is %u to %u for %s (or 0 for its setting)",
+                     (unsigned)(i + 1), (unsigned)range.capacity_min, (unsigned)range.capacity_max, ops->name);
+            return ESP_ERR_INVALID_ARG;
+        }
+        if (refresh_s != 0 && (refresh_s < range.refresh_min_s || refresh_s > range.refresh_max_s)) {
+            snprintf(why, why_len, "channel %u: refresh_s is %u to %u for %s (or 0 for its setting)",
+                     (unsigned)(i + 1), (unsigned)range.refresh_min_s, (unsigned)range.refresh_max_s, ops->name);
+            return ESP_ERR_INVALID_ARG;
+        }
+    }
+    return ESP_OK;
 }
 
 esp_err_t play_scheduler_activate(const playset_t *playset)
@@ -659,6 +691,8 @@ void play_scheduler_get_status(play_scheduler_status_t *out)
         c->wanted = c->remote && ch->has_index ? sched_content_wanted(&ch->index) : 0;
         c->listings = ch->listings;
         c->refresh_in_s = (int32_t)sched_refresh_wait_s(&ch->refresh, sched_now_ms());
+        c->capacity = ops != NULL ? sched_channel_capacity(&sched->playset.channels[i], ops) : 0;
+        c->refresh_s = ch->refresh.interval_s;
     }
     out->downloading = sched->downloading;
     out->online = sched_content_online();

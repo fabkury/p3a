@@ -12,6 +12,15 @@
 // How to play (pick mode, dwell time) is not in a playset: those are the
 // user's settings and hold across playsets.
 //
+// Two things a channel may set for itself, in this playset only (D100): how
+// many artworks it holds (`cache_size`) and how often it is listed again
+// (`refresh_s`). Zero, the usual, means what its source's settings say. The
+// same channel may ask differently in two playsets: its index on the card
+// is one, kept at the deepest size asked (p3a_index.h). What a source allows
+// is the range of its own two settings (p3a_source_ops_t.channel_range);
+// the API refuses a value outside it, and the scheduler holds any other
+// within it (playset_value).
+//
 // playset.c is pure (cJSON only; host-tested). playset_store.c keeps playsets
 // on the card.
 #pragma once
@@ -32,6 +41,7 @@ extern "C" {
 #define PLAYSET_IDENT_LEN    96
 #define PLAYSET_DISPLAY_LEN  64
 #define PLAYSET_MAX_WEIGHT   1000000u
+#define PLAYSET_MAX_CACHE_SIZE 4096u  // the largest index there is (P3A_INDEX_MAX_RECORDS)
 #define PLAYSET_VERSION      1    // of the packed layout, as written in a container's header
 #define PLAYSET_CHANNEL_ID_LEN 17 // 16 hex digits and the terminator
 
@@ -58,10 +68,14 @@ typedef struct __attribute__((packed)) {
     char kind[PLAYSET_KIND_LEN];            // which of the source's channels: "all", "trending", "search", ...
     char identifier[PLAYSET_IDENT_LEN];     // its parameter: a user, a tag, a query, a museum term
     char display_name[PLAYSET_DISPLAY_LEN]; // what to call it on screen; may be empty
-    uint8_t reserved[20]; // zero
+    uint32_t refresh_s;   // seconds between two listings of this channel here; 0: its source's setting
+    uint16_t cache_size;  // artworks this channel holds here; 0: its source's setting
+    uint8_t reserved[14]; // zero
 } playset_channel_t;
 
 _Static_assert(sizeof(playset_channel_t) == 224, "a playset channel is 224 bytes on disk");
+// The two fields took six of the bytes that were reserved, and zero means
+// what it meant: the layout's version did not change.
 
 typedef struct {
     char name[PLAYSET_NAME_LEN];  // empty for a playset that was never saved under a name
@@ -78,7 +92,8 @@ esp_err_t playset_check(const playset_t *playset, char *why, size_t why_len);
 
 // Builds a playset from its JSON form:
 //   {"name": "...", "channels": [{"source": "giphy", "kind": "search", "identifier": "cats",
-//                                  "display_name": "Cats", "weight": 2, "offset": 0}, ...]}
+//                                  "display_name": "Cats", "weight": 2, "offset": 0,
+//                                  "cache_size": 0, "refresh_s": 0}, ...]}
 // Only "source" is required in a channel. Unknown keys, wrong types and text
 // that does not fit are refused (ESP_ERR_INVALID_ARG) with the reason in `why`.
 esp_err_t playset_from_json(const cJSON *json, playset_t *out, char *why, size_t why_len);
@@ -86,9 +101,15 @@ esp_err_t playset_from_json(const cJSON *json, playset_t *out, char *why, size_t
 // The JSON form, with each channel's id added as "id". NULL when out of memory.
 cJSON *playset_to_json(const playset_t *playset);
 
+// What a channel gets for one of its two own values: `own` if it set one
+// and its source allows any (`max` above zero), held within `min` to `max`;
+// otherwise `standard`, the source's.
+uint32_t playset_value(uint32_t own, uint32_t standard, uint32_t min, uint32_t max);
+
 // A channel's id: 16 hex digits over its source, kind, identifier and offset.
 // Two channels with the same four are the same channel (and share one index
-// on the card) whatever they are called or weigh.
+// on the card) whatever they are called or weigh, and whatever size or
+// refresh interval they ask for.
 void playset_channel_id(const playset_channel_t *channel, char out[PLAYSET_CHANNEL_ID_LEN]);
 
 // The packed form for a container: one header record carrying the name,

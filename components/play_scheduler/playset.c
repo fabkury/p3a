@@ -100,6 +100,10 @@ esp_err_t playset_check(const playset_t *playset, char *why, size_t why_len)
             return fail(ESP_ERR_INVALID_ARG, why, why_len, "channel %u: weight is at most %u", (unsigned)i,
                         (unsigned)PLAYSET_MAX_WEIGHT);
         }
+        if (ch->cache_size > PLAYSET_MAX_CACHE_SIZE) {
+            return fail(ESP_ERR_INVALID_ARG, why, why_len, "channel %u: cache_size is at most %u", (unsigned)i,
+                        (unsigned)PLAYSET_MAX_CACHE_SIZE);
+        }
     }
     return ESP_OK;
 }
@@ -164,7 +168,8 @@ esp_err_t playset_from_json(const cJSON *json, playset_t *out, char *why, size_t
 {
     static const char *const top_keys[] = {"name", "channels"};
     // "id" is accepted and ignored, so that what playset_to_json() gives can be sent back.
-    static const char *const channel_keys[] = {"source", "kind", "identifier", "display_name", "weight", "offset", "id"};
+    static const char *const channel_keys[] = {"source", "kind", "identifier", "display_name", "weight", "offset",
+                                                "cache_size",   "refresh_s", "id"};
     memset(out, 0, sizeof(*out));
     if (!cJSON_IsObject(json)) {
         return fail(ESP_ERR_INVALID_ARG, why, why_len, "a playset is a JSON object");
@@ -201,7 +206,7 @@ esp_err_t playset_from_json(const cJSON *json, playset_t *out, char *why, size_t
             return fail(ESP_ERR_INVALID_ARG, why, why_len,
                         "channel %u: \"source\" must be local, makapix, giphy, klipy, museum or pinned", (unsigned)at);
         }
-        uint32_t weight = 0, offset = 0;  // locals: the struct is packed
+        uint32_t weight = 0, offset = 0, cache_size = 0, refresh_s = 0;  // locals: the struct is packed
         if ((err = take_text(cJSON_GetObjectItemCaseSensitive(item, "kind"), "kind", ch->kind, sizeof(ch->kind), why,
                              why_len)) != ESP_OK ||
             (err = take_text(cJSON_GetObjectItemCaseSensitive(item, "identifier"), "identifier", ch->identifier,
@@ -211,12 +216,18 @@ esp_err_t playset_from_json(const cJSON *json, playset_t *out, char *why, size_t
             (err = take_number(cJSON_GetObjectItemCaseSensitive(item, "weight"), "weight", PLAYSET_MAX_WEIGHT,
                                &weight, why, why_len)) != ESP_OK ||
             (err = take_number(cJSON_GetObjectItemCaseSensitive(item, "offset"), "offset", UINT32_MAX, &offset, why,
-                               why_len)) != ESP_OK) {
+                               why_len)) != ESP_OK ||
+            (err = take_number(cJSON_GetObjectItemCaseSensitive(item, "cache_size"), "cache_size",
+                               PLAYSET_MAX_CACHE_SIZE, &cache_size, why, why_len)) != ESP_OK ||
+            (err = take_number(cJSON_GetObjectItemCaseSensitive(item, "refresh_s"), "refresh_s", UINT32_MAX,
+                               &refresh_s, why, why_len)) != ESP_OK) {
             memset(out, 0, sizeof(*out));
             return err;
         }
         ch->weight = weight;
         ch->offset = offset;
+        ch->cache_size = (uint16_t)cache_size;
+        ch->refresh_s = refresh_s;
     }
     out->count = (uint32_t)count;
     return playset_check(out, why, why_len);
@@ -243,12 +254,22 @@ cJSON *playset_to_json(const playset_t *playset)
             !cJSON_AddStringToObject(item, "identifier", ch->identifier) ||
             !cJSON_AddStringToObject(item, "display_name", ch->display_name) ||
             !cJSON_AddNumberToObject(item, "weight", ch->weight) ||
-            !cJSON_AddNumberToObject(item, "offset", ch->offset)) {
+            !cJSON_AddNumberToObject(item, "offset", ch->offset) ||
+            !cJSON_AddNumberToObject(item, "cache_size", ch->cache_size) ||
+            !cJSON_AddNumberToObject(item, "refresh_s", ch->refresh_s)) {
             cJSON_Delete(root);
             return NULL;
         }
     }
     return root;
+}
+
+uint32_t playset_value(uint32_t own, uint32_t standard, uint32_t min, uint32_t max)
+{
+    if (own == 0 || max == 0) {
+        return standard;
+    }
+    return own < min ? min : own > max ? max : own;
 }
 
 // --- channel id -----------------------------------------------------------------

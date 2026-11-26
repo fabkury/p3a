@@ -31,6 +31,9 @@ static void test_the_layout_and_the_numbers_on_disk(void)
     TEST_ASSERT_EQUAL(12, offsetof(playset_channel_t, kind));
     TEST_ASSERT_EQUAL(44, offsetof(playset_channel_t, identifier));
     TEST_ASSERT_EQUAL(140, offsetof(playset_channel_t, display_name));
+    TEST_ASSERT_EQUAL(204, offsetof(playset_channel_t, refresh_s));
+    TEST_ASSERT_EQUAL(208, offsetof(playset_channel_t, cache_size));
+    TEST_ASSERT_EQUAL(210, offsetof(playset_channel_t, reserved));
     TEST_ASSERT_EQUAL(1, PLAYSET_SOURCE_LOCAL);
     TEST_ASSERT_EQUAL(5, PLAYSET_SOURCE_MUSEUM);
     TEST_ASSERT_EQUAL(6, PLAYSET_SOURCE_PINNED);
@@ -48,7 +51,8 @@ static void test_json_goes_in_and_comes_back_the_same(void)
         "{\"name\":\"Evening mix\",\"channels\":["
         "{\"source\":\"makapix\",\"kind\":\"promoted\",\"weight\":3},"
         "{\"source\":\"giphy\",\"kind\":\"search\",\"identifier\":\"pixel cats\",\"display_name\":\"Cats\",\"weight\":1},"
-        "{\"source\":\"museum\",\"kind\":\"cma:department\",\"identifier\":\"Japanese Art\",\"offset\":200},"
+        "{\"source\":\"museum\",\"kind\":\"cma:department\",\"identifier\":\"Japanese Art\",\"offset\":200,"
+        "\"cache_size\":64,\"refresh_s\":172800},"
         "{\"source\":\"local\"}]}";
     TEST_ASSERT_EQUAL_MESSAGE(ESP_OK, parse(text, &a), why);
     TEST_ASSERT_EQUAL_STRING("Evening mix", a.name);
@@ -57,11 +61,19 @@ static void test_json_goes_in_and_comes_back_the_same(void)
     TEST_ASSERT_EQUAL_STRING("pixel cats", a.channels[1].identifier);
     TEST_ASSERT_EQUAL(200, a.channels[2].offset);
     TEST_ASSERT_EQUAL(0, a.channels[3].weight);
+    TEST_ASSERT_EQUAL(64, a.channels[2].cache_size);
+    TEST_ASSERT_EQUAL(172800, a.channels[2].refresh_s);
+    TEST_ASSERT_EQUAL(0, a.channels[1].cache_size);  // not given: the source's setting
+    TEST_ASSERT_EQUAL(0, a.channels[1].refresh_s);
 
     cJSON *json = playset_to_json(&a);
     TEST_ASSERT_NOT_NULL(json);
     const cJSON *first = cJSON_GetArrayItem(cJSON_GetObjectItem(json, "channels"), 0);
     TEST_ASSERT_EQUAL(16, strlen(cJSON_GetObjectItem(first, "id")->valuestring));
+    const cJSON *third = cJSON_GetArrayItem(cJSON_GetObjectItem(json, "channels"), 2);
+    TEST_ASSERT_EQUAL(64, cJSON_GetObjectItem(third, "cache_size")->valueint);
+    TEST_ASSERT_EQUAL(172800, cJSON_GetObjectItem(third, "refresh_s")->valueint);
+    TEST_ASSERT_EQUAL(0, cJSON_GetObjectItem(first, "cache_size")->valueint);
     // What was given out is accepted back, its "id" keys included.
     TEST_ASSERT_EQUAL(ESP_OK, playset_from_json(json, &b, why, sizeof(why)));
     cJSON_Delete(json);
@@ -107,6 +119,11 @@ static void test_wrong_shapes_are_refused(void)
         "{\"channels\":[{\"source\":\"local\",\"weight\":\"2\"}]}",
         "{\"channels\":[{\"source\":\"local\",\"offset\":4294967296}]}",
         "{\"channels\":[{\"source\":\"local\",\"kind\":5}]}",
+        "{\"channels\":[{\"source\":\"giphy\",\"cache_size\":4097}]}",
+        "{\"channels\":[{\"source\":\"giphy\",\"cache_size\":-1}]}",
+        "{\"channels\":[{\"source\":\"giphy\",\"cache_size\":\"100\"}]}",
+        "{\"channels\":[{\"source\":\"giphy\",\"refresh_s\":4294967296}]}",
+        "{\"channels\":[{\"source\":\"giphy\",\"refresh_s\":60.5}]}",
         "{\"channels\":[{\"source\":\"local\",\"wieght\":2}]}",   // a typo is not silently dropped
         "{\"channels\":[{\"source\":\"local\"}],\"pick_mode\":\"random\"}",
         "{\"name\":\"a/b\",\"channels\":[{\"source\":\"local\"}]}",
@@ -135,7 +152,7 @@ static void test_the_channel_id_names_the_channel_not_its_trimmings(void)
     TEST_ASSERT_EQUAL(ESP_OK, parse("{\"channels\":["
                                     "{\"source\":\"giphy\",\"kind\":\"search\",\"identifier\":\"cats\"},"
                                     "{\"source\":\"giphy\",\"kind\":\"search\",\"identifier\":\"cats\",\"weight\":9,"
-                                    "\"display_name\":\"Kitties\"},"
+                                    "\"display_name\":\"Kitties\",\"cache_size\":100,\"refresh_s\":3600},"
                                     "{\"source\":\"klipy\",\"kind\":\"search\",\"identifier\":\"cats\"},"
                                     "{\"source\":\"giphy\",\"kind\":\"search\",\"identifier\":\"cats\",\"offset\":1},"
                                     "{\"source\":\"giphy\",\"kind\":\"searchc\",\"identifier\":\"ats\"},"
@@ -144,7 +161,7 @@ static void test_the_channel_id_names_the_channel_not_its_trimmings(void)
     playset_channel_id(&a.channels[0], id);
     TEST_ASSERT_EQUAL(16, strlen(id));
     playset_channel_id(&a.channels[1], other);
-    TEST_ASSERT_EQUAL_STRING(id, other);  // weight and display name do not make another channel
+    TEST_ASSERT_EQUAL_STRING(id, other);  // weight, display name, size and interval do not make another channel
     for (int i = 2; i < 6; i++) {         // source, offset, where the text is split, and case do
         playset_channel_id(&a.channels[i], other);
         TEST_ASSERT_TRUE(strcmp(id, other) != 0);
@@ -160,7 +177,8 @@ static void test_packing_round_trips_and_damaged_records_are_refused(void)
     static uint8_t records[(PLAYSET_MAX_CHANNELS + 1) * PLAYSET_RECORD_SIZE];
     static uint8_t damaged[sizeof(records)];
     TEST_ASSERT_EQUAL(ESP_OK, parse("{\"name\":\"Mix\",\"channels\":["
-                                    "{\"source\":\"makapix\",\"kind\":\"all\",\"weight\":2},"
+                                    "{\"source\":\"makapix\",\"kind\":\"all\",\"weight\":2,\"cache_size\":100,"
+                                    "\"refresh_s\":7200},"
                                     "{\"source\":\"pinned\",\"identifier\":\"favourites\",\"display_name\":\"Favs\"},"
                                     "{\"source\":\"local\"}]}",
                                     &a));
@@ -195,9 +213,26 @@ static void test_packing_round_trips_and_damaged_records_are_refused(void)
     TEST_ASSERT_TRUE(refused > len);  // most damage is caught here; the container's checksum catches the rest
 }
 
+static void test_a_channels_own_value_is_held_within_what_its_source_allows(void)
+{
+    // Not set: the source's.
+    TEST_ASSERT_EQUAL(350, playset_value(0, 350, 32, 500));
+    // Set, and within the range.
+    TEST_ASSERT_EQUAL(100, playset_value(100, 350, 32, 500));
+    TEST_ASSERT_EQUAL(32, playset_value(32, 350, 32, 500));
+    TEST_ASSERT_EQUAL(500, playset_value(500, 350, 32, 500));
+    // Set outside it (a file written when the range was another): held within.
+    TEST_ASSERT_EQUAL(32, playset_value(5, 350, 32, 500));
+    TEST_ASSERT_EQUAL(500, playset_value(4096, 350, 32, 500));
+    // A source that allows none (the card, a pin list) gives its own whatever is asked.
+    TEST_ASSERT_EQUAL(4096, playset_value(100, 4096, 0, 0));
+    TEST_ASSERT_EQUAL(0, playset_value(3600, 0, 0, 0));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
+    RUN_TEST(test_a_channels_own_value_is_held_within_what_its_source_allows);
     RUN_TEST(test_the_layout_and_the_numbers_on_disk);
     RUN_TEST(test_json_goes_in_and_comes_back_the_same);
     RUN_TEST(test_what_does_not_fit_is_refused_with_a_reason);

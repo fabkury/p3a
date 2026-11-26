@@ -159,6 +159,15 @@ static uint32_t makapix_index_capacity(void)
     return n;
 }
 
+// What one channel of a playset may set for itself: the ranges of the two settings above.
+static void makapix_channel_range(p3a_channel_range_t *out)
+{
+    out->capacity_min = (uint32_t)p3a_setting_defs[P3A_SET_MAKAPIX_CACHE_SIZE].min;
+    out->capacity_max = (uint32_t)p3a_setting_defs[P3A_SET_MAKAPIX_CACHE_SIZE].max;
+    out->refresh_min_s = (uint32_t)p3a_setting_defs[P3A_SET_MAKAPIX_REFRESH_S].min;
+    out->refresh_max_s = (uint32_t)p3a_setting_defs[P3A_SET_MAKAPIX_REFRESH_S].max;
+}
+
 void source_makapix_status(source_makapix_status_t *out)
 {
     memset(out, 0, sizeof(*out));
@@ -266,6 +275,7 @@ esp_err_t source_makapix_start(void)
         .user_agent = NULL,  // set below: it holds the version
         .refresh_interval_s = makapix_refresh_interval_s,
         .index_capacity = makapix_index_capacity,
+        .channel_range = makapix_channel_range,
         .smooth = false,  // pixel art: every pixel sharp
     };
     static p3a_source_ops_t table;

@@ -41,6 +41,13 @@ esp_err_t play_scheduler_start(void);
 // The history is kept. ESP_ERR_INVALID_ARG for a playset that fails its check.
 esp_err_t play_scheduler_activate(const playset_t *playset);
 
+// Whether what a playset's channels set for themselves (playset.h:
+// `cache_size`, `refresh_s`) is within what their sources allow. For a
+// playset a person is saving or activating, who can then be told:
+// ESP_ERR_INVALID_ARG with the reason in `why`. A playset that never went
+// through this still plays: the scheduler holds such values within range.
+esp_err_t play_scheduler_check_playset(const playset_t *playset, char *why, size_t why_len);
+
 // Plays the next artwork: forward in the history if "back" was used, else a
 // new pick. ESP_ERR_NOT_FOUND when no channel has anything playable,
 // ESP_ERR_INVALID_STATE while paused.
@@ -107,6 +114,8 @@ typedef struct {
     uint32_t wanted;       // artworks listed that are not on the card yet and will be downloaded
     uint32_t listings;     // listings finished since the playset was put in place, whatever their result
     int32_t refresh_in_s;  // seconds until it is listed again by itself; 0 when due or being listed, -1 when it will not be
+    uint32_t capacity;     // artworks it holds at most in this playset: its own value, or its source's setting
+    uint32_t refresh_s;    // seconds between two listings in this playset, likewise; 0 for "only when asked"
 } play_channel_status_t;
 
 typedef struct {

@@ -128,6 +128,53 @@ def test_playsets_are_saved_read_and_deleted_over_http(api):
     assert api.get("/api/v2/playsets").data["playsets"] == []
 
 
+def test_a_channels_own_size_and_interval_are_kept_and_held_to_its_sources_range(api):
+    """A channel of a playset may say how many artworks it holds and how often it is listed
+    (D100), within the range of its source's own two settings."""
+    schema = {s["key"]: s for s in api.get("/api/v2/settings/schema").json["settings"]}
+    size, interval = schema["giphy_cache_size"], schema["giphy_refresh_s"]
+    tuned = {"name": "Tuned", "channels": [
+        {"source": "giphy", "kind": "no-such-kind", "cache_size": size["min"], "refresh_s": interval["max"]},
+        {"source": "museum", "kind": "no-such-kind", "identifier": "x",
+         "refresh_s": schema["museum_refresh_s"]["max"]},
+        {"source": "local"}]}
+    assert api.call("PUT", "/api/v2/playsets/Tuned", tuned).status == 200
+    got = api.get("/api/v2/playsets/Tuned").data["channels"]
+    assert (got[0]["cache_size"], got[0]["refresh_s"]) == (size["min"], interval["max"])
+    assert (got[1]["cache_size"], got[1]["refresh_s"]) == (0, schema["museum_refresh_s"]["max"])
+    assert (got[2]["cache_size"], got[2]["refresh_s"]) == (0, 0), "not set: its source's settings"
+    assert api.call("PUT", "/api/v2/playsets/Tuned", api.get("/api/v2/playsets/Tuned").data).status == 200
+
+    def refused(channel: dict) -> str:
+        reply = api.call("PUT", "/api/v2/playsets/Tuned", {"channels": [channel]})
+        return reply.error(400, "INVALID_PLAYSET")
+
+    assert "cache_size" in refused({"source": "giphy", "kind": "trending", "cache_size": size["max"] + 1})
+    assert "cache_size" in refused({"source": "giphy", "kind": "trending", "cache_size": size["min"] - 1})
+    assert "refresh_s" in refused({"source": "giphy", "kind": "trending", "refresh_s": interval["max"] + 1})
+    # What a museum channel may ask, a Giphy channel may not: each source has its own range.
+    assert schema["museum_refresh_s"]["max"] > interval["max"]
+    assert "refresh_s" in refused({"source": "giphy", "kind": "trending",
+                                   "refresh_s": schema["museum_refresh_s"]["max"]})
+    assert "local" in refused({"source": "local", "cache_size": 100}), "the card's channel has neither"
+    assert "pinned" in refused({"source": "pinned", "refresh_s": 3600})
+    api.call("PUT", "/api/v2/player/playset",
+             {"channels": [{"source": "giphy", "kind": "trending", "cache_size": size["max"] + 1}]}) \
+        .error(400, "INVALID_PLAYSET")
+    assert api.get("/api/v2/playsets/Tuned").data["channels"] == got, "a refused request changes nothing"
+
+    # Active, the player says what each channel has: its own value, or its source's setting.
+    settings = api.get("/api/v2/settings").data
+    assert api.call("PUT", "/api/v2/player/playset", {"saved": "Tuned"}).status == 200
+    state = wait_player(api, "the playset is in place", lambda s: s["playset"] == "Tuned")
+    assert (state["channels"][0]["capacity"], state["channels"][0]["refresh_s"]) == (size["min"], interval["max"])
+    assert state["channels"][1]["capacity"] == settings["museum_cache_size"]
+    assert state["channels"][1]["refresh_s"] == schema["museum_refresh_s"]["max"]
+    assert state["channels"][2]["refresh_s"] == 0, "the card is listed when something says it changed"
+    assert api.call("PUT", "/api/v2/player/playset", LOCAL_ONLY).status == 200
+    assert api.call("DELETE", "/api/v2/playsets/Tuned").status == 200
+
+
 def test_the_active_playset_is_set_whole_or_by_a_saved_name(api):
     assert api.call("PUT", "/api/v2/player/playset", {"name": "Direct", **MIX}).status == 200
     active = api.get("/api/v2/player/playset").data

@@ -202,6 +202,13 @@ All in `components/p3a_util`; each header explains itself at the top.
   (`ops->url`). When a channel is listed again and how long a failure
   waits is `sched_refresh.c`; which blobs go when the card fills is
   `p3a_evict.c`. Both are pure with host tests: change behaviour there.
+- **A channel's size and refresh interval are asked through
+  `sched_channel_capacity()` and `sched_channel_interval()`**, never
+  from a source's table directly: a channel may set its own in a playset
+  (D100). Its index file is one whichever playset plays it and keeps the
+  deepest listing made; what is kept and what is read back is
+  `p3a_index_shared.c` (pure, host-tested). A source that has the two
+  settings gives their ranges in `channel_range`.
 - **What is on the screen is the UI's model** (`components/p3a_ui`,
   `ui_model.c`, pure). Nothing switches screens: a screen or a notice is
   put up or taken down, and what is seen follows by precedence. Code

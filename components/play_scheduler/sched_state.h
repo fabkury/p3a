@@ -54,6 +54,8 @@ typedef struct {
     bool load_tried;          // its index was looked for on the card
     bool quick_listed;        // it has had its short first listing (sched_refresh_quick_first)
     bool dirty;               // the index holds something its file does not
+    p3a_index_listing_t listing;  // what `index` is of the channel's listing (p3a_index.h); from the file, or its own
+    uint32_t in_file;         // records in the channel's file; more than `index` holds when another playset asked deeper
     int64_t save_at_ms;       // when a dirty index is written
     uint32_t cursor;          // where the search for the next artwork to download starts
     uint32_t listings;        // finished, whatever the result
@@ -138,8 +140,10 @@ uint32_t sched_content_wanted(const p3a_index_t *index);
 
 // There may be work: a playset was put in place, a listing was asked for.
 void sched_content_wake(void);
-// How many records a channel of this source may hold: what its index is made for.
-uint32_t sched_content_capacity(const p3a_source_ops_t *ops);
+// How many records this channel of a playset holds, and how often it is
+// listed again: its own value if it set one (playset.h), else its source's.
+uint32_t sched_channel_capacity(const playset_channel_t *spec, const p3a_source_ops_t *ops);
+uint32_t sched_channel_interval(const playset_channel_t *spec, const p3a_source_ops_t *ops);
 
 // Waits until the content task is between two pieces of work; false if it
 // did not get there in time. With `shut_down` set it then starts no more.

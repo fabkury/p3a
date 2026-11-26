@@ -71,6 +71,13 @@ typedef struct {
     bool random;             // the order channels are played in: random, or the channel's own
 } p3a_shown_t;
 
+// What one channel of a playset may ask for itself in place of its source's
+// two settings below (playset.h), each end included.
+typedef struct {
+    uint32_t capacity_min, capacity_max;      // records
+    uint32_t refresh_min_s, refresh_max_s;    // seconds
+} p3a_channel_range_t;
+
 typedef struct {
     uint8_t source;    // the channel source number this table serves
     const char *name;  // "local", "giphy", ...
@@ -126,6 +133,12 @@ typedef struct {
     // How many records one of its channels may hold (a setting, for most
     // sources). NULL for 1024.
     uint32_t (*index_capacity)(void);
+
+    // The ranges within which one channel of a playset may set the two
+    // values above for itself: those of the source's own settings. NULL for
+    // a source whose channels take no value of their own (the card, a pin
+    // list).
+    void (*channel_range)(p3a_channel_range_t *out);
 
     // Whether this source's pictures are scaled smoothly (photographs,
     // paintings) or with sharp pixels (pixel art).

@@ -237,6 +237,15 @@ static uint32_t museum_index_capacity(void)
     return n;
 }
 
+// What one channel of a playset may set for itself: the ranges of the two settings above.
+static void museum_channel_range(p3a_channel_range_t *out)
+{
+    out->capacity_min = (uint32_t)p3a_setting_defs[P3A_SET_MUSEUM_CACHE_SIZE].min;
+    out->capacity_max = (uint32_t)p3a_setting_defs[P3A_SET_MUSEUM_CACHE_SIZE].max;
+    out->refresh_min_s = (uint32_t)p3a_setting_defs[P3A_SET_MUSEUM_REFRESH_S].min;
+    out->refresh_max_s = (uint32_t)p3a_setting_defs[P3A_SET_MUSEUM_REFRESH_S].max;
+}
+
 esp_err_t source_museum_start(void)
 {
     // Museums ask automated clients to say what they are.
@@ -252,6 +261,7 @@ esp_err_t source_museum_start(void)
         .refusal_is_the_artworks = true,  // no picture is behind a key; a 403 is one dead picture
         .refresh_interval_s = museum_refresh_interval_s,
         .index_capacity = museum_index_capacity,
+        .channel_range = museum_channel_range,
         .smooth = true,         // photographs of paintings: scaled smoothly
         .filter_aspect = true,  // scrolls and friezes are passed over (the aspect_filter setting)
     };

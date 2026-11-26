@@ -10,7 +10,7 @@ times.
 |---|---|
 | Phase | 4, remote sources (Phases 0 to 3 complete but for their manual checks) |
 | Current milestone | Phase 6 next (M6.1 soaks). Phase 5 is done but for what waits on Fab (M4.5-a, M5.2-a, M5.3-a, M5.3-b) |
-| Next action | M6.1, the soaks (`PLAN.md` M6.1, `docs/jitter/README.md` for the pass bar and the lab tooling, `docs/2.0/TESTING.md` for the soak tier): the jitter pass bar on a trace build under the work mix (`host/jitter-lab`: the puller and the analyzer work against 2.0, the rest is adapted now), the memory-pressure soak under a full refresh cycle including the 64-channel playset that livelocked 1.x, then a multi-day run. Before starting a long soak, tell Fab what it will occupy the dev unit with and for how long. Small things left open: the "Followed" pill on the home page (1.x: `{ id: 'followed_artists', label: 'Followed', needsRegistration: true }`, a Makapix channel kind 2.0's source does not have yet; M4.5 part 4); a new screenshot of the web page for the README; clicking what was not clicked (upload on the home page, the Makapix registration on the settings page, drag to reorder in the playset editor, Harvard and the Smithsonian in the museum browser); `test_the_setup_network_is_on_the_air` if it fails again in a whole suite. Chrome is connected to this session (`mcp__claude-in-chrome__*`); stub `window.confirm` before clicking a button that asks. If Fab has registered the unit (M4.5-a), M4.5 part 4 comes first |
+| Next action | M6.1, the soaks (`PLAN.md` M6.1, `docs/jitter/README.md` for the pass bar and the lab tooling, `docs/2.0/TESTING.md` for the soak tier): the jitter pass bar on a trace build under the work mix (`host/jitter-lab`: the puller and the analyzer work against 2.0, the rest is adapted now), the memory-pressure soak under a full refresh cycle including the 64-channel playset that livelocked 1.x, then a multi-day run. Before starting a long soak, tell Fab what it will occupy the dev unit with and for how long. Small things left open: the "Followed" pill on the home page (1.x: `{ id: 'followed_artists', label: 'Followed', needsRegistration: true }`, a Makapix channel kind 2.0's source does not have yet; M4.5 part 4); clicking what was not clicked (upload on the home page, the Makapix registration on the settings page, drag to reorder in the playset editor, Harvard and the Smithsonian in the museum browser); `test_the_setup_network_is_on_the_air` if it fails again in a whole suite. Chrome is connected to this session (`mcp__claude-in-chrome__*`); stub `window.confirm` before clicking a button that asks. If Fab has registered the unit (M4.5-a), M4.5 part 4 comes first |
 | Blocked on | M4.5 part 4 only: M4.5-a (Fab registers the dev unit with Makapix Club). Nothing else waits on it |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -59,7 +59,7 @@ reopened (why).
 | M5.1 Embedded web UI | done 2026-11-25 but for the "Followed" pill (M4.5 part 4). Four pages, the museum browser. Tiers: node (42 cases), device tests, every page clicked in Chrome on the dev unit. `legacy/webui` is gone |
 | M5.2 Firmware OTA for 2.x | done 2026-11-25 but for manual check M5.2-a (one update from GitHub itself). Tiers: host tests, device tests (the whole cycle from a mirror), and the cycle clicked through the update page in Chrome |
 | M5.3 Release engineering | done 2026-11-25 but for manual checks M5.3-a (the web flasher) and M5.3-b (the flasher program). The release folder from `tools/make_release.py`, flashed onto the dev unit with its own command. Tiers: self-tests in CI, one flash by hand |
-| M5.4 Documentation | done 2026-11-25 but for a new screenshot. The user's documents and the developer pages describe 2.0; the API examples were run against the dev unit |
+| M5.4 Documentation | done 2026-11-25. The user's documents and the developer pages describe 2.0; the API examples were run against the dev unit |
 | M6.1 Soaks | not started |
 | M6.2 Parity audit | not started |
 | M6.3 Field test | not started |
@@ -517,6 +517,13 @@ what was verified and at which tier, the commit.
   them (M6.3); the screenshot in the README is still 1.x's page.
 - Left for the end of M5.4: nothing but that screenshot. `AGENTS.md` is
   current as of this commit.
+- Afterwards: the screenshot was retaken (`images/screenshots/p3a-web-ui-2.0.png`,
+  the home page with a promoted artwork playing). Taking it, the page
+  looked cut off at phone width; measured in Chrome with frames 320, 360
+  and 390 px wide, none of the four pages overflows (the settings tab bar
+  scrolls sideways by design). The cut was headless Edge, whose window
+  cannot be narrower than 500 px: screenshots narrower than that are
+  crops, not layouts.
 
 ### 2026-11-25: M5.4 part 1, the README, and what a new device plays
 

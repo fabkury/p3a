@@ -23,7 +23,7 @@
 </p>
 
 <p align="center">
-  <a href="https://discord.gg/xk9umcujXV"><strong>Discord</strong></a> · <a href="https://makapix.club/"><strong>Makapix Club</strong></a> · <a href="docs/HOW-TO-USE.md"><strong>User Guide</strong></a> · <a href="https://fabkury.github.io/p3a/web-flasher/"><strong>Web Flasher</strong></a> · <a href="https://makezine.com/projects/desktop-pixel-art-player-p3a/"><strong>Makezine Article</strong></a> 
+  <a href="https://discord.gg/xk9umcujXV"><strong>Discord</strong></a> · <a href="https://makapix.club/"><strong>Makapix Club</strong></a> · <a href="docs/HOW-TO-USE.md"><strong>User Guide</strong></a> · <a href="https://fabkury.github.io/p3a/web-flasher/"><strong>Web Flasher</strong></a> · <a href="https://makezine.com/projects/desktop-pixel-art-player-p3a/"><strong>Makezine Article</strong></a>
 </p>
 
 ---
@@ -135,7 +135,7 @@ All controls are also available via the web UI and REST API.
 Open `http://p3a.local/` from any browser on the same Wi-Fi network for the full dashboard: playback controls, playsets, pin lists, every setting, and firmware updates. It is part of the firmware, so it is always the version that matches the device.
 
 <p align="center">
-  <img src="images/screenshots/p3a-web-ui-2.20.png" alt="p3a web UI" width="350">
+  <img src="images/screenshots/p3a-web-ui-2.0.png" alt="p3a web UI" width="350">
   <br>
   <em>p3a web UI: control everything from the browser</em>
 </p>

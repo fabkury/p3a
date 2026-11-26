@@ -128,9 +128,18 @@ def test_unknown_paths_and_wrong_methods_get_the_error_envelope(api):
     api.get("/" + "a" * 300).error(414, "URI_TOO_LONG")
 
 
-def test_a_query_string_does_not_change_the_route(api):
+def a_finished_job(api, uart) -> int:
+    """A job of this test's own: the device remembers only its most recent ones, so job 1 may be gone."""
+    job = uart.command("job ok io")["id"]
+    deadline = time.monotonic() + 10
+    while api.get(f"/api/v2/jobs/{job}").data["state"] != "done" and time.monotonic() < deadline:
+        time.sleep(0.1)
+    return job
+
+
+def test_a_query_string_does_not_change_the_route(api, uart):
     assert api.get("/api/v2/status?verbose=1&x=%20").status == 200
-    assert api.get("/api/v2/jobs/1?x=1").status == 200
+    assert api.get(f"/api/v2/jobs/{a_finished_job(api, uart)}?x=1").status == 200
 
 
 def test_get_answers_carry_an_etag_and_honour_if_none_match(api, uart):
@@ -219,10 +228,11 @@ def test_the_schema_is_served_as_written(api):
 
 # --- jobs -----------------------------------------------------------------------
 
-def test_jobs_are_readable_by_id(api):
-    job = api.get("/api/v2/jobs/1").data
-    assert job["id"] == 1 and job["state"] == "done" and job["succeeded"] is True and job["progress"] == 100
-    assert job["name"], "every job has a name; which one is first depends on the boot order"
+def test_jobs_are_readable_by_id(api, uart):
+    made = a_finished_job(api, uart)
+    job = api.get(f"/api/v2/jobs/{made}").data
+    assert job["id"] == made and job["state"] == "done" and job["succeeded"] is True and job["progress"] == 100
+    assert job["name"] == "test_ok"
     for missing in ("999999", "0", "abc", "1x", "-1", "4294967297"):
         api.get(f"/api/v2/jobs/{missing}").error(404, "NOT_FOUND")
 

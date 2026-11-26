@@ -162,11 +162,13 @@ def make(build: Path, out_root: Path, allow_dev: bool = False) -> Path:
         (out / name).write_bytes(data)
 
     settings = args.get("flash_settings", {})
-    options = (f"--flash-mode {settings.get('flash_mode', 'dio')} --flash-freq {settings.get('flash_freq', '80m')} "
-               f"--flash-size {settings.get('flash_size', '32MB')}")
+    # The spellings with underscores: esptool 4 (the one an IDF 5.5 install has) takes only
+    # those, and esptool 5 still takes them.
+    options = (f"--flash_mode {settings.get('flash_mode', 'dio')} --flash_freq {settings.get('flash_freq', '80m')} "
+               f"--flash_size {settings.get('flash_size', '32MB')}")
     write(out / "flash_args", "".join(f"{offset:#x} {name}\n" for offset, name, _ in ordered))
     # --force: network_adapter.bin is an ESP32-C6 image that sits in the ESP32-P4's flash by design.
-    command = f"python -m esptool --chip esp32p4 -b 460800 --before default-reset --after hard-reset write-flash {options} --force"
+    command = f"python -m esptool --chip esp32p4 -b 460800 --before default_reset --after hard_reset write_flash {options} --force"
     write(out / "flash_command.txt",
           "# Run from this folder. Add -p <port> if the port is not found by itself.\n"
           "# This writes the whole device: its settings, Wi-Fi network and registrations are erased.\n\n"

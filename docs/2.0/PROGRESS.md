@@ -9,8 +9,8 @@ times.
 | | |
 |---|---|
 | Phase | 4, remote sources (Phases 0 to 3 complete but for their manual checks) |
-| Current milestone | M5.3 Release engineering. M5.1 and M5.2 are done but for what waits on Fab (M4.5-a, M5.2-a) |
-| Next action | The milestone-end run for M5.1 and M5.2: the whole device suite (`python -m pytest tests/device`, about 30 minutes, nothing else on the device meanwhile), `lab.py build release` and `build trace`, CI read. Then M5.3 (read `PLAN.md` M5.3 and `legacy/CMakeLists.txt`, which holds 1.x's release packaging and flasher build): the release folder with `p3a-v2.bin` (D85) and no `storage.bin`, the size check against the slot, the web flasher for 2.x with its warning that 2.0 erases a 1.x device, `p3a-flasher.exe`, the publish workflow. Left open in M5.1, small: the "Followed" pill on the home page (1.x: `{ id: 'followed_artists', label: 'Followed', needsRegistration: true }`, a Makapix channel kind 2.0's source does not have yet; M4.5 part 4), and clicking what was not clicked (upload on the home page, the Makapix registration on the settings page, drag to reorder in the playset editor, Harvard and the Smithsonian in the museum browser). Chrome is connected to this session (`mcp__claude-in-chrome__*`); stub `window.confirm` before clicking a button that asks. If Fab has registered the unit (M4.5-a), M4.5 part 4 comes first |
+| Current milestone | M5.4 Documentation. M5.1, M5.2 and M5.3 are done but for what waits on Fab (M4.5-a, M5.2-a, M5.3-a, M5.3-b) |
+| Next action | M5.4, the documentation, in one pass (`PLAN.md` M5.4): `README.md`, `docs/QUICK-START.md`, `docs/HOW-TO-USE.md`, `docs/flash-p3a.md`, `docs/infrastructure/`, `docs/known-issues.md` and `docs/deferred/` re-triaged, `AGENTS.md` final. `docs/migrating-to-2.0.md` is drafted. They describe 1.x today; `PARITY.md` is the list of what 2.0 does and how it differs, the ledger and `DECISIONS.md` say why. Outward text: no em dashes, plain and confident. Check each claim against the code or the device before writing it. M5.3 is done but for its two manual checks (M5.3-a, M5.3-b). Small things left open: the "Followed" pill on the home page (1.x: `{ id: 'followed_artists', label: 'Followed', needsRegistration: true }`, a Makapix channel kind 2.0's source does not have yet; M4.5 part 4); clicking what was not clicked (upload on the home page, the Makapix registration on the settings page, drag to reorder in the playset editor, Harvard and the Smithsonian in the museum browser); `test_the_setup_network_is_on_the_air` if it fails again in a whole suite. Chrome is connected to this session (`mcp__claude-in-chrome__*`); stub `window.confirm` before clicking a button that asks. If Fab has registered the unit (M4.5-a), M4.5 part 4 comes first |
 | Blocked on | M4.5 part 4 only: M4.5-a (Fab registers the dev unit with Makapix Club). Nothing else waits on it |
 | In flight | Nothing |
 | Uncommitted work | None |
@@ -521,12 +521,21 @@ what was verified and at which tier, the commit.
 - Verified by running: `make_release.py` on the real release build
   (refused as `-dev`; with `--allow-dev`, a folder of 9 files, the app
   at 21% of its slot) and on the test build (refused: test hooks).
+- **Flashed onto the dev unit from the release folder**, with the
+  command in its `flash_command.txt` and the IDF's own esptool. Before:
+  the test build, on Wi-Fi. After: the release build, "settings: nothing
+  stored; using defaults", "no Wi-Fi network stored", setup mode with
+  its screen and the `p3a-setup` network, boot complete, no crash. The
+  test build and the Wi-Fi were then put back.
+- Found doing it: esptool 4 (what an IDF 5.5 install has) refuses the
+  hyphenated spellings (`default-reset`, `write-flash`) that 1.x's
+  `flash_command.txt` used and I had copied. The command is written
+  with underscores now, which esptool 4 and 5 both take; the self-test
+  holds it.
 - Not verified: the web flasher in a browser (it needs the files on
   Pages or a local copy: manual check M5.3-a); the flasher program run
   or built (`build_flasher.py` needs a virtual environment with
-  PyInstaller: M5.3-b); a device flashed from a release folder, with the
-  settings really gone (next: flash the dev unit from
-  `release/v2.0.0-dev/` with esptool and look).
+  PyInstaller: M5.3-b).
 
 ### 2026-11-25: M5.2 part 2 and M5.1's end, the update page
 

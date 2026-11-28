@@ -211,10 +211,12 @@ static void test_the_sources_marks_are_pictures_of_one_height(void)
         }
         TEST_ASSERT_TRUE_MESSAGE(part_clear > 0, files[i]);
     }
-    TEST_ASSERT_EQUAL(27, marks[0].height);
+    // Giphy's as Giphy drew it with the clear border cut away; Klipy's cut
+    // the same way and scaled to that height.
+    TEST_ASSERT_EQUAL(24, marks[0].height);
     TEST_ASSERT_EQUAL(marks[0].height, marks[1].height);
-    TEST_ASSERT_EQUAL(100, marks[0].width);
-    TEST_ASSERT_EQUAL(126, marks[1].width);
+    TEST_ASSERT_EQUAL(91, marks[0].width);
+    TEST_ASSERT_EQUAL(142, marks[1].width);
 }
 
 int main(void)

@@ -3,7 +3,7 @@
 """Makes a p3a UI picture file from a PNG.
 
     python tools/gen_image.py <picture.png> <out.p3aimg>
-    python tools/gen_image.py --soft [--height N] <picture.png> <out.p3aimg>
+    python tools/gen_image.py --soft [--crop] [--ground RRGGBB] [--height N] <picture.png> <out.p3aimg>
     python tools/gen_image.py --check <file.p3aimg>
 
 The output format is described in components/p3a_ui/ui_image.h: a ten-byte
@@ -12,7 +12,10 @@ drawn or not (alpha 128 and up is drawn), so give icons hard edges.
 
 --soft keeps the PNG's alpha as it is, for a picture that is mixed with a
 known ground (ui_image_draw_on): a source's mark under its artworks.
---height scales the picture, keeping its shape, to that many rows first.
+Before that, in this order: --crop cuts away the wholly clear rows and
+columns around the picture; --ground lays the picture on that colour, which
+leaves no pixel clear; --height scales it, keeping its shape, to that many
+rows.
 
 Picture files are committed beside their PNGs, so a build needs no Pillow;
 run this only when a picture changes.
@@ -29,10 +32,19 @@ VERSION = 1
 MAX_SIDE = 512
 
 
-def build(png: Path, soft: bool = False, height: int = 0) -> bytes:
+def build(png: Path, soft: bool = False, height: int = 0, crop: bool = False, ground: str = "") -> bytes:
     from PIL import Image  # only needed to make a picture
 
     img = Image.open(png).convert("RGBA")
+    if crop:
+        box = img.getchannel("A").getbbox()
+        if box is None:
+            raise SystemExit(f"{png}: every pixel is clear")
+        img = img.crop(box)
+    if ground:
+        under = Image.new("RGBA", img.size, tuple(bytes.fromhex(ground.lstrip("#"))) + (255,))
+        under.alpha_composite(img)
+        img = under
     if height and height != img.height:
         # Scaled with the colours weighted by their alpha, so that a clear
         # pixel's colour does not bleed into the edge beside it.
@@ -66,6 +78,8 @@ def main() -> int:
     parser.add_argument("png", nargs="?")
     parser.add_argument("out", nargs="?")
     parser.add_argument("--soft", action="store_true", help="keep the PNG's alpha, for a picture mixed with a ground")
+    parser.add_argument("--crop", action="store_true", help="cut away the clear rows and columns around the picture")
+    parser.add_argument("--ground", default="", metavar="RRGGBB", help="lay the picture on this colour")
     parser.add_argument("--height", type=int, default=0, metavar="N", help="scale to N rows first, keeping the shape")
     parser.add_argument("--check", metavar="FILE", help="describe an existing picture file and exit")
     args = parser.parse_args()
@@ -74,7 +88,7 @@ def main() -> int:
         return 0
     if not (args.png and args.out):
         parser.error("give a PNG and an output file")
-    data = build(Path(args.png), args.soft, args.height)
+    data = build(Path(args.png), args.soft, args.height, args.crop, args.ground)
     Path(args.out).write_bytes(data)
     print(f"{args.out}: {describe(data)}")
     return 0

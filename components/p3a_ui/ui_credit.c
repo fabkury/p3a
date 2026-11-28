@@ -3,11 +3,11 @@
 
 #include "ui_credit.h"
 
-ui_credit_place_t ui_credit_place(int32_t src_w, int32_t src_h, int32_t view_w, int32_t view_h, int32_t text_w,
-                                  int32_t text_h)
+ui_credit_place_t ui_credit_place(int32_t src_w, int32_t src_h, int32_t view_w, int32_t view_h, int32_t mark_w,
+                                  int32_t mark_h)
 {
     ui_credit_place_t place = {0};
-    if (src_w <= 0 || src_h <= 0 || view_w <= 0 || view_h <= 0 || text_w <= 0 || text_h <= 0) {
+    if (src_w <= 0 || src_h <= 0 || view_w <= 0 || view_h <= 0 || mark_w <= 0 || mark_h <= 0) {
         return place;
     }
     // The picture as the player fits it (player_fit_compute): as large as it
@@ -22,14 +22,10 @@ ui_credit_place_t ui_credit_place(int32_t src_w, int32_t src_h, int32_t view_w, 
     const int32_t top = (int32_t)((view_h - shown_h) / 2);
     const int32_t band_top = top + (int32_t)shown_h;
     const int32_t band = view_h - band_top;
-    for (int32_t scale = 3; scale >= 2; scale--) {
-        if (text_h * scale + 2 * UI_CREDIT_MARGIN <= band && (int64_t)text_w * scale * 5 <= (int64_t)view_w * 4) {
-            place.show = true;
-            place.scale = scale;
-            place.x = (view_w - text_w * scale) / 2;
-            place.y = band_top + (band - text_h * scale) / 2;
-            return place;
-        }
+    if ((int64_t)mark_h + 2 * UI_CREDIT_MARGIN <= band && (int64_t)mark_w + 2 * UI_CREDIT_RIGHT_MARGIN <= view_w) {
+        place.show = true;
+        place.x = view_w - UI_CREDIT_RIGHT_MARGIN - mark_w;
+        place.y = band_top + (band - mark_h) / 2;
     }
     return place;
 }

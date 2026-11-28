@@ -50,8 +50,11 @@ static ui_font_t s_font;
 static atomic_bool s_banner_up;
 static atomic_int s_indicator;       // 0 off, 1 busy, 2 failed
 static atomic_int s_indicator_size;  // pixels; 0 when the setting turns it off
-// The credit under the artwork. The text is a source's own string and lives for good.
-static _Atomic(const char *) s_credit_text;
+// The credit under the artwork: a source's mark, a picture file that lives
+// for good. The two ends are stored one after the other; a pair caught
+// half changed has the wrong length for its picture and is not drawn.
+static _Atomic(const uint8_t *) s_credit_mark, s_credit_mark_end;
+static atomic_uint s_ground;  // the background colour, which the band has: 0xRRGGBB
 static _Atomic uint32_t s_credit_token, s_credit_w, s_credit_h;
 static atomic_bool s_credit_on;
 // An icon per corner and when it goes, in milliseconds since boot.
@@ -114,12 +117,14 @@ static void draw_banner(uint8_t *buffer, void *ctx)
 {
     (void)ctx;
     const int64_t now_ms = esp_timer_get_time() / 1000;
-    // First, so that everything else is seen over it: the source's name in
+    // First, so that everything else is seen over it: the source's mark in
     // the band under its artwork.
-    const char *credit = atomic_load(&s_credit_text);
-    if (credit != NULL && atomic_load(&s_credit_on)) {
+    const uint8_t *credit = atomic_load(&s_credit_mark), *credit_end = atomic_load(&s_credit_mark_end);
+    ui_image_t mark;
+    if (credit != NULL && credit_end > credit && atomic_load(&s_credit_on) &&
+        ui_image_open(&mark, credit, (size_t)(credit_end - credit))) {
         // Only under the picture it was worked out for: after a change of
-        // artwork the words wait for the job that knows the new one.
+        // artwork the mark waits for the job that knows the new one.
         animation_player_status_t player;
         animation_player_get_status(&player);
         if (player.token == atomic_load(&s_credit_token)) {
@@ -127,10 +132,9 @@ static void draw_banner(uint8_t *buffer, void *ctx)
             canvas_for(buffer, &below);
             const ui_credit_place_t place =
                 ui_credit_place((int32_t)atomic_load(&s_credit_w), (int32_t)atomic_load(&s_credit_h),
-                                ui_canvas_view_width(&below), ui_canvas_view_height(&below),
-                                ui_text_width(&s_font, credit, 1), s_font.height);
+                                ui_canvas_view_width(&below), ui_canvas_view_height(&below), mark.width, mark.height);
             if (place.show) {
-                ui_text_draw(&below, &s_font, place.x, place.y, place.scale, 0xA8A8A8, credit);
+                ui_image_draw_on(&below, &mark, place.x, place.y, atomic_load(&s_ground));
             }
         }
     }
@@ -210,14 +214,16 @@ bool p3a_ui_button_rect(int index, int32_t *x, int32_t *y, int32_t *w, int32_t *
                                index, x, y, w, h);
 }
 
-void ui_display_set_credit(const char *text, uint32_t token, uint32_t width, uint32_t height)
+void ui_display_set_credit(const uint8_t *mark, const uint8_t *mark_end, uint32_t token, uint32_t width,
+                           uint32_t height)
 {
-    // Both are stored, whichever changed: with `||` a new text left the old
+    // Both are stored, whichever changed: with `||` a new mark left the old
     // token in place, and the first GIF after another source's artwork went
     // without its credit until something else asked again.
-    const bool new_text = atomic_exchange(&s_credit_text, text) != text;
+    const bool new_mark = atomic_exchange(&s_credit_mark, mark) != mark;
+    atomic_store(&s_credit_mark_end, mark_end);
     const bool new_token = atomic_exchange(&s_credit_token, token) != token;
-    const bool changed = new_text || new_token;
+    const bool changed = new_mark || new_token;
     atomic_store(&s_credit_w, width);
     atomic_store(&s_credit_h, height);
     if (changed) {
@@ -238,6 +244,7 @@ static void take_settings(void)
     p3a_settings_get(&settings);
     atomic_store(&s_indicator_size, settings.indicator_enabled ? (int)settings.indicator_size : 0);
     atomic_store(&s_credit_on, settings.source_credit);
+    atomic_store(&s_ground, settings.background_color);
     atomic_store(&s_clock_on, settings.clock_enabled);
     atomic_store(&s_clock_24h, settings.clock_24h);
     atomic_store(&s_clock_place, (int)settings.clock_position);
@@ -291,6 +298,7 @@ static void on_setting_changed(const p3a_event_t *event, void *ctx)
     case P3A_SET_INDICATOR_ENABLED:
     case P3A_SET_INDICATOR_SIZE:
     case P3A_SET_SOURCE_CREDIT:
+    case P3A_SET_BACKGROUND_COLOR:
     case P3A_SET_CLOCK_ENABLED:
     case P3A_SET_CLOCK_24H:
     case P3A_SET_CLOCK_POSITION:

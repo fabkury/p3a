@@ -186,13 +186,17 @@ static void klipy_channel_range(p3a_channel_range_t *out)
 
 esp_err_t source_klipy_start(void)
 {
+    // The service's own mark (credit/README.md).
+    extern const uint8_t mark_start[] asm("_binary_powered_by_klipy_p3aimg_start");
+    extern const uint8_t mark_end[] asm("_binary_powered_by_klipy_p3aimg_end");
     static const p3a_source_ops_t ops = {
         .source = P3A_SOURCE_KLIPY,
         .name = "klipy",
         .refresh = klipy_refresh,
         .remote = true,
         .url = klipy_url,
-        .credit = "Powered by KLIPY",
+        .credit = mark_start,
+        .credit_end = mark_end,
         .refresh_interval_s = klipy_refresh_interval_s,
         .index_capacity = klipy_index_capacity,
         .channel_range = klipy_channel_range,

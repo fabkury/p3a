@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // The UI's small pictures: the file format and drawing.
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -134,9 +135,86 @@ static void test_damaged_picture_files_are_refused_or_harmless(void)
         if (ui_image_open(&image, bytes, cut)) {
             fresh(round % 4 * 90);
             ui_image_draw(&canvas, &image, 1, 1, 2);
+            ui_image_draw_on(&canvas, &image, 1, 1, seed & 0xFFFFFF);
         }
         free(bytes);
     }
+}
+
+// 4 by 1: solid red, half white, a quarter blue, clear green.
+static size_t soft(uint8_t *out)
+{
+    static const uint8_t file[] = {
+        'P', '3', 'A', 'I', 1, 0, 4, 0, 1, 0,
+        0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x80, 0xFF, 0x00, 0x00, 0x40, 0x00, 0xFF, 0x00, 0x00,
+    };
+    memcpy(out, file, sizeof(file));
+    return sizeof(file);
+}
+
+static void test_a_soft_picture_is_mixed_with_its_ground(void)
+{
+    uint8_t bytes[64];
+    ui_image_t image;
+    TEST_ASSERT_TRUE(ui_image_open(&image, bytes, soft(bytes)));
+    // Over black: each colour scaled by its alpha.
+    fresh(0);
+    ui_image_draw_on(&canvas, &image, 2, 1, 0x000000);
+    TEST_ASSERT_EQUAL_HEX32(0xFF0000, at(2, 1));
+    TEST_ASSERT_EQUAL_HEX32(0x808080, at(3, 1));  // half white is grey
+    TEST_ASSERT_EQUAL_HEX32(0x000040, at(4, 1));
+    TEST_ASSERT_EQUAL_HEX32(0x000000, at(5, 1));  // clear: left alone
+    TEST_ASSERT_EQUAL(3, lit());
+    // Over a colour: what is not the picture's is the ground's.
+    fresh(0);
+    ui_image_draw_on(&canvas, &image, 0, 0, 0x204060);
+    TEST_ASSERT_EQUAL_HEX32(0xFF0000, at(0, 0));  // solid: the ground plays no part
+    TEST_ASSERT_EQUAL_HEX32(0x90A0B0, at(1, 0));  // (255*128 + g*127 + 127) / 255
+    TEST_ASSERT_EQUAL_HEX32(0x183088, at(2, 0));
+    TEST_ASSERT_EQUAL_HEX32(0x000000, at(3, 0));  // clear: not even the ground is drawn
+    // Upright when turned, and clipped at the edges.
+    fresh(180);
+    ui_image_draw_on(&canvas, &image, 0, 0, 0);
+    TEST_ASSERT_EQUAL_HEX32(0xFF0000, at(W - 1, H - 1));
+    fresh(0);
+    ui_image_draw_on(&canvas, &image, W - 1, H - 1, 0);
+    ui_image_draw_on(&canvas, &image, -100, 3, 0);
+    TEST_ASSERT_EQUAL(1, lit());
+    for (int i = 0; i < 16; i++) {
+        TEST_ASSERT_EQUAL_HEX8(0xEE, pixels[W * H * 3 + i]);
+    }
+    // Not opened: draws nothing.
+    ui_image_t none;
+    TEST_ASSERT_FALSE(ui_image_open(&none, bytes, 3));
+    fresh(0);
+    ui_image_draw_on(&canvas, &none, 0, 0, 0xFFFFFF);
+    TEST_ASSERT_EQUAL(0, lit());
+}
+
+// The marks of the sources, as compiled into the firmware: they open, they
+// are the same height, and each has soft pixels (made with --soft).
+static void test_the_sources_marks_are_pictures_of_one_height(void)
+{
+    static const char *const files[] = {GIPHY_MARK_FILE, KLIPY_MARK_FILE};
+    static uint8_t bytes[2][64 * 1024];
+    ui_image_t marks[2];
+    for (int i = 0; i < 2; i++) {
+        FILE *f = fopen(files[i], "rb");
+        TEST_ASSERT_NOT_NULL_MESSAGE(f, files[i]);
+        const size_t len = fread(bytes[i], 1, sizeof(bytes[i]), f);
+        fclose(f);
+        TEST_ASSERT_TRUE_MESSAGE(ui_image_open(&marks[i], bytes[i], len), files[i]);
+        int part_clear = 0;
+        for (int32_t p = 0; p < marks[i].width * marks[i].height; p++) {
+            const uint8_t alpha = marks[i].pixels[p * 4 + 3];
+            part_clear += alpha > 0 && alpha < 255;
+        }
+        TEST_ASSERT_TRUE_MESSAGE(part_clear > 0, files[i]);
+    }
+    TEST_ASSERT_EQUAL(27, marks[0].height);
+    TEST_ASSERT_EQUAL(marks[0].height, marks[1].height);
+    TEST_ASSERT_EQUAL(100, marks[0].width);
+    TEST_ASSERT_EQUAL(126, marks[1].width);
 }
 
 int main(void)
@@ -145,5 +223,7 @@ int main(void)
     RUN_TEST(test_a_picture_is_drawn_pixel_for_pixel_and_clear_pixels_are_left);
     RUN_TEST(test_bytes_that_are_not_a_picture_are_refused);
     RUN_TEST(test_damaged_picture_files_are_refused_or_harmless);
+    RUN_TEST(test_a_soft_picture_is_mixed_with_its_ground);
+    RUN_TEST(test_the_sources_marks_are_pictures_of_one_height);
     return UNITY_END();
 }

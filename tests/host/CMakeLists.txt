@@ -268,6 +268,9 @@ p3a_host_test(test_ui_route
 p3a_host_test(test_ui_image
     SOURCES ui/test_ui_image.c ${UI}/ui_image.c ${UI}/ui_canvas.c
     INCLUDES ${UI})
+target_compile_definitions(test_ui_image PRIVATE
+    GIPHY_MARK_FILE="${P3A_COMPONENTS}/source_giphy/credit/powered-by-giphy.p3aimg"
+    KLIPY_MARK_FILE="${P3A_COMPONENTS}/source_klipy/credit/powered-by-klipy.p3aimg")
 p3a_host_test(test_ui_credit
     SOURCES ui/test_ui_credit.c ${UI}/ui_credit.c
     INCLUDES ${UI})

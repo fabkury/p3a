@@ -68,7 +68,7 @@ The firmware is public (Apache 2.0). 1.x runs on real users' devices from
 | `tools/check_tree.py` | The structural rules below as a script; CI and the lab run it. |
 | `tools/embed_static.py` | Gzips the web files under `components/p3a_net/static/` into the firmware at configure time. Adding a page is adding a file there. `tools/test_embed_static.py` is its self-test. |
 | `tools/gen_font.py` | Makes a UI font file from a pixel font's TTF. Run by hand when a font changes; the result under `components/p3a_ui/fonts/` is committed. |
-| `tools/gen_image.py` | Makes a UI picture file from a PNG, the same way: by hand, result committed under `components/p3a_ui/images/`. |
+| `tools/gen_image.py` | Makes a UI picture file from a PNG, the same way: by hand, result committed under `components/p3a_ui/images/`. With `--soft` it keeps the PNG's soft edges, for a source's mark (`components/source_<name>/credit/`, beside the PNG as the service gives it). |
 | `tools/gen_settings.py` | Generates the settings table and struct from `components/p3a_settings/settings.json` at configure time. `tools/test_gen_settings.py` is its self-test. |
 | `tools/make_release.py` | Makes the release folder (`release/v<version>/`) from a release build: `p3a-v2.bin`, the other flash files, `flash_args`, and `nvs-erased.bin` (D89). Refuses a build that must not ship. `tools/test_make_release.py` is its self-test. |
 | `host/p3a-flasher/` | The Windows flasher program. It writes what a release's `flash_args` lists (`flash_plan.py`, tested by `tools/test_flash_plan.py`) and holds no address of its own. `build_flasher.py` builds the executable by hand, after `make_release.py`. |
@@ -150,6 +150,10 @@ All in `components/p3a_util`; each header explains itself at the top.
   its one task's tick (`makapix_register.c`); the MQTT client's own task
   only queues what arrives. A command becomes a call through
   `makapix_command_map()` (pure): add a command there, with its test.
+- **A source with a mark to be credited with** ("Powered by GIPHY") gives
+  it in its table (`credit`), a picture file compiled into its own
+  component. The UI draws it in the band under the source's artworks
+  (`ui_credit.c`, pure: where, and whether there is room).
 - **A source that must know what is seen** (to count views) sets
   `shown` in its table; the scheduler calls it. Nothing else asks the
   renderer or the UI.

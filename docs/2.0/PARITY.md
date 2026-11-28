@@ -227,7 +227,7 @@ Same pages and look, new internals (D11).
 | [x] | Repetition suppression (C) | M2.4 |
 | [x] | Aspect-ratio filter for museum channels (D) | M2.4, M4.3. Seen on the device with a 5:1 picture: passed over with the filter on, played with it off |
 | [x] | Clock overlay, off by default (idea 1) | `test_overlays.py`, host `test_ui_clock`. By eye: M3.5-a |
-| [x] | Giphy and Klipy branding in the letterbox band, on by default (idea 2) | M4.2, in words (D72); the marks wait on O6 |
+| [x] | Giphy and Klipy branding in the letterbox band, on by default (idea 2) | M4.2; the services' own marks since D101 |
 | [x] | Pixel fonts on screen (idea 3) | `test_ui_drawing.py`, host `test_ui_text`. By eye: M3.2-a |
 | [x] | Pins without duplicate bytes | `test_pins.py`, host `test_pin_table` |
 | [x] | Back-off under memory pressure | M4.1 |

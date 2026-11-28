@@ -97,9 +97,12 @@ typedef struct {
     // (a source that must look the address up); P3A_ERR_MISSING when the
     // artwork no longer exists. NULL for a source that is not remote.
     esp_err_t (*url)(const p3a_record_t *record, char *out, size_t len);
-    // The line that names the source, drawn in the band under its artworks
-    // when there is one ("Powered by GIPHY"). NULL for none.
-    const char *credit;
+    // The source's mark, drawn in the band under its artworks when there
+    // is one ("Powered by GIPHY", as the service drew it): a picture file
+    // made by tools/gen_image.py --soft and compiled into the source's
+    // component, from its first byte to the one after its last. NULL for
+    // none.
+    const uint8_t *credit, *credit_end;
     // What its downloads say they are; NULL for "p3a".
     const char *user_agent;
     // A download that is refused (401, 403) says something about that

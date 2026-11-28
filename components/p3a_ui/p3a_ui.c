@@ -228,14 +228,17 @@ static esp_err_t player_job(void *arg)
     s_problems_seen = facts.problems;
     // The source's name under its artwork, when it has one to show.
     p3a_record_t shown;
-    const char *credit = NULL;
+    const uint8_t *credit = NULL, *credit_end = NULL;
     animation_player_status_t on_panel = {0};
     if (play_scheduler_current(&shown)) {
         const p3a_source_ops_t *ops = p3a_source_get(shown.source);
-        credit = ops != NULL ? ops->credit : NULL;
+        if (ops != NULL) {
+            credit = ops->credit;
+            credit_end = ops->credit_end;
+        }
         animation_player_get_status(&on_panel);
     }
-    ui_display_set_credit(credit, on_panel.token, on_panel.width, on_panel.height);
+    ui_display_set_credit(credit, credit_end, on_panel.token, on_panel.width, on_panel.height);
     const ui_source_problem_t source = ui_player_source_problem(&facts, &words);
     if (source == UI_SOURCE_FINE) {
         changed |= ui_model_notice_hide(&s_model, P3A_NOTICE_SOURCE_PROBLEM);

@@ -19,7 +19,7 @@ times.
 
 | | |
 |---|---|
-| Running | `2.0.0-dev`, test configuration (`build-test`), flashed 2026-11-26 with D100 and the redrawn playset editor. On the Wi-Fi as `p3a-fab.local` |
+| Running | `2.0.0-dev`, test configuration (`build-test`), flashed 2026-11-28 with the sources' marks (D101). On the Wi-Fi as `p3a-fab.local` |
 | Flash state | Bootloader, 2.x partition table, app in `ota_0`, the 2.9.3 co-processor image in `slave_fw`. NVS holds the test rig's Wi-Fi credentials and the device name `fab`, put there by the lab (`lab.py provision`). The C6 itself runs esp_hosted 2.7.0 and cannot be updated (see M1.2-e) |
 | SD card | 32 GB, healthy (D8). Still holds 1.x folders; see the M1.3 entry in the session log |
 | 1.x flash backup | `%USERPROFILE%\.p3a-lab\backups\p3a-fab_v1.2.4_full-flash_2026-11-17.bin` (see the session log for size and hash) |
@@ -52,7 +52,7 @@ reopened (why).
 | M3.5 Overlays | done 2026-11-23 except source branding, which moves to M4.2 where its sources and their terms are (O6). Tiers: host tests (29 programs, under the sanitizers too), device tests (the overlays equal the workstation's rendering). Manual check M3.5-a pending |
 | M3.6 USB mass storage | built 2026-11-23; open for manual check M3.6-a (a real computer). Tiers: host tests (30 programs, under the sanitizers too), device tests with the bus's reports injected (with it every test not marked slow passes: 267 cases), release, test and trace builds, the configuration guard, a from-scratch configure in the CI container |
 | M4.1 Fetch, download, refresh, eviction | done 2026-11-25. Tiers: host tests (32 programs), the whole device suite on the M4.1 commit (297 pass, 6 skipped), CI green, release and trace builds (made on the tree with M4.2 part 1 in it). Manual: none. Not verified: listed in the log entry of 2026-11-23; O9's measurements moved to M4.2 |
-| M4.2 Giphy and Klipy | done 2026-11-25. Tiers: host tests (35 programs), device tests (the whole suite: 309 passed, 6 skipped), CI, test, release and trace builds. Manual: M4.2-a. Not verified: listed in the log entries of 2026-11-25. O6 (the services' own marks) stays open and holds nothing |
+| M4.2 Giphy and Klipy | done 2026-11-25. Tiers: host tests (35 programs), device tests (the whole suite: 309 passed, 6 skipped), CI, test, release and trace builds. Manual: M4.2-a. Not verified: listed in the log entries of 2026-11-25. The services' own marks replaced the words on 2026-11-28 (D101) |
 | M4.3 Museums | done 2026-11-25. Tiers: host tests (36 programs, also under the sanitizers), device tests (the whole suite on the last build: 322 passed, 6 skipped), CI, test, release and trace builds. Manual: none. Not verified: listed in the log entries of 2026-11-25. O20 (what p3a tells the museums it is) stays open and holds nothing |
 | M4.4 Pinned lists and "show this" | done 2026-11-25. Tiers: host tests (38 programs, also under the sanitizers), device tests (the whole suite: 330 passed, 6 skipped; the pin tests again on the last build), test, release and trace builds. Manual: M4.4-a. Not verified: listed in the log entry |
 | M4.5 Makapix | done 2026-11-26 but for manual check M4.5-b (a like, the site's buttons). The source, registration, the link, commands, views, likes, renewal, the server's playsets. Tiers: host tests, device tests unregistered and, live, on the registered dev unit |
@@ -217,7 +217,7 @@ and proposals are in [DECISIONS.md](DECISIONS.md) under "Open decisions".
 | O2 | Should 1.2.5 carry a notice about 2.0, and with what wording? | 1.2.5 |
 | O5 | Clock overlay: built with working answers (24 hour by default with a 12 hour setting, no seconds, hidden under any screen, one font). Say if any should differ | when convenient |
 | O19 | How does a person tell the device its time zone? The setting is a POSIX TZ string, which nobody types. The web page could offer a list of regions, or send the browser's own zone | M5.1 |
-| O6 | May p3a ship Giphy's and Klipy's own marks, and which? The source is credited in words meanwhile (D72) | when Fab has an answer; holds nothing |
+| O6 | Answered 2026-11-28: the two marks Fab chose (D101) | closed |
 | O20 | What should 2.0 tell the museums it is? 1.x sent "p3a/{version}" with a contact e-mail address. 2.0 sends "p3a/{version}" alone for now. Museums like a way to reach whoever runs a client; the choices are an address, the project's public page, or nothing | M4.3 ends; holds nothing |
 | O21 | Answered 2026-11-26: leave it (D95) | closed |
 | O1 | Exact name of the 2.x firmware asset: working answer D85, to confirm | M5.2 |
@@ -528,6 +528,47 @@ M4.3, 2026-11-25:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-28: Giphy's and Klipy's own marks under their artworks (D101)
+
+Fab chose the two marks, which answers O6. The words "Powered by GIPHY"
+in the UI's font, centred, are gone; each service's own mark is drawn in
+their place.
+
+- **The marks.** Giphy's small mark for dark backgrounds, 100 by 27
+  pixels, as Giphy gives it. Klipy's horizontal yellow and white mark,
+  640 by 137 as Klipy gives it, scaled to the same 27 rows (126 wide).
+  Both PNGs are committed unchanged beside the picture files made from
+  them, in `components/source_<name>/credit/`, each with a README that
+  has the command.
+- **Where.** At its own size, against the right of the band below the
+  artwork with 12 clear pixels to the edge, in the middle of the band's
+  height, when the band has 35 rows or more (the mark and 4 rows each
+  side). `ui_credit.c`, still pure; the sizes 2 and 3 of the text are
+  gone with the text.
+- **Soft edges.** Both marks are anti-aliased, and Giphy's "POWERED BY"
+  is white at half alpha. `tools/gen_image.py --soft` keeps the PNG's
+  alpha (and `--height` scales, with the colours weighted by alpha), and
+  `ui_image_draw_on()` mixes each pixel with the background colour, which
+  is what the band has. The icons are unchanged: their files come out of
+  the tool byte for byte as before.
+- **Who holds the mark.** The source: `credit` in its table is now the
+  picture file, compiled into the source's own component, so the UI still
+  names no source. `AGENTS.md` says so.
+- Tested. Host: `test_ui_credit` rewritten for the new placement,
+  `test_ui_image` gains the mixing, the mutated-file round for it, and a
+  check that both committed marks open and are 27 rows high; 44 programs
+  pass, under the sanitizers in WSL too. Tree checks pass. Device (test
+  build, flashed): `test_giphy.py`, 8 cases; the credit case now compares
+  the panel with Giphy's mark pixel for pixel at the expected place, and
+  finds nothing else in the band. It turns the clock off while it looks,
+  since the dev unit has the clock on and the test now counts every pixel
+  that is not background. Smoke: 6 cases.
+- Not tested: Klipy's mark on the panel (it is drawn by the same code
+  from a file the host test opens; no device test looks at it and it was
+  not seen). A background colour other than black on the device (host
+  test only). Rotations on the device (the canvas's host tests). The
+  release and trace builds were not made.
 
 ### 2026-11-26: the device tests leave the dev unit its API keys
 

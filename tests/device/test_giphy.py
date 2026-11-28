@@ -208,51 +208,73 @@ def test_a_refused_key_is_said_over_what_plays_until_it_is_put_right(rig):
 
 def test_giphy_is_named_in_the_band_under_its_gifs(rig):
     import io
+    import pathlib
+    import struct
     from PIL import Image
-    grey = (0xA8, 0xA8, 0xA8)
+    # The mark as the firmware holds it, mixed with black as the device mixes it.
+    mark_file = (pathlib.Path(__file__).parents[2] / "components" / "source_giphy" / "credit"
+                 / "powered-by-giphy.p3aimg").read_bytes()
+    mark_w, mark_h = struct.unpack_from("<HH", mark_file, 6)
+    expected = Image.new("RGB", (mark_w, mark_h))
+    expected.putdata([tuple((mark_file[10 + i * 4 + c] * mark_file[13 + i * 4] + 127) // 255 for c in (2, 1, 0))
+                      for i in range(mark_w * mark_h)])
+    last = {}
 
     def band_pixels() -> tuple:
-        """(rows in the band below the picture, pixels of the credit's colour in it and above the picture)"""
+        """(rows in the band below the picture, pixels that are not the background in it and above the picture)
+
+        Four rows next to the picture are left out on each side: the player may place a scaled picture's edge a
+        row or two from where this works it out, and the mark keeps four rows clear of the picture anyway."""
         width, height, _ = rig.on_panel()
         shown_h = 720 * height // width if width >= height else 720
         band_top = (720 - shown_h) // 2 + shown_h
         shot = Image.open(io.BytesIO(rig.api.get("/api/v2/test/screenshot", timeout=60).body)).convert("RGB")
-        count = lambda box: sum(n for n, colour in (shot.crop(box).getcolors(1 << 20) or []) if colour == grey)
-        return 720 - band_top, count((0, band_top, 720, 720)) if band_top < 720 else 0, \
-            count((0, 0, 720, (720 - shown_h) // 2)) if shown_h < 720 else 0
+        last.update(shot=shot, band_top=band_top)
+        count = lambda box: sum(n for n, colour in (shot.crop(box).getcolors(1 << 20) or []) if colour != (0, 0, 0))
+        return 720 - band_top, count((0, band_top + 4, 720, 720)) if band_top + 4 < 720 else 0, \
+            count((0, 0, 720, (720 - shown_h) // 2 - 4)) if shown_h < 720 - 8 else 0
 
-    rig.uart.command("settings set", {"background_color": "#000000", "rotation": 0})
-    assert rig.uart.command("sched activate", playset("trending")) == {"result": "ok"}
-    rig.wait("a GIF is playing", lambda s: s["playing"] and not s["loading"] and s["current_source"] == "giphy",
-             timeout=60)
-    # A GIF wide enough to leave a band: most are, a square one is not.
-    for _ in range(8):
+    # The clock is drawn in a band too: off while the bands are looked at.
+    clock = rig.api.get("/api/v2/settings").data["clock_enabled"]
+    rig.uart.command("settings set", {"background_color": "#000000", "rotation": 0, "clock_enabled": False})
+    try:
+        assert rig.uart.command("sched activate", playset("trending")) == {"result": "ok"}
+        rig.wait("a GIF is playing", lambda s: s["playing"] and not s["loading"] and s["current_source"] == "giphy",
+                 timeout=60)
+        # A GIF wide enough to leave a band: most are, a square one is not.
+        for _ in range(8):
+            rows, below, above = band_pixels()
+            if rows >= 60:
+                break
+            rig.step("next")
+        assert rows >= 60, "no wide GIF among those fetched"
+        time.sleep(1.0)
         rows, below, above = band_pixels()
-        if rows >= 60:
-            break
-        rig.step("next")
-    assert rows >= 60, "no wide GIF among those fetched"
-    time.sleep(1.0)
-    rows, below, above = band_pixels()
-    assert below > 200 and above == 0, "the words are in the band below the picture, and only there"
-    # Under the first GIF after another source's artwork too: the text and the picture change
-    # together then, and the credit once went missing until the next change.
-    import pathlib
-    picture = (pathlib.Path(__file__).parents[1] / "assets" / "decoders" / "good" / "png" / "gray.png").read_bytes()
-    try:
-        assert rig.api.call("POST", "/api/v2/files?name=zz-giphy-between.png", picture, timeout=30).status == 200
-        rig.wait("the card's picture is up", lambda s: s["current_source"] == "local" and not s["loading"])
-        time.sleep(1.0)
-        assert band_pixels()[1] == 0, "a picture from the card has no credit"
-        rig.step("back")
-        assert rig.status()["current_source"] == "giphy"
-        time.sleep(1.0)
-        assert band_pixels()[1] > 200, "the GIF that comes back has its credit"
+        assert below > 200 and above == 0, "the mark is in the band below the picture, and only there"
+        # Giphy's own mark, pixel for pixel, against the right and in the middle of the band's height.
+        left, top = 720 - 12 - mark_w, last["band_top"] + (rows - mark_h) // 2
+        assert last["shot"].crop((left, top, left + mark_w, top + mark_h)).tobytes() == expected.tobytes()
+        assert last["shot"].crop((0, last["band_top"] + 4, left, 720)).getcolors() == [(left * (rows - 4), (0, 0, 0))], \
+            "nothing left of the mark"
+        # Under the first GIF after another source's artwork too: the mark and the picture change
+        # together then, and the credit once went missing until the next change.
+        picture = (pathlib.Path(__file__).parents[1] / "assets" / "decoders" / "good" / "png" / "gray.png").read_bytes()
+        try:
+            assert rig.api.call("POST", "/api/v2/files?name=zz-giphy-between.png", picture, timeout=30).status == 200
+            rig.wait("the card's picture is up", lambda s: s["current_source"] == "local" and not s["loading"])
+            time.sleep(1.0)
+            assert band_pixels()[1] == 0, "a picture from the card has no credit"
+            rig.step("back")
+            assert rig.status()["current_source"] == "giphy"
+            time.sleep(1.0)
+            assert band_pixels()[1] > 200, "the GIF that comes back has its credit"
+        finally:
+            rig.remove("zz-giphy-between.png")
+        rig.uart.command("settings set", {"source_credit": False})
+        try:
+            time.sleep(1.0)
+            assert band_pixels()[1] == 0, "and gone when the setting says so"
+        finally:
+            rig.uart.command("settings set", {"source_credit": True})
     finally:
-        rig.remove("zz-giphy-between.png")
-    rig.uart.command("settings set", {"source_credit": False})
-    try:
-        time.sleep(1.0)
-        assert band_pixels()[1] == 0, "and gone when the setting says so"
-    finally:
-        rig.uart.command("settings set", {"source_credit": True})
+        rig.uart.command("settings set", {"clock_enabled": clock})

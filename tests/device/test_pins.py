@@ -233,6 +233,12 @@ def test_the_lists_and_what_they_keep_are_there_after_a_restart(rig):
     uart.command("reboot")
     uart.wait_ready(since=start, timeout=30)
     lab.wait_online(uart)
+    # Nothing is evicted before the clock is set, and the network is up some seconds before it is:
+    # without this wait both evictions below can do nothing, and the first check passes for no reason.
+    deadline = time.monotonic() + 60
+    while not uart.command("clock")["set"] and time.monotonic() < deadline:
+        time.sleep(0.5)
+    assert uart.command("clock")["set"], "the clock should be set within a minute of the network"
     assert rig.pins.active()["slug"] == rig.slug and rig.pins.active()["count"] == 1
     assert [entry["id"] for entry in rig.pins.pins(rig.slug)] == [rig.kept]
     kept = key_of(rig, rig.kept)

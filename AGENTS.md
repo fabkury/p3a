@@ -78,7 +78,7 @@ The firmware is public (Apache 2.0). 1.x runs on real users' devices from
 | `host/p3a-lab/` | Builds, flashes and talks to the dev unit. Use it instead of raw `idf.py` for anything that involves the device. |
 | `partitions.csv` | The 2.x partition table, fixed for the life of 2.x (`docs/2.0/DECISIONS.md` D1). |
 | `sdkconfig.defaults` | The build configuration and its source of truth. `sdkconfig` is generated and not tracked. |
-| `legacy/` | The 1.x sources, kept as the quarry 2.0 is built from. Never compiled, never included, never linked. See `legacy/README.md`. |
+| `legacy/` | The 1.x build configuration, which `tools/compare_sdkconfig.py` reads. The 1.x sources that were here are all moved or deleted; they are on `main`. See `legacy/README.md`. |
 | `docs/2.0/` | The work stream: protocol, plan, ledger, decisions, testing, parity. |
 | `docs/2.0-architecture-review/` | The design of 2.0. |
 | `host/` | Host tooling. `intro-anim-lab` builds the boot animations from `components/p3a_ui/intro/` and checks their contract (`--check`); run it after touching one. In `jitter-lab`, `soak.py` runs a soak against 2.0 (the workload, the UART log, the frame trace, the report) with `pull_frames.py`, `analyze.py`, `run_audit.py` and `serial_logger.py`; the other tools there still speak 1.x's API. |
@@ -262,13 +262,12 @@ All in `components/p3a_util`; each header explains itself at the top.
 - **Long loops yield.** Console output is a busy wait, and the task
   watchdog reports a task that starves the idle task for 15 seconds.
 
-### Moving code out of `legacy/`
+### Code from 1.x
 
-Code leaves `legacy/` only inside a milestone: `git mv` it into the new tree,
-strip its upward includes, check `docs/known-issues.md` for that file and
-fix or re-record what it lists, and land it with tests at the tier the
-milestone names. Deleting a legacy file without moving it goes in the
-ledger's deletion log with the reason.
+`legacy/` holds no sources any more. Code that is still wanted from 1.x is
+read on `main` and written into the 2.0 tree like any other code: no upward
+includes, `docs/known-issues.md` checked for the file it came from, and
+tests at the tier its milestone names.
 
 ## Toolchain and environment
 

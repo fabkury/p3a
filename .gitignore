@@ -39,3 +39,6 @@ build-rel/
 # p3a-lab run logs
 host/p3a-lab/runs/
 .pytest_cache/
+
+# What is left on the workstation of the 1.x tree (see legacy/README.md)
+legacy/components/

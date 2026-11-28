@@ -8,18 +8,18 @@ times.
 
 | | |
 |---|---|
-| Phase | 4, remote sources (Phases 0 to 3 complete but for their manual checks) |
-| Current milestone | Phase 6: M6.1 (soaks) and M6.2 (parity audit) together. Phase 5 is done but for what waits on Fab (M4.5-a, M5.2-a, M5.3-a, M5.3-b) |
-| Next action | Phase 6's machine work is done as far as it goes without Fab: the jitter and memory soaks passed (RUN-20261125-02, RUN-20261126-01), the parity audit is in `PARITY.md`, `legacy/` holds only what M4.5 part 4 reads. The dev unit has the test build, provisioned, playing the card. Next, in order of use: (1) if Fab has registered the unit (M4.5-a), M4.5 part 4: live Makapix tests, the "Followed" pill, the server's playsets by name, `get_post`, then delete `legacy/components/makapix` and the rest of `legacy/` but the 1.x `sdkconfig`. (2) O21 if Fab answers it (large artworks skipped when memory is short at a swap). (3) Click what was never clicked: upload on the home page, the Makapix registration on the settings page, drag to reorder, Harvard and the Smithsonian in the museum browser. Chrome is connected; stub `window.confirm` before clicking a button that asks. (4) The intermittent failure of `test_giphy.py::test_a_swipe_up_on_a_gif_is_told_to_giphy` (the swipe down did not unpin, once in a whole suite), and `test_the_setup_network_is_on_the_air` once back on the former LAN. (5) A multi-day soak before release (tell Fab first: it occupies the dev unit): `lab.py flash trace`, `python host/jitter-lab/soak.py --hours 72`. M6.3, the field test, is Fab's |
-| Blocked on | Nothing. The dev unit is registered with Makapix Club (M4.5-a done; its snapshot is `nvs-registered.bin` in the lab's folder) |
-| In flight | Nothing |
+| Phase | 6, hardening and release (Phases 0 to 5 complete but for their manual checks) |
+| Current milestone | Phase 6: M6.1 (the long soak is running) and M6.2 (parity: 24 rows open, each with what it waits on). Phase 5 is done but for what waits on Fab (M5.2-a, M5.3-a, M5.3-b) |
+| Next action | (1) When RUN-20261128-01 ends (about 18:45 on 2026-11-29): read `host/jitter-lab/runs/RUN-20261128-01/report.md` and `%USERPROFILE%\.p3a-lab\soak\soak-20261128.out.log`, record the verdict here and in `docs/jitter/REPORT.md`, close M6.1 if it passed. Then `lab.py up`, and set the unit's clock and time zone again as Fab had them (`clock_enabled` true, `timezone` `EST5EDT,M3.2.0,M11.1.0`: the suite's factory reset cleared them). (2) What nobody has clicked or tested, listed at the top of `PARITY.md`: in Chrome, a large JPEG uploaded from the home page, the show-URL box, the settings page's new logo section; then tests for the stale-index sweep and for show URL refused during a USB session. Chrome is connected; stub `window.confirm` before clicking a button that asks. (3) The intermittent swipe down in `test_giphy.py::test_a_swipe_up_on_a_gif_is_told_to_giphy` (it passed in the whole suite of 2026-11-28). (4) Fab's: the manual checklist, O22 to O24 and the older open questions, the second board (O14), M6.3 and M6.4 |
+| Blocked on | Nothing. The dev unit is busy with the soak until about 18:45 on 2026-11-29: do not flash it, reset it or open its serial port before then |
+| In flight | RUN-20261128-01: `soak.py --hours 27 --mix work`, started 2026-11-28 15:42 as a detached process on the workstation, which is kept from idle sleep while it runs (closing the lid would still stop it). When it ends it writes the report and puts the unit's playset and dwell back by itself |
 | Uncommitted work | None |
 
 ## Dev unit
 
 | | |
 |---|---|
-| Running | `2.0.0-dev`, test configuration (`build-test`), flashed 2026-11-28 with the sources' marks (D101). On the Wi-Fi as `p3a-fab.local` |
+| Running | `2.0.0-dev`, trace configuration (`build-trace`), flashed 2026-11-28 for the long soak, on the tree of that date. On the Wi-Fi as `p3a-fab.local`, registered with Makapix Club. Its status says "built Nov 25": that is the compile date of one file that was not recompiled, not the age of the code |
 | Flash state | Bootloader, 2.x partition table, app in `ota_0`, the 2.9.3 co-processor image in `slave_fw`. NVS holds the test rig's Wi-Fi credentials and the device name `fab`, put there by the lab (`lab.py provision`). The C6 itself runs esp_hosted 2.7.0 and cannot be updated (see M1.2-e) |
 | SD card | 32 GB, healthy (D8). Still holds 1.x folders; see the M1.3 entry in the session log |
 | 1.x flash backup | `%USERPROFILE%\.p3a-lab\backups\p3a-fab_v1.2.4_full-flash_2026-11-17.bin` (see the session log for size and hash) |
@@ -60,8 +60,8 @@ reopened (why).
 | M5.2 Firmware OTA for 2.x | done 2026-11-25 but for manual check M5.2-a (one update from GitHub itself). Tiers: host tests, device tests (the whole cycle from a mirror), and the cycle clicked through the update page in Chrome |
 | M5.3 Release engineering | done 2026-11-25 but for manual checks M5.3-a (the web flasher) and M5.3-b (the flasher program). The release folder from `tools/make_release.py`, flashed onto the dev unit with its own command. Tiers: self-tests in CI, one flash by hand |
 | M5.4 Documentation | done 2026-11-25. The user's documents and the developer pages describe 2.0; the API examples were run against the dev unit |
-| M6.1 Soaks | in progress. Done 2026-11-26: the jitter pass bar (RUN-20261125-02, 3 h) and the 63-channel memory soak (RUN-20261126-01, 3 h), both without a stall or a reset. Left: a multi-day run |
-| M6.2 Parity audit | in progress. The audit is in `PARITY.md` (116 rows ticked, 38 open, most waiting on a manual check); `legacy/` holds only the 1.x Makapix client and the 1.x `sdkconfig`. Left: the open rows, and deleting the Makapix client now that M4.5 has what it needed from it |
+| M6.1 Soaks | in progress. Done 2026-11-26: the jitter pass bar (RUN-20261125-02, 3 h) and the 63-channel memory soak (RUN-20261126-01, 3 h), both without a stall or a reset. Running: the long run, 27 hours by Fab's choice in place of the 72 first thought of (RUN-20261128-01, ends about 18:45 on 2026-11-29) |
+| M6.2 Parity audit | in progress. Re-audited 2026-11-28: 130 rows ticked, 24 open, and `PARITY.md` says at its top what each open row waits on (a manual check, another board, a failure that cannot be provoked, a test nobody wrote, O22). `legacy/` holds only the 1.x configuration the build check reads (O24). Left: the open rows, O22 to O24 |
 | M6.3 Field test | not started |
 | M6.4 Release | not started |
 
@@ -86,17 +86,6 @@ Open:
   device-tested against a mirror on the LAN; this adds GitHub's redirect
   and its TLS.
 - **M4.5-b, what only the owner can do on a registered unit.** With a Makapix artwork playing (the Promoted pill): swipe up (a like, with its icon; it should show on the post at makapix.club, under your name), then swipe down (taken back). Then, at makapix.club, the player's buttons: next, previous, pause, a channel, show on player on a post. Each should do on the device what it says.
-- **M4.5-a, registering the dev unit with Makapix Club** (D13). Needed
-  before anything a registered player does can be tested (part 3 on).
-  With the unit on and on the network: `curl -X POST
-  http://p3a-fab.local/api/v2/makapix/registration`. A six-character code
-  appears on the screen, large, with "sign in at makapix.club and enter
-  this code" under it. Type it at makapix.club within 15 minutes, with
-  any name for the player. The screen should say "Registered" for ten
-  seconds and go back to the artwork; `curl
-  http://p3a-fab.local/api/v2/makapix` should say `"registered": true`.
-  Say when it is done (or do it together with a session, which can start
-  it and watch).
 - **M4.4-a, the pin icons.** With a Giphy, Klipy or museum artwork
   playing, swipe up: a pin icon should flash in the top left corner for
   four seconds (with Giphy art, the click icon top right as well). Swipe
@@ -104,12 +93,20 @@ Open:
   the error icon, top right (there is nothing left to undo). On a file
   of your own, either swipe gives the error icon top right. The tests
   check what each swipe does to the list, not which icon is drawn.
-- **M4.2-a, the credit under a Giphy artwork.** With a Giphy key set and a
-  Giphy channel playing, wait for a GIF that is wider than it is tall.
-  "Powered by GIPHY" should stand centred in the black band under it, in
-  grey: readable from where the device is usually seen, quieter than the
-  picture, clear of its edge. Nothing under a GIF that fills the screen.
-  Say if the size or the grey is wrong.
+- **M4.2-a, the marks under Giphy and Klipy artworks** (D101). With a
+  Giphy channel playing, wait for a GIF that is wider than it is tall:
+  Giphy's "Powered by GIPHY" mark should stand at the right of the band
+  under it, clear of the edge. The same with a Klipy channel and Klipy's
+  mark, the two of the same height. With the clock on at the bottom
+  right, the mark stands at the left. With a light background colour
+  (white, say), each service's mark for light backgrounds is drawn;
+  Klipy's has not been seen on the panel by anyone. Nothing under an
+  artwork that fills the screen. Fab saw the dark marks on 2026-11-28 and
+  asked for the polish that followed; this line is for the result.
+- **M5.1-a, dragging in the playset editor.** On the playsets page, drag
+  a channel's row by its handle to another place with a real mouse (and
+  on a phone, with a finger): the rows reorder and Save keeps the order.
+  The handlers were driven with made-up drag events only.
 
 - **M1.2-a, the panel shows what the framebuffer holds.** Run
   `python host/p3a-lab/lab.py cmd "lcd bars"`. The panel should show eight
@@ -201,6 +198,10 @@ Open:
 
 Cleared:
 
+- **M4.5-a, registering the dev unit with Makapix Club.** Done by Fab on
+  2026-11-26. The registration was lost to a test the same day and
+  recovered from the flash (ledger entries of that date); its snapshot is
+  `nvs-registered.bin` in the lab's folder.
 - **M2.1-a, how playback looks.** Cleared by Fab on 2026-11-23 (ledger entry of
   that date): motion, sharpness, JPEG tones, placement, transparency and
   rotation all look right.
@@ -212,7 +213,10 @@ and proposals are in [DECISIONS.md](DECISIONS.md) under "Open decisions".
 
 | Id | Question | Needed before |
 |---|---|---|
-| Q1 to Q10 | Ten 1.x behaviours that look accidental (brightness not restored at boot, API keys readable over the LAN, no update check for 12 hours, and others). Keep or change each? Listed in [PARITY.md](PARITY.md) under "Behaviours to decide" | M1.3 at the earliest; each row names its milestone |
+| Q3, Q4, Q8, Q9 | Of the ten 1.x behaviours that looked accidental, six are decided. Four have working answers for Fab to confirm or overturn: the first update check two minutes after the network (Q3, D87); pinned art scaled as its own source's is (Q4, D78); the raw SD debug endpoints not carried over (Q8, D94); `set_mirror` still answers "unsupported" (Q9). Listed in [PARITY.md](PARITY.md) under "Behaviours to decide" | M6.4 |
+| O22 | Is "reset the advance timer" dropped as an action? 1.x had a call; 2.0 has none and nothing asks for one. Proposed: dropped | M6.2 |
+| O23 | Do the parity rows carried over on trust (behaviours for hardware that fails, which the dev unit cannot be made to do) hold the release? Proposed: no | M6.2 |
+| O24 | When do `tools/compare_sdkconfig.py` and `legacy/sdkconfig` go? Proposed: in the release commit | M6.4 |
 | O18 | Should the user's own files be scaled smoothly or with sharp pixels? 1.x used sharp pixels for everything on the card, which suits pixel art and makes photographs blocky. Options: keep sharp; go smooth; or decide per file (smooth for JPEG, sharp for the rest) | M2.4 |
 | O2 | Should 1.2.5 carry a notice about 2.0, and with what wording? | 1.2.5 |
 | O5 | Clock overlay: built with working answers (24 hour by default with a 12 hour setting, no seconds, hidden under any screen, one font). Say if any should differ | when convenient |
@@ -257,6 +261,27 @@ its own commit on `main`; nothing else of 2.0 goes there.
 What was deleted from `legacy/` without being moved, and why. Filled from
 M0.1 on.
 
+M6.2, 2026-11-28. The last sources in `legacy/`, kept until M4.5 had
+read them. M4.5 is done (parts 1 to 4, live on the registered dev unit).
+
+- `components/makapix/` (29 files): rewritten as
+  `components/source_makapix` (the source, `makapix_rpc()` over HTTPS for
+  listings, reactions and playsets (D80), the MQTT link for commands,
+  presence and views, registration, renewal) and
+  `components/p3a_net/net_makapix_commands.c` with the pure
+  `makapix_command_map()`. Not carried over: `get_post` and the
+  single-artwork channel (D96), the listing over MQTT (D80).
+- `components/channel_manager/makapix_channel_*` (8 files): a Makapix
+  channel is a channel like any other now: listed by the source's
+  `refresh`, kept, downloaded and evicted by the content task (M4.1).
+- `components/p3a_core/p3a_current_post.*` and
+  `p3a_reaction_dispatcher.*`: what is on the screen is
+  `play_scheduler_current()`, and a like is the `like` of that record's
+  source (`test_player_api.py`).
+- Left on the workstation, untracked and untouched:
+  `legacy/components/makapix/certs/` (the certificate includes a build of
+  `main` needs) and `legacy/managed_components/`.
+
 M6.2, 2026-11-25. Everything below was rewritten in 2.0 in the milestone
 named, and was left in the quarry until its features had all moved. The
 parity audit of this date is the check that they have (`PARITY.md`). 1.x's
@@ -297,9 +322,8 @@ sources remain on `main`.
   flasher build: `tools/make_release.py` and `host/p3a-flasher` now),
   `partitions.csv` (1.x's table), `dependencies.lock`.
 
-Still in `legacy/`: `components/makapix`, `channel_manager`'s
-`makapix_channel_*`, and `p3a_core`'s two files about the current post
-and reactions, all for M4.5 part 4 to read; `sdkconfig` and
+Still in `legacy/` after that date: the 1.x Makapix client (deleted on
+2026-11-28, see the top of this log) and `sdkconfig` and
 `sdkconfig.defaults`, which `tools/compare_sdkconfig.py` compares every
 release build against.
 
@@ -528,6 +552,57 @@ M4.3, 2026-11-25:
 
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
+
+### 2026-11-28: the ledger put right, `legacy/` emptied of sources, the parity sheet re-audited, a whole run of everything, the long soak started
+
+Fab asked what is left for 2.0, then for the tidy, the full runs and the
+long soak, at 27 hours instead of 72.
+
+- **`legacy/` holds no sources.** The 1.x Makapix client (41 files) is
+  deleted, with its lines in the deletion log. What is left is the 1.x
+  configuration that `tools/compare_sdkconfig.py` reads, and when that
+  goes is O24. `AGENTS.md`, `legacy/README.md` and `PARITY.md` say so.
+  The workstation's untracked leftovers under `legacy/components/` are
+  ignored by name now (their own `.gitignore` went with the client).
+- **The parity sheet, row by row.** Each of the 38 open rows was checked
+  against the tests and the code as they are. 14 are ticked (most of the
+  Makapix block, which was written before the live tests on the
+  registered unit; Q8, dropped by D94). 24 stay open, and the top of
+  `PARITY.md` says what each waits on. No open row is missing code but
+  one: 1.x's "reset the advance timer" action has no call in 2.0, and
+  whether it is dropped is O22. The rows for hardware that fails cannot
+  be ticked by any test here: O23.
+- **The ledger.** The phase (it said 4), the next action, M4.5-a moved to
+  cleared, M4.2-a rewritten for the marks of D101, a new manual check
+  M5.1-a (a real drag in the playset editor), Q1 to Q10 reduced to the
+  four that still wait on a word from Fab.
+- **Everything run, on this tree.** Tree checks and their self-test (29);
+  host tests (44); web tests (43); the release and trace builds with the
+  build checks; the whole device suite on the test build: 364 passed, 1
+  failed, 9 skipped (6 timing cases that need the trace-test build, 3
+  live Makapix cases that the factory-reset tests run before). Then
+  `test_makapix.py` by itself on the registered unit: 8 passed, 2 skipped
+  (they are for an unregistered unit). The swipe-down case of
+  `test_giphy.py` passed this time.
+- **The one failure was the test's.**
+  `test_pins.py::test_the_lists_and_what_they_keep_are_there_after_a_restart`
+  evicted straight after a restart, and nothing is evicted before the
+  clock is set, which is some seconds after the network is up. Its first
+  check then passed for no reason and its second failed. It waits for the
+  clock now; the file passes by itself and after smoke (14 cases).
+- **The long soak**, RUN-20261128-01: the trace build, the work mix (8
+  channels, one of each kind of source), 27 hours from 15:42. The
+  workstation sleeps after five idle minutes on mains, so the run is
+  started through a wrapper that asks Windows to stay awake while it
+  lives; no power setting was changed.
+- Not run: the 6 timing cases (`trace-test` build); the host tests under
+  the sanitizers in WSL (no host-tested file changed; CI runs them).
+  Not done yet, and listed under "Next action": the clicks in Chrome.
+- Found on the way: the device suite leaves the unit's settings at their
+  defaults (its factory-reset tests), so the clock and time zone Fab had
+  set are gone until set again; only the keys and the registration are
+  put back by the teardown. The status call's "built" date does not
+  follow a rebuild.
 
 ### 2026-11-28: the marks polished: cut to size, a light pair, out of the clock's way (D101)
 

@@ -151,9 +151,10 @@ All in `components/p3a_util`; each header explains itself at the top.
   only queues what arrives. A command becomes a call through
   `makapix_command_map()` (pure): add a command there, with its test.
 - **A source with a mark to be credited with** ("Powered by GIPHY") gives
-  it in its table (`credit`), a picture file compiled into its own
-  component. The UI draws it in the band under the source's artworks
-  (`ui_credit.c`, pure: where, and whether there is room).
+  it in its table (`credit`, and `credit_light` for light background
+  colours), picture files compiled into its own component. The UI draws
+  one in the band under the source's artworks (`ui_credit.c`, pure:
+  which, where, and whether there is room).
 - **A source that must know what is seen** (to count views) sets
   `shown` in its table; the scheduler calls it. Nothing else asks the
   renderer or the UI.

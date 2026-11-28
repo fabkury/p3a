@@ -191,32 +191,42 @@ static void test_a_soft_picture_is_mixed_with_its_ground(void)
     TEST_ASSERT_EQUAL(0, lit());
 }
 
-// The marks of the sources, as compiled into the firmware: they open, they
-// are the same height, and each has soft pixels (made with --soft).
-static void test_the_sources_marks_are_pictures_of_one_height(void)
+// The marks of the sources, as compiled into the firmware: they open and
+// have the sizes their READMEs say.
+static void test_the_sources_marks_are_pictures_of_the_sizes_meant(void)
 {
-    static const char *const files[] = {GIPHY_MARK_FILE, KLIPY_MARK_FILE};
-    static uint8_t bytes[2][64 * 1024];
-    ui_image_t marks[2];
-    for (int i = 0; i < 2; i++) {
-        FILE *f = fopen(files[i], "rb");
-        TEST_ASSERT_NOT_NULL_MESSAGE(f, files[i]);
-        const size_t len = fread(bytes[i], 1, sizeof(bytes[i]), f);
+    static const struct {
+        const char *file;
+        int32_t width, height;
+        bool soft;  // has pixels to mix with the ground
+    } marks[] = {
+        // Giphy's as Giphy drew it with the clear border cut away; Klipy's
+        // cut the same way and scaled to that height.
+        {MARK_DIR "source_giphy/credit/powered-by-giphy-on-dark.p3aimg", 91, 24, true},
+        {MARK_DIR "source_klipy/credit/powered-by-klipy-on-dark.p3aimg", 142, 24, true},
+        // Giphy's for light backgrounds is a plate, laid on black: nothing to mix.
+        {MARK_DIR "source_giphy/credit/powered-by-giphy-on-light.p3aimg", 101, 36, false},
+        {MARK_DIR "source_klipy/credit/powered-by-klipy-on-light.p3aimg", 142, 24, true},
+    };
+    static uint8_t bytes[64 * 1024];
+    for (size_t i = 0; i < sizeof(marks) / sizeof(marks[0]); i++) {
+        FILE *f = fopen(marks[i].file, "rb");
+        TEST_ASSERT_NOT_NULL_MESSAGE(f, marks[i].file);
+        const size_t len = fread(bytes, 1, sizeof(bytes), f);
         fclose(f);
-        TEST_ASSERT_TRUE_MESSAGE(ui_image_open(&marks[i], bytes[i], len), files[i]);
-        int part_clear = 0;
-        for (int32_t p = 0; p < marks[i].width * marks[i].height; p++) {
-            const uint8_t alpha = marks[i].pixels[p * 4 + 3];
+        ui_image_t mark;
+        TEST_ASSERT_TRUE_MESSAGE(ui_image_open(&mark, bytes, len), marks[i].file);
+        TEST_ASSERT_EQUAL_MESSAGE(marks[i].width, mark.width, marks[i].file);
+        TEST_ASSERT_EQUAL_MESSAGE(marks[i].height, mark.height, marks[i].file);
+        int part_clear = 0, clear = 0;
+        for (int32_t p = 0; p < mark.width * mark.height; p++) {
+            const uint8_t alpha = mark.pixels[p * 4 + 3];
             part_clear += alpha > 0 && alpha < 255;
+            clear += alpha == 0;
         }
-        TEST_ASSERT_TRUE_MESSAGE(part_clear > 0, files[i]);
+        TEST_ASSERT_EQUAL_MESSAGE(marks[i].soft, part_clear > 0, marks[i].file);
+        TEST_ASSERT_EQUAL_MESSAGE(marks[i].soft, clear > 0, marks[i].file);
     }
-    // Giphy's as Giphy drew it with the clear border cut away; Klipy's cut
-    // the same way and scaled to that height.
-    TEST_ASSERT_EQUAL(24, marks[0].height);
-    TEST_ASSERT_EQUAL(marks[0].height, marks[1].height);
-    TEST_ASSERT_EQUAL(91, marks[0].width);
-    TEST_ASSERT_EQUAL(142, marks[1].width);
 }
 
 int main(void)
@@ -226,6 +236,6 @@ int main(void)
     RUN_TEST(test_bytes_that_are_not_a_picture_are_refused);
     RUN_TEST(test_damaged_picture_files_are_refused_or_harmless);
     RUN_TEST(test_a_soft_picture_is_mixed_with_its_ground);
-    RUN_TEST(test_the_sources_marks_are_pictures_of_one_height);
+    RUN_TEST(test_the_sources_marks_are_pictures_of_the_sizes_meant);
     return UNITY_END();
 }

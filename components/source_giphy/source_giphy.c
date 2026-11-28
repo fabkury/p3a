@@ -299,9 +299,11 @@ static void giphy_channel_range(p3a_channel_range_t *out)
 
 esp_err_t source_giphy_start(void)
 {
-    // The service's own mark (credit/README.md).
-    extern const uint8_t mark_start[] asm("_binary_powered_by_giphy_p3aimg_start");
-    extern const uint8_t mark_end[] asm("_binary_powered_by_giphy_p3aimg_end");
+    // The service's own marks (credit/README.md).
+    extern const uint8_t dark_start[] asm("_binary_powered_by_giphy_on_dark_p3aimg_start");
+    extern const uint8_t dark_end[] asm("_binary_powered_by_giphy_on_dark_p3aimg_end");
+    extern const uint8_t light_start[] asm("_binary_powered_by_giphy_on_light_p3aimg_start");
+    extern const uint8_t light_end[] asm("_binary_powered_by_giphy_on_light_p3aimg_end");
     static const p3a_source_ops_t ops = {
         .source = P3A_SOURCE_GIPHY,
         .name = "giphy",
@@ -309,8 +311,10 @@ esp_err_t source_giphy_start(void)
         .remote = true,
         .url = giphy_url,
         .react = giphy_react,
-        .credit = mark_start,
-        .credit_end = mark_end,
+        .credit = dark_start,
+        .credit_end = dark_end,
+        .credit_light = light_start,
+        .credit_light_end = light_end,
         .refresh_interval_s = giphy_refresh_interval_s,
         .index_capacity = giphy_index_capacity,
         .channel_range = giphy_channel_range,

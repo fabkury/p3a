@@ -101,8 +101,11 @@ typedef struct {
     // is one ("Powered by GIPHY", as the service drew it): a picture file
     // made by tools/gen_image.py --soft and compiled into the source's
     // component, from its first byte to the one after its last. NULL for
-    // none.
+    // none. `credit` is the mark for a dark background colour;
+    // `credit_light` the one for a light background, or NULL when the
+    // first serves for both.
     const uint8_t *credit, *credit_end;
+    const uint8_t *credit_light, *credit_light_end;
     // What its downloads say they are; NULL for "p3a".
     const char *user_agent;
     // A download that is refused (401, 403) says something about that

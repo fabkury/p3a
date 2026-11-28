@@ -8,7 +8,8 @@
 // with a margin above and below, has no credit. The mark is drawn at its
 // own size, in the middle of the band's height, against the right. When
 // the clock is on and set to the bottom right, the mark goes against the
-// left instead, so that neither covers the other.
+// left instead, so that neither covers the other. A source may have a
+// second mark for a light background colour.
 //
 // All in the viewer's coordinates, so the screen's rotation plays no part:
 // "below" is below as the picture is seen.
@@ -28,6 +29,11 @@ typedef struct {
     bool show;
     int32_t x, y;  // the mark's top left corner
 } ui_credit_place_t;
+
+// True when the background colour (0xRRGGBB) calls for the mark made for
+// light backgrounds: it is as light as mid-grey (0x808080) or lighter, by
+// its luma.
+bool ui_credit_ground_is_light(uint32_t ground);
 
 // True when the mark goes against the left: the clock is shown
 // (`clock_on`) where the mark would be (`clock_place`, a ui_clock_place_t).

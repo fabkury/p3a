@@ -529,6 +529,44 @@ M4.3, 2026-11-25:
 Newest first. One entry per session or checkpoint: date, what was done,
 what was verified and at which tier, the commit.
 
+### 2026-11-28: the marks polished: cut to size, a light pair, out of the clock's way (D101)
+
+Four changes Fab asked for after seeing the marks on the panel. D101 is
+rewritten to say all of it; the entry below this one describes the first
+version.
+
+- **Cut to what is drawn.** Klipy's file has more empty space around its
+  mark than Giphy's, so at the same file height Klipy's looked smaller.
+  Both are now cut to their drawn pixels first (`gen_image.py --crop`).
+  Giphy's is not scaled (91 by 24); Klipy's is scaled to those 24 rows
+  (142 wide).
+- **A mark for light backgrounds.** A source's table has a second mark,
+  `credit_light`, drawn when the background colour is as light as
+  mid-grey or lighter (`ui_credit_ground_is_light()`, by luma). Giphy's is
+  its mark on a black plate, 101 by 36, laid on black by the tool
+  (`--ground 000000`) so that it has nothing to mix; Klipy's is its yellow
+  and black mark, 142 by 24.
+- **Out of the clock's way.** With the clock on and at the bottom right
+  the mark is drawn against the left (`ui_credit_at_left()`).
+- **The setting.** It was there already (`source_credit`, on by default).
+  It is now labelled "Show the Giphy and Klipy logos under their
+  artworks" and has its own section on the settings page instead of
+  sitting under Advanced.
+- The four PNGs as the services give them are in
+  `components/source_<name>/credit/`, named `-on-dark` and `-on-light`,
+  with the picture files and a README that has the commands.
+- Tested. Host: 44 programs, under the sanitizers in WSL too (the
+  placement at either side, the light and dark rule at mid-grey, the four
+  picture files' sizes). Web: 43 cases.
+  Tree checks. Device (test build, flashed): `test_giphy.py` (8 cases;
+  the credit case now also finds the mark at the left with the clock at
+  the bottom right, Giphy's plate on white and on mid-grey, and the dark
+  mark mixed with #7f7f7f, each pixel for pixel), `test_klipy.py` (4
+  cases, one new: Klipy's mark on the panel pixel for pixel), smoke (6).
+- Not tested: Klipy's mark for light backgrounds on the panel (host test
+  of its file only). The settings page was not opened in a browser. The
+  release and trace builds were not made.
+
 ### 2026-11-28: Giphy's and Klipy's own marks under their artworks (D101)
 
 Fab chose the two marks, which answers O6. The words "Powered by GIPHY"

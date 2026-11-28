@@ -211,13 +211,24 @@ def test_giphy_is_named_in_the_band_under_its_gifs(rig):
     import pathlib
     import struct
     from PIL import Image
-    # The mark as the firmware holds it, mixed with black as the device mixes it.
-    mark_file = (pathlib.Path(__file__).parents[2] / "components" / "source_giphy" / "credit"
-                 / "powered-by-giphy.p3aimg").read_bytes()
-    mark_w, mark_h = struct.unpack_from("<HH", mark_file, 6)
-    expected = Image.new("RGB", (mark_w, mark_h))
-    expected.putdata([tuple((mark_file[10 + i * 4 + c] * mark_file[13 + i * 4] + 127) // 255 for c in (2, 1, 0))
-                      for i in range(mark_w * mark_h)])
+
+    def mark(kind: str, ground: int) -> Image.Image:
+        """A mark as the firmware holds it, mixed with a grey of `ground` as the device mixes it."""
+        data = (pathlib.Path(__file__).parents[2] / "components" / "source_giphy" / "credit"
+                / f"powered-by-giphy-on-{kind}.p3aimg").read_bytes()
+        width, height = struct.unpack_from("<HH", data, 6)
+        picture = Image.new("RGB", (width, height))
+        picture.putdata([tuple((data[10 + i * 4 + c] * data[13 + i * 4] + ground * (255 - data[13 + i * 4]) + 127) // 255
+                               for c in (2, 1, 0)) for i in range(width * height)])
+        return picture
+
+    def shown_at(picture: Image.Image, left: int) -> bool:
+        """True when the last screenshot has `picture` at `left`, in the middle of the band's height."""
+        top = last["band_top"] + (720 - last["band_top"] - picture.height) // 2
+        return last["shot"].crop((left, top, left + picture.width, top + picture.height)).tobytes() == picture.tobytes()
+
+    expected = mark("dark", 0)
+    mark_w, mark_h = expected.size
     last = {}
 
     def band_pixels() -> tuple:
@@ -252,8 +263,8 @@ def test_giphy_is_named_in_the_band_under_its_gifs(rig):
         rows, below, above = band_pixels()
         assert below > 200 and above == 0, "the mark is in the band below the picture, and only there"
         # Giphy's own mark, pixel for pixel, against the right and in the middle of the band's height.
-        left, top = 720 - 12 - mark_w, last["band_top"] + (rows - mark_h) // 2
-        assert last["shot"].crop((left, top, left + mark_w, top + mark_h)).tobytes() == expected.tobytes()
+        left = 720 - 12 - mark_w
+        assert shown_at(expected, left)
         assert last["shot"].crop((0, last["band_top"] + 4, left, 720)).getcolors() == [(left * (rows - 4), (0, 0, 0))], \
             "nothing left of the mark"
         # Under the first GIF after another source's artwork too: the mark and the picture change
@@ -276,5 +287,35 @@ def test_giphy_is_named_in_the_band_under_its_gifs(rig):
             assert band_pixels()[1] == 0, "and gone when the setting says so"
         finally:
             rig.uart.command("settings set", {"source_credit": True})
+        # With the clock where the mark would be, the mark is against the left.
+        place = rig.api.get("/api/v2/settings").data["clock_position"]
+        try:
+            rig.uart.command("settings set", {"clock_enabled": True, "clock_position": "bottom-right"})
+            time.sleep(1.0)
+            band_pixels()
+            assert shown_at(expected, 12) and not shown_at(expected, left)
+            rig.uart.command("settings set", {"clock_position": "bottom-left"})
+            time.sleep(1.0)
+            band_pixels()
+            assert shown_at(expected, left), "and back at the right when the clock is elsewhere"
+        finally:
+            rig.uart.command("settings set", {"clock_enabled": False, "clock_position": place})
+        # On a light background, Giphy's mark for light backgrounds; mid-grey counts as light.
+        try:
+            plate = mark("light", 255)
+            rig.uart.command("settings set", {"background_color": "#ffffff"})
+            time.sleep(1.5)
+            band_pixels()
+            assert shown_at(plate, 720 - 12 - plate.width)
+            rig.uart.command("settings set", {"background_color": "#808080"})
+            time.sleep(1.5)
+            band_pixels()
+            assert shown_at(plate, 720 - 12 - plate.width)
+            rig.uart.command("settings set", {"background_color": "#7f7f7f"})
+            time.sleep(1.5)
+            band_pixels()
+            assert shown_at(mark("dark", 0x7F), left), "one shade darker: the mark for dark backgrounds, mixed with it"
+        finally:
+            rig.uart.command("settings set", {"background_color": "#000000"})
     finally:
         rig.uart.command("settings set", {"clock_enabled": clock})

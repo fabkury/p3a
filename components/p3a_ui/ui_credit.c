@@ -5,6 +5,12 @@
 
 #include "ui_clock.h"
 
+bool ui_credit_ground_is_light(uint32_t ground)
+{
+    const uint32_t r = (ground >> 16) & 0xFF, g = (ground >> 8) & 0xFF, b = ground & 0xFF;
+    return (r * 299 + g * 587 + b * 114) / 1000 >= 128;
+}
+
 bool ui_credit_at_left(bool clock_on, int clock_place)
 {
     return clock_on && clock_place == UI_CLOCK_BOTTOM_RIGHT;

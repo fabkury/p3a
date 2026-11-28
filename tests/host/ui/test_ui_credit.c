@@ -78,6 +78,21 @@ static void test_the_mark_goes_left_when_the_clock_is_where_it_would_be(void)
     TEST_ASSERT_FALSE(ui_credit_place(500, 500, 720, 720, MARK_W, MARK_H, true).show);
 }
 
+static void test_a_background_as_light_as_mid_grey_takes_the_mark_for_light_ones(void)
+{
+    TEST_ASSERT_FALSE(ui_credit_ground_is_light(0x000000));
+    TEST_ASSERT_TRUE(ui_credit_ground_is_light(0xFFFFFF));
+    TEST_ASSERT_FALSE(ui_credit_ground_is_light(0x7F7F7F));
+    TEST_ASSERT_TRUE(ui_credit_ground_is_light(0x808080));  // mid-grey itself is light
+    // By how light a colour looks, not by its largest part: pure blue is
+    // dark, pure green and yellow are light.
+    TEST_ASSERT_FALSE(ui_credit_ground_is_light(0x0000FF));
+    TEST_ASSERT_FALSE(ui_credit_ground_is_light(0xFF0000));
+    TEST_ASSERT_TRUE(ui_credit_ground_is_light(0x00FF00));
+    TEST_ASSERT_TRUE(ui_credit_ground_is_light(0xFFFF00));
+    TEST_ASSERT_TRUE(ui_credit_ground_is_light(0xFF808080));  // only the colour's 24 bits count
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -86,5 +101,6 @@ int main(void)
     RUN_TEST(test_a_mark_wider_than_the_screen_allows_is_not_drawn);
     RUN_TEST(test_nonsense_sizes_show_nothing);
     RUN_TEST(test_the_mark_goes_left_when_the_clock_is_where_it_would_be);
+    RUN_TEST(test_a_background_as_light_as_mid_grey_takes_the_mark_for_light_ones);
     return UNITY_END();
 }

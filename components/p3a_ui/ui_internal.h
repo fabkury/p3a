@@ -2,6 +2,7 @@
 // Between the UI's own files.
 #pragma once
 
+#include "p3a_source.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -36,12 +37,10 @@ int ui_display_button_at(int32_t x, int32_t y);
 // 2 failed. Safe from any task.
 void ui_display_set_indicator(int show);
 
-// The credit of the artwork on the panel: its source's mark (a picture
-// file that lives for good, from `mark` to `mark_end`, or NULL for none)
-// under the picture the player shows as `token`, which is `width` by
-// `height`.
-void ui_display_set_credit(const uint8_t *mark, const uint8_t *mark_end, uint32_t token, uint32_t width,
-                           uint32_t height);
+// The credit of the artwork on the panel: its source (whose table lives
+// for good and holds its marks; NULL for no credit) under the picture the
+// player shows as `token`, which is `width` by `height`.
+void ui_display_set_credit(const p3a_source_ops_t *source, uint32_t token, uint32_t width, uint32_t height);
 
 // Flashes an icon (a p3a_icon_t) in a corner (a p3a_icon_place_t), and the
 // panel side's share of the UI's tick: icons that expire, the clock's

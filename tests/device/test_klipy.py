@@ -75,6 +75,42 @@ def test_with_a_key_trending_gifs_are_listed_downloaded_and_played(rig):
     assert b"klipy" in lines and rig.key.encode() not in lines
 
 
+def test_klipy_is_credited_with_its_mark_under_its_gifs(rig):
+    """Follows the test above: Klipy's trending GIFs are playing. The rules of the mark are test_giphy.py's."""
+    import io
+    import pathlib
+    import struct
+    from PIL import Image
+    data = (pathlib.Path(__file__).parents[2] / "components" / "source_klipy" / "credit"
+            / "powered-by-klipy-on-dark.p3aimg").read_bytes()
+    mark_w, mark_h = struct.unpack_from("<HH", data, 6)
+    expected = Image.new("RGB", (mark_w, mark_h))
+    expected.putdata([tuple((data[10 + i * 4 + c] * data[13 + i * 4] + 127) // 255 for c in (2, 1, 0))
+                      for i in range(mark_w * mark_h)])
+    settings = rig.api.get("/api/v2/settings").data
+    rig.uart.command("settings set", {"background_color": "#000000", "rotation": 0, "clock_enabled": False,
+                                      "source_credit": True})
+    try:
+        # A GIF wide enough to leave a band: most are, a square one is not.
+        for _ in range(8):
+            rig.wait("a GIF is playing", lambda s: s["playing"] and not s["loading"] and s["current_source"] == "klipy",
+                     timeout=60)
+            width, height, _ = rig.on_panel()
+            shown_h = 720 * height // width if width >= height else 720
+            band_top = (720 - shown_h) // 2 + shown_h
+            if 720 - band_top >= 60:
+                break
+            rig.step("next")
+        assert 720 - band_top >= 60, "no wide GIF among those fetched"
+        time.sleep(1.0)
+        shot = Image.open(io.BytesIO(rig.api.get("/api/v2/test/screenshot", timeout=60).body)).convert("RGB")
+        left, top = 720 - 12 - mark_w, band_top + (720 - band_top - mark_h) // 2
+        assert shot.crop((left, top, left + mark_w, top + mark_h)).tobytes() == expected.tobytes()
+    finally:
+        rig.uart.command("settings set", {key: settings[key] for key in ("background_color", "rotation", "clock_enabled",
+                                                                         "source_credit")})
+
+
 def test_a_sticker_search_as_webp(rig):
     before = rig.status()
     rig.uart.command("settings set", {"klipy_format": "webp"})

@@ -105,7 +105,8 @@ export const TABS = [
             'clock_outline_color', 'clock_outline'] },
         { title: 'Playback', keys: ['dwell_s', 'pick_mode', 'channel_select', 'playback_max_speed', 'aspect_filter',
             'aspect_max_tenths'] },
-        { title: 'Advanced', keys: ['source_credit', 'indicator_size', 'show_fps'] },
+        { title: 'Giphy and Klipy Logos', keys: ['source_credit'] },
+        { title: 'Advanced', keys: ['indicator_size', 'show_fps'] },
     ] },
     { id: 'network', label: 'Network', groups: ['network'], sections: [
         { title: 'Connection', widget: 'connection' },

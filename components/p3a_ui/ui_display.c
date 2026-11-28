@@ -132,7 +132,8 @@ static void draw_banner(uint8_t *buffer, void *ctx)
             canvas_for(buffer, &below);
             const ui_credit_place_t place =
                 ui_credit_place((int32_t)atomic_load(&s_credit_w), (int32_t)atomic_load(&s_credit_h),
-                                ui_canvas_view_width(&below), ui_canvas_view_height(&below), mark.width, mark.height);
+                                ui_canvas_view_width(&below), ui_canvas_view_height(&below), mark.width, mark.height,
+                                ui_credit_at_left(atomic_load(&s_clock_on), atomic_load(&s_clock_place)));
             if (place.show) {
                 ui_image_draw_on(&below, &mark, place.x, place.y, atomic_load(&s_ground));
             }
